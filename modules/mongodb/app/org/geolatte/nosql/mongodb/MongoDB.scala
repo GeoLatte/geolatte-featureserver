@@ -1,0 +1,202 @@
+package org.geolatte.nosql.mongodb
+
+import org.geolatte.common.Feature
+import collection.JavaConversions._
+import org.geolatte.geom.codec.Wkb
+import com.mongodb.casbah.commons.MongoDBObject._
+import org.geolatte.geom.{Geometry, Envelope, ByteBuffer, ByteOrder}
+import org.geolatte.geom.curve.MortonCode
+import org.geolatte.nosql.{WindowQueryable, Source, Sink}
+import com.mongodb.casbah.Imports._
+import org.geolatte.scala.ChainedIterator
+import java.util
+
+
+class MongoDBSink(val collection: MongoCollection, val mortoncode: MortonCode) extends Sink {
+  private val GROUP_SIZE = 5000
+
+  def consume(iterator: Iterator[Feature]) {
+
+    collection.dropIndexes
+
+    def toFeature(f: Feature): Option[DBObject] = {
+      try {
+        Some(MongoDBFeature(f, mortoncode))
+      } catch {
+        case ex: IllegalArgumentException => {
+          println(" Can't save feature with envelope " + f.getGeometry.getEnvelope.toString)
+          None
+        }
+      }
+    }
+
+    //we call flatten to remove the None items generated when mapping toFeature
+    val groupedObjIterator = (iterator map toFeature flatten) grouped GROUP_SIZE
+    while (groupedObjIterator hasNext) {
+        val group = groupedObjIterator.next()
+        collection.insert(group:_*)
+    }
+    collection.ensureIndex("mc")
+  }
+
+
+}
+
+trait MortonCodeQueryOptimizer {
+  //the return type of the optimizer
+  type QueryDocuments = List[DBObject]
+
+  /**
+   * Optimizes the window query, given the specified {@code MortonCode}
+   * @param window
+   * @return
+   */
+  def optimize(window: Envelope, mortoncode: MortonCode) : QueryDocuments
+}
+
+trait SubdividingMCQueryOptimizer extends MortonCodeQueryOptimizer {
+
+  def optimize(window: Envelope, mortoncode: MortonCode): QueryDocuments = {
+
+    /*
+    recursively divide the subquery to lowest level
+     */
+    def divide(mc: String): Set[String] = {
+      if (!(window intersects (mortoncode envelopeOf mc))) Set()
+      else if (mc.length == mortoncode.getMaxLength) Set(mc)
+      else divide(mc+"0") ++ divide(mc+"1") ++ divide(mc+"2") ++ divide(mc + "3")
+    }
+
+    /*
+    expand a set of mortoncodes to all mortoncodes of predecessors. i.e expand "00" to
+    "", "0","00"
+     */
+    def expand(mcs : Set[String]) : Set[String] = {
+        Set("") ++ (for (mc <- mcs; i <- 0 to mc.length) yield mc.substring(0,i)).toSet
+    }
+
+    //maps the set of mortoncode strings to a list of querydocuments
+    def toQueryDocuments (mcSet : Set[String]): QueryDocuments = {
+      mcSet.map( mc => MongoDBObject("mc" -> mc)).toList
+    }
+
+    val mc = mortoncode ofEnvelope window
+    val result = (divide _ andThen expand _ andThen toQueryDocuments _)(mc)
+    println("num. of queries for window = " + result.size)
+    result
+  }
+
+}
+
+
+class MongoDBSource(val collection: MongoCollection, val mortoncode: MortonCode)
+  extends Source
+  with WindowQueryable {
+
+  //we require a MortonCodeQueryOptimizer to be mixed in on instantiation
+  this: MortonCodeQueryOptimizer =>
+
+
+  def produce(): Iterator[Feature] = toFeatureIterator(collection.iterator)
+
+  /**
+    *
+   * @param window the query window
+   * @return
+   * @throws IllegalArgumentException if Envelope does not fall within context of the mortoncode
+   */
+  def produce(window: Envelope): Iterator[Feature] = {
+
+    // this is an alternative strategy
+    //TODO -- reuse this e.g. by grouping by N mortoncodes in qds and chaining the OR-queries.
+//    /*
+//    * chain a stream iterators into a a very lazy ChainedIterator
+//    */
+//    def chain(iters: Stream[Iterator[Feature]]) = new ChainedIterator(iters)
+//
+//    // Use a stream such that the mapping of a querydocument to a DBCursor happens lazily
+//    val qds = optimize(window, mortoncode).toStream
+//    //TODO -- clean up filtering, is now too convoluted
+//    chain(
+//      qds.map( qd => toFeatureIterator(collection.find(qd)).filter(f => window.intersects(f.getGeometry.getEnvelope)))
+//    )
+   val qds = optimize(window,mortoncode)
+   val qListBuilder = MongoDBList.newBuilder
+   qds.foreach( qd => qListBuilder += qd )
+   val query = MongoDBObject( "$or" -> qListBuilder.result)
+   println("query = " + query)
+   toFeatureIterator(collection.find(query)).filter(f => window.intersects(f.getGeometry.getEnvelope))
+  }
+
+  private def toFeatureIterator(originalIterator: Iterator[DBObject]) : Iterator[Feature] = {
+    ((originalIterator map (MongoDBFeature.toFeature(_))) flatten)
+  }
+}
+
+object MongoDBSource {
+
+  def apply(collection: MongoCollection, mortoncode: MortonCode) : MongoDBSource =
+    new MongoDBSource(collection, mortoncode) with SubdividingMCQueryOptimizer
+
+}
+
+/**
+ * Converts between features and DBObjects
+ *
+ * @author Karel Maesen, Geovise BVBA
+ *         creation-date: 3/2/13
+ */
+object MongoDBFeature {
+
+  val geometryEncoder = Wkb.newEncoder()
+  val geometryDecoder = Wkb.newDecoder()
+  //  val mortonCode = new MortonCode(new MortonContext(new Envelope(-140.0, 20.0, -40.0, 50.0, CrsId.valueOf(4326)), 8))
+
+  def propertyMap(feature: Feature): Seq[(String, Any)] = {
+    (feature getProperties) map (p => (p, feature.getProperty(p))) toSeq
+  }
+
+  def geometryProperties(feature: Feature, mortonCode: MortonCode): Seq[(String, Any)] = {
+    val geom = feature.getGeometry
+    val wkbHexStr = geometryEncoder.encode(geom, ByteOrder.XDR).toString()
+    ("wkb", wkbHexStr) ::("mc", mortonCode.ofGeometry(geom)) :: Nil
+  }
+
+  def apply(feature: Feature, mortonCode: MortonCode) = {
+    val elems = propertyMap(feature) ++ geometryProperties(feature, mortonCode)
+    (newBuilder ++= elems).result()
+  }
+
+  def toFeature(obj: MongoDBObject): Option[Feature] = {
+    if (obj.get("wkb") == Nil) return None
+    Some(new DBObjectFeature(obj))
+  }
+
+  class DBObjectFeature (val obj: MongoDBObject) extends Feature {
+
+    private val propertyMap = obj filterKeys (k => !("wkb".equals(k) || "id".equals(k) || "_id".equals(k) || "mc".equals(k)))
+    private val geometry = geometryDecoder.decode(ByteBuffer.from(obj.as[String]("wkb")))
+
+    def hasProperty(propertyName: String, inclSpecial: Boolean): Boolean =
+      (inclSpecial && ("id".equals(propertyName) || "geometry".equals(propertyName))) ||
+      (propertyMap.keys.contains(propertyName))
+
+    def getProperties: util.Collection[String] = propertyMap.keys
+
+    def getProperty(propertyName: String): AnyRef =
+      if(propertyName == null) throw new IllegalArgumentException("Null parameter passed.")
+      else propertyMap.get(propertyName).getOrElse(null) //when None, we return null to conform to the interface definition
+
+    def getId: AnyRef = obj.getOrElse("id", obj.getOrElse("_id", "<no id.>"))
+
+    def getGeometry: Geometry = geometry
+
+    def getGeometryName: String = "geometry"
+
+    def hasId: Boolean = true
+
+    def hasGeometry: Boolean = true
+  }
+
+}
+
