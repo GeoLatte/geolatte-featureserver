@@ -1,8 +1,5 @@
 package controllers
 
-
-
-
 import org.geolatte.geom.curve.{MortonContext, MortonCode}
 import org.geolatte.geom.Envelope
 import org.geolatte.geom.crs.CrsId
@@ -10,33 +7,65 @@ import org.geolatte.nosql.mongodb._
 import com.mongodb.casbah.MongoClient
 import org.geolatte.common.dataformats.json.jackson.JsonMapper
 import play.api.mvc.{Action, Controller}
+import play.api.Logger
+import util.QueryParam
 
 object FeatureCollection extends Controller {
 
+  val definedQueryParams = List(
+    //we leave at this stage bbox as a String parameter because the
+    QueryParam.make("bbox", (s: String) => Some(s) )
+  )
+
+  //temporary fixed value
+  val WGS_84 = CrsId.valueOf(4326)
 
   def query(db: String, collection: String) = Action { request =>
-    Ok("Query string is: " + request.queryString.mkString)
+    val params = extract(request.queryString)
+    Logger.info(s"Query string is ${request.queryString} on $db, collection $collection")
+
+    Ok(s"Query string is ${params.get("bbox")} on $db, collection $collection")
   }
 
+  def extract(queryParams: Map[String, Seq[String]]): Map[String, AnyRef] = {
+    var result = Map[String, AnyRef]()
+    for ( key <- definedQueryParams) {
+      queryParams.get(key.name) match {
+        case Some(seq) => result += ( key.name -> key.bind(seq.head))
+        case _ =>     //do nothing
+      }
+    }
+    result
+  }
+
+
 }
+
+
+object Bbox {
+
+  private val bbox_pattern = "(-*[\\.\\d]+),(-*[\\.\\d]+),(-*[\\.\\d]+),(-*[\\.\\d]+)".r
+
+  def apply (s: String, crs: CrsId): Option[Envelope] = {
+      s match {
+        case bbox_pattern(minx, miny, maxx, maxy) => {
+          try
+            Some(new Envelope(minx.toDouble, miny.toDouble, maxx.toDouble, maxy.toDouble, crs))
+          catch {
+            case _ : Throwable => None
+          }
+        }
+        case _ => None
+      }
+    }
+
+}
+
 
 trait Temp {
   type EnvelopeCoords = (Double, Double, Double, Double)
 
-  val bbox_pattern = "(-*[\\.\\d]+),(-*[\\.\\d]+),(-*[\\.\\d]+),(-*[\\.\\d]+)".r
 
-  val bboxStr2Tuple = (s: String) => {
-    s match {
-      case bbox_pattern(minx, miny, maxx, maxy) => {
-        try
-          Some((minx.toDouble, miny.toDouble, maxx.toDouble, maxy.toDouble))
-        catch {
-          case _ : Throwable => None
-        }
-      }
-      case _ => None
-    }
-  }
 
 
   //these are temporary -- need to be injected
