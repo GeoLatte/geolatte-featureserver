@@ -34,6 +34,7 @@ object GeolatteNoSqlBuild extends Build {
   lazy val commonBuildSettings = Seq(
     organization := "org.geolatte.nosql",
     scalaVersion := "2.10.0",
+    scalacOptions += "-feature",
     resolvers ++= commonResolvers
   )
 

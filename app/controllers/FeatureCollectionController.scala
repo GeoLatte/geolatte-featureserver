@@ -9,11 +9,18 @@ import org.geolatte.geom.crs.CrsId
 import org.geolatte.nosql.mongodb._
 import com.mongodb.casbah.MongoClient
 import org.geolatte.common.dataformats.json.jackson.JsonMapper
-import play.api.mvc.Controller
+import play.api.mvc.{Action, Controller}
 
-trait FeatureCollection extends Controller {
+object FeatureCollection extends Controller {
 
 
+  def query(db: String, collection: String) = Action { request =>
+    Ok("Query string is: " + request.queryString.mkString)
+  }
+
+}
+
+trait Temp {
   type EnvelopeCoords = (Double, Double, Double, Double)
 
   val bbox_pattern = "(-*[\\.\\d]+),(-*[\\.\\d]+),(-*[\\.\\d]+),(-*[\\.\\d]+)".r
@@ -48,9 +55,9 @@ trait FeatureCollection extends Controller {
     try {
       val window = toWindow(bbox)
       val coll = mongo(database)(collection)
-      val src = MongoDBSource(coll, mortoncode)
+      val src = MongoDbSource(coll, mortoncode)
       val now = System.currentTimeMillis
-      val resultList = src.produce(window).toList
+      val resultList = src.query(window).toList
       val responseBuilder = new StringBuilder("{ 'total' : ")
         .append(resultList.size)
         .append(",")
