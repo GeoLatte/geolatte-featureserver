@@ -24,10 +24,10 @@ class SubdividingMCQueryOptimizerTest extends Specification {
 
     "return the mortoncode of the window" in {
         val result = optimizer.optimize(window, mortoncode)
-        result must contain(DBObject("mc" -> "000"))
-        result must contain(DBObject("mc" -> "00"))
-        result must contain(DBObject("mc" -> "0"))
-        result must contain(DBObject("mc" -> ""))
+        result must contain(DBObject("_mc" -> "000"))
+        result must contain(DBObject("_mc" -> "00"))
+        result must contain(DBObject("_mc" -> "0"))
+        result must contain(DBObject("_mc" -> ""))
         result.size must_== 4
     }
   }
@@ -37,19 +37,19 @@ class SubdividingMCQueryOptimizerTest extends Specification {
 
     "4 queries at lowest level " in {
       val result = optimizer.optimize(window, mortoncode)
-      result must contain(DBObject("mc" -> ""))
-      result must contain(DBObject("mc" -> "0"))
-      result must contain(DBObject("mc" -> "1"))
-      result must contain(DBObject("mc" -> "2"))
-      result must contain(DBObject("mc" -> "3"))
-      result must contain(DBObject("mc" -> "03"))
-      result must contain(DBObject("mc" -> "12"))
-      result must contain(DBObject("mc" -> "30"))
-      result must contain(DBObject("mc" -> "21"))
-      result must contain(DBObject("mc" -> "033"))
-      result must contain(DBObject("mc" -> "122"))
-      result must contain(DBObject("mc" -> "300"))
-      result must contain(DBObject("mc" -> "211"))
+      result must contain(DBObject("_mc" -> ""))
+      result must contain(DBObject("_mc" -> "0"))
+      result must contain(DBObject("_mc" -> "1"))
+      result must contain(DBObject("_mc" -> "2"))
+      result must contain(DBObject("_mc" -> "3"))
+      result must contain(DBObject("_mc" -> "03"))
+      result must contain(DBObject("_mc" -> "12"))
+      result must contain(DBObject("_mc" -> "30"))
+      result must contain(DBObject("_mc" -> "21"))
+      result must contain(DBObject("_mc" -> "033"))
+      result must contain(DBObject("_mc" -> "122"))
+      result must contain(DBObject("_mc" -> "300"))
+      result must contain(DBObject("_mc" -> "211"))
       result.size must_== 13
 
     }

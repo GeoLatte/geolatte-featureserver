@@ -11,6 +11,8 @@ import com.mongodb.casbah.Imports._
 import org.geolatte.scala.ChainedIterator
 import java.util
 import play.Logger
+import org.geolatte.geom.crs.CrsId
+import scala.util.matching.Regex
 
 object SpecialMongoProperties {
 
@@ -19,9 +21,9 @@ object SpecialMongoProperties {
   val BBOX = "_bbox"
   val ID = "id"
   val _ID = "_id"
-  val SRID = "_crs"
+//  val SRID = "_crs"
 
-  val all = Set(WKB, MC, BBOX, ID, _ID, SRID)
+  val all = Set(WKB, MC, BBOX, ID, _ID)
 
   def isSpecialMongoProperty ( key : String) : Boolean = all.contains(key)
 
@@ -58,7 +60,7 @@ class MongoDbSink(val collection: MongoCollection, val mortoncode: MortonCode) e
         val group = groupedObjIterator.next()
         collection.insert(group:_*)
     }
-    collection.ensureIndex("mc")
+    collection.ensureIndex(SpecialMongoProperties.MC)
   }
 
 
@@ -99,12 +101,12 @@ trait SubdividingMCQueryOptimizer extends MortonCodeQueryOptimizer {
 
     //maps the set of mortoncode strings to a list of querydocuments
     def toQueryDocuments (mcSet : Set[String]): QueryDocuments = {
-      mcSet.map( mc => MongoDBObject("mc" -> mc)).toList
+      mcSet.map( mc => MongoDBObject(SpecialMongoProperties.MC -> mc)).toList
     }
 
     val mc = mortoncode ofEnvelope window
     val result = (divide _ andThen expand _ andThen toQueryDocuments _)(mc)
-    Logger.info(s"num. of queries for window ${window.toString}= ${result.size}")
+    Logger.debug(s"num. of queries for window ${window.toString}= ${result.size}")
     result
   }
 
@@ -181,7 +183,9 @@ object MongoDbFeature {
   def geometryProperties(feature: Feature, mortonCode: MortonCode): Seq[(String, Any)] = {
     val geom = feature.getGeometry
     val wkbHexStr = geometryEncoder.encode(geom, ByteOrder.XDR).toString()
-    ("wkb", wkbHexStr) ::("mc", mortonCode.ofGeometry(geom)) :: Nil
+    val bbox = EnvelopeSerializer(geom.getEnvelope)
+    import SpecialMongoProperties._
+    (WKB, wkbHexStr) :: (MC, mortonCode.ofGeometry(geom)) :: (BBOX, bbox) :: Nil
   }
 
   def apply(feature: Feature, mortonCode: MortonCode) = {
@@ -190,7 +194,7 @@ object MongoDbFeature {
   }
 
   def toFeature(obj: MongoDBObject): Option[DBObjectFeature] = {
-    if (obj.get("wkb") == Nil) return None
+    if (obj.get(SpecialMongoProperties.WKB) == None || obj.get(SpecialMongoProperties.BBOX) == None) return None
     Some(new DBObjectFeature(obj))
   }
 
@@ -203,9 +207,11 @@ object MongoDbFeature {
 
     import SpecialMongoProperties._
 
-    lazy private val propertyMap = obj filterKeys ( ! isSpecialMongoProperty(_) )
     lazy private val geometry:Geometry = geometryDecoder.decode(ByteBuffer.from(obj.as[String](WKB)))
 
+    lazy private val propertyMap = obj filterKeys ( ! isSpecialMongoProperty(_) )
+
+    val envelope = EnvelopeSerializer.unapply(obj.as[String](BBOX)).getOrElse(geometry.getEnvelope)
 
     def hasProperty(propertyName: String, inclSpecial: Boolean): Boolean =
       (inclSpecial && ("id".equals(propertyName) || "geometry".equals(propertyName))) ||
@@ -227,9 +233,41 @@ object MongoDbFeature {
 
     def hasGeometry: Boolean = true
 
-    def envelope = geometry.getEnvelope
-
   }
+
+}
+
+object EnvelopeSerializer {
+
+  private val pattern = "(\\d\\d\\d\\d):(-*[\\.\\d]+),(-*[\\.\\d]+),(-*[\\.\\d]+),(-*[\\.\\d]+)".r
+
+  def apply(bbox: Envelope): String = {
+    if (bbox == null) ""
+    else {
+      val srid = bbox.getCrsId.getCode
+      val builder = new StringBuilder()
+          .append(srid)
+          .append(":")
+          .append(List(bbox.getMinX, bbox.getMinY, bbox.getMaxX, bbox.getMaxY).mkString(","))
+      builder.toString
+    }
+  }
+
+  def unapply(str: String): Option[Envelope] =
+    cleaned(str) match {
+      case pattern(srid, minx, miny, maxx, maxy) => {
+              try {
+                Some(new Envelope(minx.toDouble, miny.toDouble, maxx.toDouble, maxy.toDouble, CrsId.parse(srid)))
+              } catch  {
+                case _ : Throwable => None
+              }
+      }
+      case _ => None
+  }
+
+  def cleaned(str: String) : String = str.trim
+
+
 
 
 }
