@@ -9,6 +9,9 @@ import org.geolatte.common.dataformats.json.jackson.JsonMapper
 import play.api.mvc.{Action, Controller}
 import play.api.Logger
 import util.QueryParam
+import play.api.libs.iteratee.Enumerator
+import concurrent.Future
+import play.api.http.MimeTypes
 
 object FeatureCollection extends Controller {
 
@@ -28,10 +31,19 @@ object FeatureCollection extends Controller {
 
         val windowOpt = Bbox(QueryParams.BBOX.extractOrElse(""), QueryParams.CRS.extractOrElse(WGS_84))
         windowOpt match {
-          case Some(window) => Ok(Repository.query(db, collection, window))
+          case Some(window) => mkChunked(db, collection, window)
           case None => BadRequest(s"BadRequest ${queryStr}")
         }
     }
+
+  def mkChunked(db: String, collection: String, window: Envelope) =  {
+
+    val dataContent = toStream(
+      Repository.query(db, collection, window)
+    )
+
+    Ok.stream(dataContent).as(MimeTypes.TEXT)
+  }
 
   object Bbox {
 
@@ -52,7 +64,7 @@ object FeatureCollection extends Controller {
 
   }
 
-
+  //this needs to move to a service layer
   object Repository {
 
     //these are temporary -- need to be injected
@@ -63,23 +75,48 @@ object FeatureCollection extends Controller {
     val jsonMapper = new JsonMapper()
 
 
-    def query(database: String, collection: String, window: Envelope): String = {
+
+
+    def query(database: String, collection: String, window: Envelope): Iterator[String] = {
       val coll = mongo(database)(collection)
       val src = MongoDbSource(coll, mortoncode)
       val now = System.currentTimeMillis
-      val resultList = src.query(window).toList
-      val responseBuilder = new StringBuilder("{ 'total' : ")
-        .append(resultList.size)
-        .append(",")
-        .append("'items': [")
-        .append(resultList.map(jsonMapper.toJson(_)).mkString(","))
-        .append("]")
-        .append(", 'millis': ")
-        .append(System.currentTimeMillis - now)
-        .append("}")
-      responseBuilder.toString
+      for (f <- src.query(window))
+        yield(jsonMapper.toJson(f) + " ")
+//      val responseBuilder = new StringBuilder("{ 'total' : ")
+//        .append(resultList.size)
+//        .append(",")
+//        .append("'items': [")
+//        .append(resultList.map(jsonMapper.toJson(_)).mkString(","))
+//        .append("]")
+//        .append(", 'millis': ")
+//        .append(System.currentTimeMillis - now)
+//        .append("}")
+//      responseBuilder.toString
     }
 
   }
+
+
+  def toStream(it: Iterator[String]) = {
+
+    def advance = if (it.hasNext) it.next.iterator else Iterator.empty
+
+    var nextStrIt = advance
+
+    def hasNext : Boolean = {
+      nextStrIt.hasNext || {nextStrIt = advance; nextStrIt.hasNext}
+    }
+
+    val itStream = new java.io.InputStream {
+      def read(): Int =
+        if (hasNext) nextStrIt.next else -1
+    }
+
+    Enumerator.fromStream(itStream)
+
+  }
+
+
 
 }
