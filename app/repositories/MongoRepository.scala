@@ -1,29 +1,47 @@
 package repositories
 
-import org.geolatte.geom.crs.CrsId
-import org.geolatte.geom.curve.{MortonContext, MortonCode}
+
+import org.geolatte.geom.curve.MortonContext
 import org.geolatte.geom.Envelope
-import com.mongodb.casbah.MongoClient
+import com.mongodb.casbah.{MongoCollection, MongoClient}
 import org.geolatte.common.Feature
-import org.geolatte.nosql.mongodb.MongoDbSource
+import org.geolatte.nosql.mongodb.{MetadataIdentifiers, Metadata, MongoDbSource}
+import com.mongodb.casbah.commons.MongoDBObject
+import com.mongodb.DBObject
 
 /**
  * @author Karel Maesen, Geovise BVBA
- * creation-date: 3/11/13
+ *         creation-date: 3/11/13
  */
 
-  //this needs to move to a service layer
-  object MongoRepository {
+//this needs to move to a service layer
+object MongoRepository {
 
-    //these are temporary -- need to be injected
-    var wgs84 = CrsId.valueOf(4326)
-    val mortoncode = new MortonCode(new MortonContext(new Envelope(-140.0, 15, -40.0, 50.0, wgs84), 8))
-    val mongo = MongoClient()
+  val mongo = MongoClient()
 
-    def query(database: String, collection: String, window: Envelope): Iterator[Feature] = {
-      val coll = mongo(database)(collection)
-      val src = MongoDbSource(coll, mortoncode)
-      src.query(window)
+  def query(database: String, collection: String, window: Envelope): Iterator[Feature] = {
+    val md = metadata(database, collection)
+    val coll = mongo(database)(collection)
+    val src = MongoDbSource(coll, mkMortonContext(md))
+    src.query(window)
+  }
+
+  def metadata(database: String, collection: String) : Metadata = {
+    import MetadataIdentifiers._
+    val metadataCollection : MongoCollection = mongo(database)(MetadataCollection)
+    metadataCollection.findOne( MongoDBObject( CollectionField -> collection)) match {
+      case Some(obj) => toMetadata(obj)
+      case _ => throw new NoSuchElementException(s"Can't find metadata for collection ${collection}")
+    }
+  }
+
+  def toMetadata(obj: DBObject) : Metadata =
+    Metadata.from(obj) match {
+      case Some(md) => md
+      case _ => throw new NoSuchElementException(s"Invalid metadata for collection")
     }
 
-  }
+  def mkMortonContext(md: Metadata) : MortonContext = new MortonContext(md.envelope, md.level)
+
+
+}

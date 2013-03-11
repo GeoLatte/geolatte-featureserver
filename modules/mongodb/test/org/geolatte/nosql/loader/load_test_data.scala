@@ -17,10 +17,11 @@ import mongodb._
 object Loader {
 
   def load() {
-    val mortoncode = new MortonCode(new MortonContext(new Envelope(-140.0, 15, -40.0, 50.0, CrsId.valueOf(4326)), 8))
+    val ctxt = new MortonContext(new Envelope(-140.0, 15, -40.0, 50.0, CrsId.valueOf(4326)), 8)
     val src = GeoJsonFileSource.fromFile("/tmp/tiger-1.json")
     lazy val coll = MongoClient()("test")("tiger")
-    val sink = new MongoDbSink(coll, mortoncode)
+    val sink = new MongoDbSink(coll, ctxt)
+
   //  val mongoSrc = MongoDBSource(coll, mortoncode)
 
     time(sink.in(src.out))
