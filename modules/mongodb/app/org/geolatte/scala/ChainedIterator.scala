@@ -25,5 +25,10 @@ class ChainedIterator[A](val iterators : Stream[Iterator[A]]) extends Iterator[A
     if (! hasNext) throw new NoSuchElementException()
     else currentSubIt.next
 
+}
+
+object ChainedIterator {
+
+  def chain[A](iterators: Iterator[A] *) : ChainedIterator[A] = new ChainedIterator(iterators.toStream)
 
 }

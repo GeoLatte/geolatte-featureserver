@@ -21,7 +21,6 @@ object SpecialMongoProperties {
   val BBOX = "_bbox"
   val ID = "id"
   val _ID = "_id"
-//  val SRID = "_crs"
 
   val all = Set(WKB, MC, BBOX, ID, _ID)
 
@@ -142,7 +141,7 @@ class MongoDbSource(val collection: MongoCollection, val mortoncode: MortonCode)
 //    val qds = optimize(window, mortoncode).toStream
 //    //TODO -- clean up filtering, is now too convoluted
 //    chain(
-//      qds.map( qd => toFeatureIterator(collection.find(qd)).filter(f => window.intersects(f.getGeometry.getEnvelope)))
+//      qds.map( qd => toFeatureIterator(collection.find(qd)).filter(f => window.intersects(f.envelope)))
 //    )
    val qds = optimize(window,mortoncode)
    val qListBuilder = MongoDBList.newBuilder
