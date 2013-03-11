@@ -26,13 +26,21 @@ object FeatureCollection extends Controller {
       request =>
         implicit val queryStr = request.queryString
         Logger.info(s"Query string ${queryStr} on $db, collection $collection")
-        val md = MongoRepository.metadata(db, collection)
-        val windowOpt = Bbox(QueryParams.BBOX.extractOrElse(""), md.envelope.getCrsId)
-        windowOpt match {
-          case Some(window) => mkChunked(db, collection, window)
-          case None => BadRequest(s"BadRequest: No or invalid bbox parameter in query string.")
-        }
+        doQuery(db, collection)
     }
+
+  def doQuery(db: String, collection: String)(implicit queryStr: Map[String, Seq[String]]) =
+    try {
+      val md = MongoRepository.metadata(db, collection)
+      val windowOpt = Bbox(QueryParams.BBOX.extractOrElse(""), md.envelope.getCrsId)
+      windowOpt match {
+        case Some(window) => mkChunked(db, collection, window)
+        case None => BadRequest(s"BadRequest: No or invalid bbox parameter in query string.")
+      }
+    } catch {
+      case ex: NoSuchElementException => NotFound(s"${db}.${collection} not found in metadata")
+    }
+
 
   def mkChunked(db: String, collection: String, window: Envelope) =  {
     try {

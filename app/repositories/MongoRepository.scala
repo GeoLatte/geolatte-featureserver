@@ -26,6 +26,7 @@ object MongoRepository {
     val coll = mongo(database)(collection)
     val src = MongoDbSource(coll, mkMortonContext(md))
     src.query(window)
+
   }
 
   def metadata(database: String, collection: String) : Metadata = {

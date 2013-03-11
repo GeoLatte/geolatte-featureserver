@@ -11,6 +11,7 @@ import com.mongodb.casbah.Imports._
 import java.util
 import play.Logger
 import org.geolatte.geom.crs.CrsId
+import play.api.libs.json.{Json, Writes}
 
 
 object MetadataIdentifiers {

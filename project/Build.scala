@@ -27,7 +27,10 @@ object GeolatteNoSqlBuild extends Build {
   lazy val commonDependencies = Seq(
     "org.specs2" %% "specs2" % "1.14" % "test",    
     "org.geolatte" % "geolatte-geom" %  "0.12-SNAPSHOT",
-    "org.geolatte" % "geolatte-common" % "0.7-SNAPSHOT" exclude("org.codehaus", "jackson")
+    "org.geolatte" % "geolatte-common" % "0.7-SNAPSHOT"
+      exclude("org.codehaus.jackson", "jackson-core-lgpl")     //needs to exclude these because they conflict with Play's more recent Jackson
+      exclude("org.codehaus.jackson", "jackson-mapper-lgpl")
+
   )
 
   //Build Settings applied to all projects
