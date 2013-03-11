@@ -8,6 +8,8 @@ import org.geolatte.common.Feature
 import org.geolatte.nosql.mongodb.{MetadataIdentifiers, Metadata, MongoDbSource}
 import com.mongodb.casbah.commons.MongoDBObject
 import com.mongodb.DBObject
+import play.api.cache.Cache
+import play.api.Play.current
 
 /**
  * @author Karel Maesen, Geovise BVBA
@@ -27,6 +29,15 @@ object MongoRepository {
   }
 
   def metadata(database: String, collection: String) : Metadata = {
+    val key = s"${database}.${collection}"
+    Cache.getOrElse[Metadata](key){
+      val md= lookUpMetadata(database, collection)
+      Cache.set(key, md)
+      md
+    }
+  }
+
+  def lookUpMetadata(database :String, collection: String) : Metadata = {
     import MetadataIdentifiers._
     val metadataCollection : MongoCollection = mongo(database)(MetadataCollection)
     metadataCollection.findOne( MongoDBObject( CollectionField -> collection)) match {

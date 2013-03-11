@@ -31,4 +31,6 @@ object ChainedIterator {
 
   def chain[A](iterators: Iterator[A] *) : ChainedIterator[A] = new ChainedIterator(iterators.toStream)
 
+  def chain[A](iterators: Stream[Iterator[A]]) : ChainedIterator[A] = new ChainedIterator(iterators)
+
 }

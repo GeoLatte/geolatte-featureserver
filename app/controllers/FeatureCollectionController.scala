@@ -17,7 +17,6 @@ object FeatureCollection extends Controller {
   object QueryParams {
     //we leave bbox as a String parameter because an Envelope needs a CrsId
     val BBOX = QueryParam("bbox", (s: String) => Some(s))
-    val CRS = QueryParam("crs", (s: String) => Some(CrsId.parse(s)))
   }
 
     //temporary fixed value
@@ -27,7 +26,8 @@ object FeatureCollection extends Controller {
       request =>
         implicit val queryStr = request.queryString
         Logger.info(s"Query string ${queryStr} on $db, collection $collection")
-        val windowOpt = Bbox(QueryParams.BBOX.extractOrElse(""), QueryParams.CRS.extractOrElse(WGS_84))
+        val md = MongoRepository.metadata(db, collection)
+        val windowOpt = Bbox(QueryParams.BBOX.extractOrElse(""), md.envelope.getCrsId)
         windowOpt match {
           case Some(window) => mkChunked(db, collection, window)
           case None => BadRequest(s"BadRequest: No or invalid bbox parameter in query string.")
@@ -66,33 +66,50 @@ object FeatureCollection extends Controller {
 
   def toStream(features: Iterator[Feature]) = {
 
-    import ChainedIterator._
-
-    val START = List("{ \"items\": [").iterator
-    val END = List("]}").iterator
-
     val jsonMapper = new JsonMapper()
-    var count = 0
-    val jsons = for (json <- features.map( jsonMapper.toJson(_)))
-      yield (if (count == 0) {count += 1; json} else ","+json)
 
-    val jsonStringIt = chain[String](START, jsons , END)
-
-    def advance = if (jsonStringIt.hasNext) jsonStringIt.next.iterator else Iterator.empty
-
-    var currentJson = advance
-
-    def hasNext : Boolean = {
-      currentJson.hasNext || {currentJson = advance; currentJson.hasNext}
+    object Counter {
+      private var num = 0
+      def inc : Unit = num += 1
+      def value = num
     }
 
+    import ChainedIterator._
+    val START: Iterator[String] = List("{ \"items\": [").iterator
+
+    lazy val END : Iterator[String] = List(s"], total: ${Counter.value} }").iterator
+
+
+
+    def seperatorAddingIterator(it: Iterator[String]) = new Iterator[String] {
+          def hasNext: Boolean = it.hasNext
+          var sep = false
+          def next(): String = if (sep) {sep = false; ","} else {Counter.inc; sep = true; it.next}
+    }
+
+    val jsons = seperatorAddingIterator( features.map( jsonMapper.toJson(_)) )
+
+
+    val str  = START #:: jsons #:: END #:: Stream.empty
+    val jsonStringIt = chain[String]( str )
+
+
+
     val itStream = new java.io.InputStream {
+
+      def advance = if (jsonStringIt.hasNext) jsonStringIt.next.iterator else Iterator.empty
+
+      var currentJson = advance
+
+      def hasNext : Boolean = {
+        currentJson.hasNext || {currentJson = advance; currentJson.hasNext}
+      }
+
       def read(): Int =
         if (hasNext) currentJson.next else -1
     }
 
     Enumerator.fromStream(itStream)
-
   }
 
 }
