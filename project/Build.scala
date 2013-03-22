@@ -19,6 +19,7 @@ object GeolatteNoSqlBuild extends Build {
     "Codahale Repo" at "http://repo.codahale.com",
     "Sonatype Repo" at "https://oss.sonatype.org/content/repositories/releases/",
     "Typesafe Repository" at "http://repo.typesafe.com/typesafe/releases/",    
+    "Typesafe Backup Releases Repository" at "http://repo.typesafe.com/typesafe/repo/",
     "sbt-idea-repo" at "http://mpeltonen.github.com/maven/",
     Resolver.url("artifactory", url("http://scalasbt.artifactoryonline.com/scalasbt/sbt-plugin-releases"))(Resolver.ivyStylePatterns)
   )
