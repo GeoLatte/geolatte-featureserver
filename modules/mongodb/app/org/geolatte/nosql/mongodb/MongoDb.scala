@@ -12,6 +12,7 @@ import java.util
 import play.Logger
 import org.geolatte.geom.crs.CrsId
 import play.api.libs.json.{Json, Writes}
+import sun.misc.{BASE64Decoder, BASE64Encoder}
 
 
 object MetadataIdentifiers {
@@ -25,21 +26,21 @@ object MetadataIdentifiers {
 
 object SpecialMongoProperties {
 
-  val WKB  = "_wkb"
-  val MC   ="_mc"
+  val WKB = "_wkb"
+  val MC = "_mc"
   val BBOX = "_bbox"
   val ID = "id"
   val _ID = "_id"
 
   val all = Set(WKB, MC, BBOX, ID, _ID)
 
-  def isSpecialMongoProperty ( key : String) : Boolean = all.contains(key)
+  def isSpecialMongoProperty(key: String): Boolean = all.contains(key)
 
 }
 
 trait FeatureWithEnvelope extends Feature {
 
-  def envelope : Envelope
+  def envelope: Envelope
 
 }
 
@@ -54,13 +55,13 @@ class MongoDbSink(val collection: MongoCollection, val mortoncontext: MortonCont
 
   def in(iterator: Iterator[Feature]) {
 
-    val mcStats = Map[String,Int]()
+    val mcStats = Map[String, Int]()
 
     def transform(f: Feature): Option[DBObject] = {
       try {
         val mc = mortoncode ofGeometry f.getGeometry
-        mcStats.put(mc, (mcStats.getOrElse(mc, 0) + 1 ))
-        Some( MongoDbFeature(f, mc) )
+        mcStats.put(mc, (mcStats.getOrElse(mc, 0) + 1))
+        Some(MongoDbFeature(f, mc))
       } catch {
         case ex: IllegalArgumentException => {
           Logger.warn(" Can't save feature with envelope " + f.getGeometry.getEnvelope.toString)
@@ -70,10 +71,10 @@ class MongoDbSink(val collection: MongoCollection, val mortoncontext: MortonCont
     }
 
     //we call flatten to remove the None items generated when mapping toFeature
-    val groupedObjIterator = (iterator.map( transform(_) ).flatten) grouped GROUP_SIZE
+    val groupedObjIterator = (iterator.map(transform(_)).flatten) grouped GROUP_SIZE
     while (groupedObjIterator.hasNext) {
-        val group = groupedObjIterator.next()
-        collection.insert(group:_*)
+      val group = groupedObjIterator.next()
+      collection.insert(group: _*)
     }
     afterIn(mcStats)
   }
@@ -90,7 +91,7 @@ class MongoDbSink(val collection: MongoCollection, val mortoncontext: MortonCont
       IndexLevelField -> mortoncontext.getDepth
 
     )
-    val selector = MongoDBObject(  "collection" -> collection.getName())
+    val selector = MongoDBObject("collection" -> collection.getName())
 
     collection.getDB().getCollection(MetadataIdentifiers.MetadataCollection)
       .update(selector, metadata, true, false, WriteConcern.Safe)
@@ -107,7 +108,7 @@ trait MortonCodeQueryOptimizer {
    * @param window
    * @return
    */
-  def optimize(window: Envelope, mortoncode: MortonCode) : QueryDocuments
+  def optimize(window: Envelope, mortoncode: MortonCode): QueryDocuments
 }
 
 trait SubdividingMCQueryOptimizer extends MortonCodeQueryOptimizer {
@@ -120,20 +121,20 @@ trait SubdividingMCQueryOptimizer extends MortonCodeQueryOptimizer {
     def divide(mc: String): Set[String] = {
       if (!(window intersects (mortoncode envelopeOf mc))) Set()
       else if (mc.length == mortoncode.getMaxLength) Set(mc)
-      else divide(mc+"0") ++ divide(mc+"1") ++ divide(mc+"2") ++ divide(mc + "3")
+      else divide(mc + "0") ++ divide(mc + "1") ++ divide(mc + "2") ++ divide(mc + "3")
     }
 
     /*
     expand a set of mortoncodes to all mortoncodes of predecessors. i.e expand "00" to
     "", "0","00"
      */
-    def expand(mcs : Set[String]) : Set[String] = {
-        Set("") ++ (for (mc <- mcs; i <- 0 to mc.length) yield mc.substring(0,i)).toSet
+    def expand(mcs: Set[String]): Set[String] = {
+      Set("") ++ (for (mc <- mcs; i <- 0 to mc.length) yield mc.substring(0, i)).toSet
     }
 
     //maps the set of mortoncode strings to a list of querydocuments
-    def toQueryDocuments (mcSet : Set[String]): QueryDocuments = {
-      mcSet.map( mc => MongoDBObject(SpecialMongoProperties.MC -> mc)).toList
+    def toQueryDocuments(mcSet: Set[String]): QueryDocuments = {
+      mcSet.map(mc => MongoDBObject(SpecialMongoProperties.MC -> mc)).toList
     }
 
     val mc = mortoncode ofEnvelope window
@@ -157,7 +158,7 @@ class MongoDbSource(val collection: MongoCollection, val mortoncontext: MortonCo
   def out(): Iterator[Feature] = toFeatureIterator(collection.iterator)
 
   /**
-    *
+   *
    * @param window the query window
    * @return
    * @throws IllegalArgumentException if Envelope does not fall within context of the mortoncode
@@ -166,33 +167,33 @@ class MongoDbSource(val collection: MongoCollection, val mortoncontext: MortonCo
 
     // this is an alternative strategy
     //TODO -- reuse this e.g. by grouping by N mortoncodes in qds and chaining the OR-queries.
-//    /*
-//    * chain a stream iterators into a a very lazy ChainedIterator
-//    */
-//    def chain(iters: Stream[Iterator[Feature]]) = new ChainedIterator(iters)
-//
-//    // Use a stream such that the mapping of a querydocument to a DBCursor happens lazily
-//    val qds = optimize(window, mortoncode).toStream
-//    //TODO -- clean up filtering, is now too convoluted
-//    chain(
-//      qds.map( qd => toFeatureIterator(collection.find(qd)).filter(f => window.intersects(f.envelope)))
-//    )
-   val qds = optimize(window, mortoncode)
-   val qListBuilder = MongoDBList.newBuilder
-   qds.foreach( qd => qListBuilder += qd )
-   val query = MongoDBObject( "$or" -> qListBuilder.result)
-   toFeatureIterator(collection.find(query))
-     .filter(f => window.intersects(f.envelope))
+    //    /*
+    //    * chain a stream iterators into a a very lazy ChainedIterator
+    //    */
+    //    def chain(iters: Stream[Iterator[Feature]]) = new ChainedIterator(iters)
+    //
+    //    // Use a stream such that the mapping of a querydocument to a DBCursor happens lazily
+    //    val qds = optimize(window, mortoncode).toStream
+    //    //TODO -- clean up filtering, is now too convoluted
+    //    chain(
+    //      qds.map( qd => toFeatureIterator(collection.find(qd)).filter(f => window.intersects(f.envelope)))
+    //    )
+    val qds = optimize(window, mortoncode)
+    val qListBuilder = MongoDBList.newBuilder
+    qds.foreach(qd => qListBuilder += qd)
+    val query = MongoDBObject("$or" -> qListBuilder.result)
+    toFeatureIterator(collection.find(query))
+      .filter(f => window.intersects(f.envelope))
   }
 
-  private def toFeatureIterator(originalIterator: Iterator[DBObject]) : Iterator[FeatureWithEnvelope] = {
-    originalIterator.map( MongoDbFeature.toFeature(_) ).flatten
+  private def toFeatureIterator(originalIterator: Iterator[DBObject]): Iterator[FeatureWithEnvelope] = {
+    originalIterator.map(MongoDbFeature.toFeature(_)).flatten
   }
 }
 
 object MongoDbSource {
 
-  def apply(collection: MongoCollection, mortoncontext: MortonContext) : MongoDbSource =
+  def apply(collection: MongoCollection, mortoncontext: MortonContext): MongoDbSource =
     new MongoDbSource(collection, mortoncontext) with SubdividingMCQueryOptimizer
 
 }
@@ -207,18 +208,20 @@ object MongoDbFeature {
 
   val geometryEncoder = Wkb.newEncoder()
   val geometryDecoder = Wkb.newDecoder()
-  //  val mortonCode = new MortonCode(new MortonContext(new Envelope(-140.0, 20.0, -40.0, 50.0, CrsId.valueOf(4326)), 8))
+  val base64Encoder = new BASE64Encoder();
+  val base64Decoder = new BASE64Decoder();
+
 
   def propertyMap(feature: Feature): Seq[(String, Any)] = {
-    feature.getProperties.map ( p => (p, feature.getProperty(p)) ).toSeq
+    feature.getProperties.map(p => (p, feature.getProperty(p))).toSeq
   }
 
   def geometryProperties(feature: Feature, mortoncode: String): Seq[(String, Any)] = {
     val geom = feature.getGeometry
-    val wkbHexStr = geometryEncoder.encode(geom, ByteOrder.XDR).toString()
+    val wkbBASE64 = base64Encoder.encode(geometryEncoder.encode(geom, ByteOrder.XDR).toByteArray)
     val bbox = EnvelopeSerializer(geom.getEnvelope)
     import SpecialMongoProperties._
-    (WKB, wkbHexStr) :: (MC, mortoncode) :: (BBOX, bbox) :: Nil
+    (WKB, wkbBASE64) ::(MC, mortoncode) ::(BBOX, bbox) :: Nil
   }
 
   def apply(feature: Feature, mortoncode: String) = {
@@ -236,24 +239,27 @@ object MongoDbFeature {
    *
    * @param obj the adapted MongoDBObject
    */
-  class DBObjectFeature (val obj: MongoDBObject) extends FeatureWithEnvelope {
+  class DBObjectFeature(val obj: MongoDBObject) extends FeatureWithEnvelope {
 
     import SpecialMongoProperties._
 
-    lazy private val geometry:Geometry = geometryDecoder.decode(ByteBuffer.from(obj.as[String](WKB)))
+    lazy private val geometry: Geometry = {
+      val bytes = base64Decoder.decodeBuffer(obj.as[String](WKB))
+      geometryDecoder.decode( ByteBuffer.from( bytes ) )
+    }
 
-    lazy private val propertyMap = obj filterKeys ( ! isSpecialMongoProperty(_) )
+    lazy private val propertyMap = obj filterKeys (!isSpecialMongoProperty(_))
 
     val envelope = EnvelopeSerializer.unapply(obj.as[String](BBOX)).getOrElse(geometry.getEnvelope)
 
     def hasProperty(propertyName: String, inclSpecial: Boolean): Boolean =
       (inclSpecial && ("id".equals(propertyName) || "geometry".equals(propertyName))) ||
-      (propertyMap.keys.contains(propertyName))
+        (propertyMap.keys.contains(propertyName))
 
     def getProperties: util.Collection[String] = propertyMap.keys
 
     def getProperty(propertyName: String): AnyRef =
-      if(propertyName == null) throw new IllegalArgumentException("Null parameter passed.")
+      if (propertyName == null) throw new IllegalArgumentException("Null parameter passed.")
       else propertyMap.get(propertyName).getOrElse(null) //when None, we return null to conform to the interface definition
 
     def getId: AnyRef = obj.getOrElse(ID, obj.getOrElse(_ID, "<no id.>"))
@@ -271,7 +277,7 @@ object MongoDbFeature {
 }
 
 
-case class Metadata (envelope : Envelope, stats : Map[String, Int], name: String, level: Int )
+case class Metadata(envelope: Envelope, stats: Map[String, Int], name: String, level: Int)
 
 object Metadata {
 
@@ -295,17 +301,17 @@ object Metadata {
     }
   }
 
-  private def toMap(optObj : Option[DBObject]) : Option[Map[String, Int]] = {
+  private def toMap(optObj: Option[DBObject]): Option[Map[String, Int]] = {
     for (obj <- optObj; m <- dbObjtoMap(obj)) yield m
   }
 
-  private def dbObjtoMap(obj: DBObject): Option[Map[String,Int]] = {
-      try {
-        val m : Map[String, Int] = (for ( (k,v) <- obj) yield (k.asInstanceOf[String], v.asInstanceOf[Int])).toMap
-        Some(m)
-      } catch {
-        case _ : Throwable => None
-      }
+  private def dbObjtoMap(obj: DBObject): Option[Map[String, Int]] = {
+    try {
+      val m: Map[String, Int] = (for ((k, v) <- obj) yield (k.asInstanceOf[String], v.asInstanceOf[Int])).toMap
+      Some(m)
+    } catch {
+      case _: Throwable => None
+    }
   }
 
 }
@@ -320,9 +326,9 @@ object EnvelopeSerializer {
     else {
       val srid = bbox.getCrsId.getCode
       val builder = new StringBuilder()
-          .append(srid)
-          .append(":")
-          .append(List(bbox.getMinX, bbox.getMinY, bbox.getMaxX, bbox.getMaxY).mkString(","))
+        .append(srid)
+        .append(":")
+        .append(List(bbox.getMinX, bbox.getMinY, bbox.getMaxX, bbox.getMaxY).mkString(","))
       builder.toString
     }
   }
@@ -330,16 +336,16 @@ object EnvelopeSerializer {
   def unapply(str: String): Option[Envelope] =
     cleaned(str) match {
       case pattern(srid, minx, miny, maxx, maxy) => {
-              try {
-                Some(new Envelope(minx.toDouble, miny.toDouble, maxx.toDouble, maxy.toDouble, CrsId.parse(srid)))
-              } catch  {
-                case _ : Throwable => None
-              }
+        try {
+          Some(new Envelope(minx.toDouble, miny.toDouble, maxx.toDouble, maxy.toDouble, CrsId.parse(srid)))
+        } catch {
+          case _: Throwable => None
+        }
       }
       case _ => None
-  }
+    }
 
-  def cleaned(str: String) : String = str.trim
+  def cleaned(str: String): String = str.trim
 
 }
 

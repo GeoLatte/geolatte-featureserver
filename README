@@ -1,6 +1,10 @@
-========================
-HOW TO USE THIS TEMPLATE
-========================
+This is a FeatureServer for NoSQL databases.
+
+A Feature Server provides a REST API for querying and managing (geospatial) data. Currently, the NoSQL-FeatureServer supports MongoDB only.
+
+============================
+Building NoSQL-FeatureServer
+============================
 
 * install sbt 0.11.2  if you do not have it already. You can get it from here: https://github.com/harrah/xsbt/wiki/Getting-Started-Setup
 
@@ -10,7 +14,7 @@ HOW TO USE THIS TEMPLATE
 
 * execute `sbt` and then 'run' to run the built-in development server
 
-* onece the development server is running, documentation is available at http://localhost:9000/@documentation
+
 
 
 
