@@ -1,7 +1,10 @@
 // Comment to get more information during initialization
 logLevel := Level.Warn
 
-// Use the Play sbt plugin for Play projects
+// Use the Play sbt plugin for Play project
+
+resolvers += "Typesafe repository" at "http://repo.typesafe.com/typesafe/releases/"
+
 addSbtPlugin("play" % "sbt-plugin" % "2.1.0")
 
 addSbtPlugin("com.eed3si9n" % "sbt-buildinfo" % "0.2.0")
