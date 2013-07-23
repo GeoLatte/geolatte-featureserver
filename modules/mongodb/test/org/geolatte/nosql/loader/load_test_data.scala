@@ -22,7 +22,7 @@ object Loader {
     lazy val coll = MongoClient()("test")("tiger")
     val sink = new MongoDbSink(coll, ctxt)
 
-  //  val mongoSrc = MongoDBSource(coll, mortoncode)
+    val mongoSrc = MongoDbSource(coll, ctxt)
 
     time(sink.in(src.out))
   }

@@ -10,6 +10,7 @@ import com.mongodb.casbah.commons.MongoDBObject
 import com.mongodb.DBObject
 import play.api.cache.Cache
 import play.api.Play.current
+import collection.mutable
 
 /**
  * @author Karel Maesen, Geovise BVBA
@@ -19,7 +20,10 @@ import play.api.Play.current
 //this needs to move to a service layer
 object MongoRepository {
 
+  //TODO -- make the client configurable
   val mongo = MongoClient()
+
+  def listDatabases() : mutable.Buffer[String] = mongo.dbNames
 
   def query(database: String, collection: String, window: Envelope): Iterator[Feature] = {
     val md = metadata(database, collection)

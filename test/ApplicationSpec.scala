@@ -4,6 +4,7 @@ import org.specs2.mutable._
 
 import play.api.test._
 import play.api.test.Helpers._
+import play.api.libs.ws.WS
 
 /**
  * Add your spec here.
@@ -14,12 +15,8 @@ class ApplicationSpec extends Specification {
   
   "Application" should {
     
-    "send 404 on a bad request" in {
-      running(FakeApplication()) {
-        val boum = route(FakeRequest(GET, "/boum")).get
-
-        status(boum) must equalTo ( NOT_FOUND )
-      }
+    "send 404 on a bad request" in new WithServer {
+      await (WS.url("http://localhost:" + port + "/foo").get).status must equalTo ( NOT_FOUND )
     }
     
     "redirect to the index page" in {
