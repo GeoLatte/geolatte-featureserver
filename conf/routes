@@ -7,7 +7,13 @@ GET     /                              controllers.Application.index
 
 # FeatureServer REST API
 
-GET /api/databases                     controllers.Databases.get()
+GET /api/databases                     controllers.Databases.list()
+GET /api/databases/:db                 controllers.Databases.getDb(db : String)
+PUT /api/databases/:db                 controllers.Databases.createDb(db : String)
+DELETE /api/databases/:db              controllers.Databases.deleteDb(db : String)
+
+
+GET /api/databases/:db/:collection     controllers.Databases.getCollection(db: String, collection: String)
 
 GET /rest/:db/:collection              controllers.FeatureCollection.query(db: String, collection: String)
 

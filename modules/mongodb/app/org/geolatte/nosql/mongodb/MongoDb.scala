@@ -16,6 +16,7 @@ import sun.misc.{BASE64Decoder, BASE64Encoder}
 
 
 object MetadataIdentifiers {
+  val MetadataCollectionPrefix = "geolatte_nosql."
   val MetadataCollection = "geolatte_nosql.collections"
   val ExtentField = "extent"
   val IndexStatsField = "index_stats"

@@ -20,10 +20,35 @@ import collection.mutable
 //this needs to move to a service layer
 object MongoRepository {
 
+
+  import MetadataIdentifiers._
+
   //TODO -- make the client configurable
   val mongo = MongoClient()
 
+
+
   def listDatabases() : mutable.Buffer[String] = mongo.dbNames
+
+  def isMetadata(name : String) : Boolean =  (name startsWith MetadataCollectionPrefix) || (name startsWith "system.")
+
+  def listCollections(dbname : String) =
+  if ( mongo.dbNames.exists( _ == dbname ) ) Some( mongo.getDB(dbname).collectionNames.filterNot( isMetadata(_)) )
+  else None
+
+  def createDb(dbname : String) : Boolean =
+  if(mongo.dbNames.exists( _ == dbname )) false
+  else {
+    mongo(dbname).createCollection(MetadataCollection, MongoDBObject.empty)
+    true
+  }
+
+  def deleteDb(dbname: String): Boolean =
+    if (mongo.dbNames.exists( _ == dbname)) {
+      mongo(dbname).dropDatabase
+      true
+    }
+    else false
 
   def query(database: String, collection: String, window: Envelope): Iterator[Feature] = {
     val md = metadata(database, collection)
