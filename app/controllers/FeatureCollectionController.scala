@@ -10,7 +10,7 @@ import play.api.libs.iteratee.Enumerator
 import play.api.http.MimeTypes
 import org.geolatte.common.Feature
 import org.geolatte.scala.ChainedIterator
-import repositories.MongoRepository
+import repositories.{SpatialMetadata, MongoRepository}
 
 object FeatureCollection extends Controller {
 
@@ -19,38 +19,40 @@ object FeatureCollection extends Controller {
     val BBOX = QueryParam("bbox", (s: String) => Some(s))
   }
 
-    //temporary fixed value
-    val WGS_84 = CrsId.valueOf(4326)
+  //temporary fixed value
+  val WGS_84 = CrsId.valueOf(4326)
 
-    def query(db: String, collection: String) = Action {
-      request =>
-        implicit val queryStr = request.queryString
-        Logger.info(s"Query string ${queryStr} on $db, collection $collection")
-        doQuery(db, collection)
-    }
+  def query(db: String, collection: String) = Action {
+    request =>
+      implicit val queryStr = request.queryString
+      Logger.info(s"Query string ${queryStr} on $db, collection $collection")
+      doQuery(db, collection)
+  }
 
   def doQuery(db: String, collection: String)(implicit queryStr: Map[String, Seq[String]]) =
     try {
-      val windowOpt = for {
-        md <- MongoRepository.metadata(db, collection)
-        w  <- Bbox(QueryParams.BBOX.extractOrElse(""), md.envelope.getCrsId)
-      } yield w
-      windowOpt match {
-        case Some(window) => mkChunked(db, collection, window)
-        case None => BadRequest(s"BadRequest: No or invalid bbox parameter in query string.")
+      val meta = MongoRepository.metadata(db, collection)
+      meta match {
+        case md: SpatialMetadata => val windowOpt = for {
+          w <- Bbox(QueryParams.BBOX.extractOrElse(""), md.envelope.getCrsId)
+        } yield w
+          windowOpt match {
+            case Some(window) => mkChunked(db, collection, window)
+            case None => BadRequest(s"BadRequest: No or invalid bbox parameter in query string.")
+          }
       }
     } catch {
       case ex: NoSuchElementException => NotFound(s"${db}.${collection} not found in metadata")
     }
 
 
-  def mkChunked(db: String, collection: String, window: Envelope) =  {
+  def mkChunked(db: String, collection: String, window: Envelope) = {
     try {
       val dataContent = toStream(MongoRepository.query(db, collection, window))
       Ok.stream(dataContent).as(MimeTypes.JSON)
     }
     catch {
-      case ex : IllegalArgumentException => BadRequest(s"Error: " + ex.getMessage())
+      case ex: IllegalArgumentException => BadRequest(s"Error: " + ex.getMessage())
     }
   }
 
@@ -80,28 +82,36 @@ object FeatureCollection extends Controller {
 
     object Counter {
       private var num = 0
-      def inc : Unit = num += 1
+
+      def inc: Unit = num += 1
+
       def value = num
     }
 
     import ChainedIterator._
     val START: Iterator[String] = List("{ \"items\": [").iterator
 
-    lazy val END : Iterator[String] = List(s"], total: ${Counter.value} }").iterator
+    lazy val END: Iterator[String] = List(s"], total: ${Counter.value} }").iterator
 
 
 
     def seperatorAddingIterator(it: Iterator[String]) = new Iterator[String] {
-          def hasNext: Boolean = it.hasNext
-          var sep = false
-          def next(): String = if (sep) {sep = false; ","} else {Counter.inc; sep = true; it.next}
+      def hasNext: Boolean = it.hasNext
+
+      var sep = false
+
+      def next(): String = if (sep) {
+        sep = false; ","
+      } else {
+        Counter.inc; sep = true; it.next
+      }
     }
 
-    val jsons = seperatorAddingIterator( features.map( jsonMapper.toJson(_)) )
+    val jsons = seperatorAddingIterator(features.map(jsonMapper.toJson(_)))
 
 
-    val str  = START #:: jsons #:: END #:: Stream.empty
-    val jsonStringIt = chain[String]( str )
+    val str = START #:: jsons #:: END #:: Stream.empty
+    val jsonStringIt = chain[String](str)
 
 
 
@@ -111,8 +121,10 @@ object FeatureCollection extends Controller {
 
       var currentJson = advance
 
-      def hasNext : Boolean = {
-        currentJson.hasNext || {currentJson = advance; currentJson.hasNext}
+      def hasNext: Boolean = {
+        currentJson.hasNext || {
+          currentJson = advance; currentJson.hasNext
+        }
       }
 
       def read(): Int =

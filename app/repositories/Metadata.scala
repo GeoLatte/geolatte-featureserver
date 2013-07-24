@@ -6,14 +6,10 @@ import org.geolatte.geom.Envelope
  * @author Karel Maesen, Geovise BVBA
  *         creation-date: 7/24/13
  */
-trait Metadata {
 
-  def envelope: Envelope
+trait Metadata
 
-  def stats: Map[String, Int]
+case class NonSpatialMetadata(name: String) extends Metadata
 
-  def name: String
 
-  def level: Int
-
-}
+case class SpatialMetadata(name: String, envelope: Envelope, stats: Map[String, Int], level : Int) extends Metadata
