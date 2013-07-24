@@ -5,6 +5,7 @@ import play.api.mvc.{RequestHeader, Result, Action, Controller}
 import repositories.MongoRepository
 import play.api.libs.json._
 import config.ConfigurationValues.Format
+import models._
 
 /**
  * @author Karel Maesen, Geovise BVBA
@@ -12,9 +13,11 @@ import config.ConfigurationValues.Format
  */
 object Databases extends Controller {
 
-  def toResultRepr[A](result: A)(implicit request: RequestHeader, writes: Writes[A]): Result = {
-    render {
-      case MediaTypeSpec(Format.JSON, version) => Ok(Json.toJson(result)).as(MediaTypeSpec(Format.JSON, version))
+  //TODO -- also set the Vary response header.
+  def toResult[A <: RenderableResource](result: A)(implicit request: RequestHeader): Result = {
+    (result, request) match {
+      case (r : Jsonable, MediaTypeSpec(Format.JSON, version)) => Ok(r.toJson).as(MediaTypeSpec(Format.JSON, version))
+      case (r : Csvable, MediaTypeSpec(Format.CSV, version)) => Ok(r.toCsv).as(MediaTypeSpec(Format.CSV, version))
       case _ => UnsupportedMediaType("No supported media type")
     }
   }
@@ -23,8 +26,7 @@ object Databases extends Controller {
     Action {
       implicit request =>
         val dbs = MongoRepository.listDatabases()
-        val results = dbs.map(name => Map("name" -> name, "url" -> routes.Databases.getDb(name).url))
-        toResultRepr(results)
+        toResult(DatabasesResource(dbs))
     }
   }
 
@@ -33,8 +35,7 @@ object Databases extends Controller {
       MongoRepository.listCollections(db) match {
         case None => NotFound(s"No database $db")
         case Some(collections) => {
-          val result = collections map (n => Map(n -> routes.Databases.getCollection(db, n).url))
-          toResultRepr(result)
+          toResult(DatabaseResource(db, collections))
         }
       }
   }

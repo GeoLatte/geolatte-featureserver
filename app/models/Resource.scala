@@ -1,9 +1,33 @@
-package controllers
+package models
 
 import play.api.mvc.{Result, Action, Controller}
 import repositories.MongoRepository
 import play.api.libs.json.{JsValue, Writes, Json}
 import org.geolatte.nosql.mongodb.{EnvelopeSerializer, MetadataIdentifiers, Metadata}
+import controllers.routes
+
+
+trait RenderableResource;
+
+
+
+trait Jsonable extends RenderableResource {
+  def toJson : JsValue
+}
+
+trait Csvable extends RenderableResource {
+  def toCsv : String
+}
+
+case class DatabasesResource(dbNames : Traversable[String]) extends Jsonable {
+  lazy val intermediate = dbNames map(name => Map("name" -> name, "url" -> routes.Databases.getDb(name).url))
+  def toJson = Json.toJson(intermediate)
+}
+
+case class DatabaseResource(db: String, collections : Traversable[String]) extends Jsonable {
+  lazy val intermediate = collections map ( name => Map("name" -> name, "url" -> routes.Databases.getCollection(db, name).url))
+  def toJson = Json.toJson(intermediate)
+}
 
 
 /**

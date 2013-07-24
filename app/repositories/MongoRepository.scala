@@ -10,7 +10,6 @@ import com.mongodb.casbah.commons.MongoDBObject
 import com.mongodb.DBObject
 import play.api.cache.Cache
 import play.api.Play.current
-import collection.mutable
 
 /**
  * @author Karel Maesen, Geovise BVBA
@@ -28,11 +27,11 @@ object MongoRepository {
 
 
 
-  def listDatabases() : mutable.Buffer[String] = mongo.dbNames
+  def listDatabases() : Traversable[String] = mongo.dbNames
 
   def isMetadata(name : String) : Boolean =  (name startsWith MetadataCollectionPrefix) || (name startsWith "system.")
 
-  def listCollections(dbname : String) =
+  def listCollections(dbname : String) : Option[Traversable[String]]=
   if ( mongo.dbNames.exists( _ == dbname ) ) Some( mongo.getDB(dbname).collectionNames.filterNot( isMetadata(_)) )
   else None
 
