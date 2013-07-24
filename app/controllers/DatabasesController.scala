@@ -3,7 +3,6 @@ package controllers
 import util.MediaTypeSpec
 import play.api.mvc.{RequestHeader, Result, Action, Controller}
 import repositories.MongoRepository
-import play.api.libs.json._
 import config.ConfigurationValues.Format
 import models._
 
@@ -59,7 +58,10 @@ object Databases extends Controller {
 
   def getCollection(db: String, collection: String) = Action {
     implicit request =>
-      Ok("ok")
+      MongoRepository.metadata(db, collection) match {
+        case Some(md) => toResult(CollectionResource(md))
+        case none => NotFound(s"No metadata for collection $collection found in $db")
+      }
   }
 
 }

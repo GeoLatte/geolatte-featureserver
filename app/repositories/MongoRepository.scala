@@ -5,11 +5,9 @@ import org.geolatte.geom.curve.MortonContext
 import org.geolatte.geom.Envelope
 import com.mongodb.casbah.{MongoCollection, MongoClient}
 import org.geolatte.common.Feature
-import org.geolatte.nosql.mongodb.{MetadataIdentifiers, Metadata, MongoDbSource}
+import org.geolatte.nosql.mongodb.{SpatialCollectionMetadata, MetadataIdentifiers, MongoDbSource}
 import com.mongodb.casbah.commons.MongoDBObject
 import com.mongodb.DBObject
-import play.api.cache.Cache
-import play.api.Play.current
 
 /**
  * @author Karel Maesen, Geovise BVBA
@@ -52,36 +50,28 @@ object MongoRepository {
   def query(database: String, collection: String, window: Envelope): Iterator[Feature] = {
     val md = metadata(database, collection)
     val coll = mongo(database)(collection)
-    val src = MongoDbSource(coll, mkMortonContext(md))
+    val src = MongoDbSource(coll, mkMortonContext(md.get))
     src.query(window)
 
   }
 
-  def metadata(database: String, collection: String) : Metadata = {
-    val key = s"${database}.${collection}"
-    Cache.getOrElse[Metadata](key){
-      val md= lookUpMetadata(database, collection)
-      Cache.set(key, md)
-      md
-    }
-  }
-
-  def lookUpMetadata(database :String, collection: String) : Metadata = {
+  def metadata(database :String, collection: String) : Option[Metadata] = {
     import MetadataIdentifiers._
-    val metadataCollection : MongoCollection = mongo(database)(MetadataCollection)
-    metadataCollection.findOne( MongoDBObject( CollectionField -> collection)) match {
-      case Some(obj) => toMetadata(obj)
-      case _ => throw new NoSuchElementException(s"Can't find metadata for collection ${collection}")
-    }
+    val metadataCollection = mongo(database)(MetadataCollection)
+    for {
+      dbobj <- metadataCollection.findOne( MongoDBObject( CollectionField -> collection))
+      mongoMeta <- SpatialCollectionMetadata.from(dbobj)
+      md = new Metadata{
+        def envelope: Envelope = mongoMeta.envelope
+        def stats: Map[String, Int] = mongoMeta.stats
+        def name: String = mongoMeta.name
+        def level: Int = mongoMeta.level
+      }
+    } yield md
+
   }
 
-  def toMetadata(obj: DBObject) : Metadata =
-    Metadata.from(obj) match {
-      case Some(md) => md
-      case _ => throw new NoSuchElementException(s"Invalid metadata for collection")
-    }
-
-  def mkMortonContext(md: Metadata) : MortonContext = new MortonContext(md.envelope, md.level)
+  private def mkMortonContext(md: Metadata) : MortonContext = new MortonContext(md.envelope, md.level)
 
 
 }

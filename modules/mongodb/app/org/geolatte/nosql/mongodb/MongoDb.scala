@@ -246,7 +246,7 @@ object MongoDbFeature {
 
     lazy private val geometry: Geometry = {
       val bytes = base64Decoder.decodeBuffer(obj.as[String](WKB))
-      geometryDecoder.decode( ByteBuffer.from( bytes ) )
+      geometryDecoder.decode(ByteBuffer.from(bytes))
     }
 
     lazy private val propertyMap = obj filterKeys (!isSpecialMongoProperty(_))
@@ -278,40 +278,27 @@ object MongoDbFeature {
 }
 
 
-case class Metadata(envelope: Envelope, stats: Map[String, Int], name: String, level: Int)
+case class SpatialCollectionMetadata(envelope: Envelope, stats: Map[String, Int], name: String, level: Int)
 
-object Metadata {
+object SpatialCollectionMetadata {
 
   import MetadataIdentifiers._
 
-  def from(dbObj: DBObject): Option[Metadata] = {
-    val envOpt: Option[Envelope] = dbObj.getAs[String](ExtentField) match {
-      case Some(EnvelopeSerializer(env)) => Some(env)
-      case _ => None
-    }
-    try {
-      val nameOpt: Option[String] = dbObj.getAs[String](CollectionField)
-      val indexOpt: Option[Map[String, Int]] = toMap(dbObj.getAs[DBObject](IndexStatsField))
-      val levelOpt: Option[Int] = dbObj.getAs[Int](IndexLevelField)
-      (envOpt, nameOpt, indexOpt, levelOpt) match {
-        case (Some(env), Some(name), Some(index), Some(level)) => Some(Metadata(env, index, name, level))
-        case _ => None
-      }
-    } catch {
-      case _: Throwable => None
-    }
+  def from(dbObj: DBObject): Option[SpatialCollectionMetadata] = {
+    for {
+      h <- dbObj.getAs[String](ExtentField)
+      env <- EnvelopeSerializer.unapply(h)
+      name <- dbObj.getAs[String](CollectionField)
+      indexObj  <- dbObj.getAs[DBObject](IndexStatsField)
+      index = indexObj.mapValues[Int]( v => toInt(v) ).toMap.filter( _._2 >= 0 )  // toMap is required to ensure mapValues result conforms to immutable.Map
+      level <- dbObj.getAs[Int](IndexLevelField)
+    } yield SpatialCollectionMetadata(env, index, name, level)
   }
 
-  private def toMap(optObj: Option[DBObject]): Option[Map[String, Int]] = {
-    for (obj <- optObj; m <- dbObjtoMap(obj)) yield m
-  }
-
-  private def dbObjtoMap(obj: DBObject): Option[Map[String, Int]] = {
-    try {
-      val m: Map[String, Int] = (for ((k, v) <- obj) yield (k.asInstanceOf[String], v.asInstanceOf[Int])).toMap
-      Some(m)
-    } catch {
-      case _: Throwable => None
+  private def toInt(v: Any): Int = {
+    v match {
+      case i : Int => i
+      case _ => -1
     }
   }
 

@@ -31,8 +31,10 @@ object FeatureCollection extends Controller {
 
   def doQuery(db: String, collection: String)(implicit queryStr: Map[String, Seq[String]]) =
     try {
-      val md = MongoRepository.metadata(db, collection)
-      val windowOpt = Bbox(QueryParams.BBOX.extractOrElse(""), md.envelope.getCrsId)
+      val windowOpt = for {
+        md <- MongoRepository.metadata(db, collection)
+        w  <- Bbox(QueryParams.BBOX.extractOrElse(""), md.envelope.getCrsId)
+      } yield w
       windowOpt match {
         case Some(window) => mkChunked(db, collection, window)
         case None => BadRequest(s"BadRequest: No or invalid bbox parameter in query string.")
