@@ -1,7 +1,7 @@
 package models
 
 
-import repositories.{NonSpatialMetadata, SpatialMetadata, Metadata}
+import repositories.{SpatialMetadata, Metadata}
 import play.api.libs.json.{JsValue, Writes, Json}
 import org.geolatte.nosql.mongodb.{EnvelopeSerializer, MetadataIdentifiers}
 import controllers.routes
@@ -33,13 +33,14 @@ case class CollectionResource(md: Metadata) extends Jsonable {
 
   implicit object MetadataWrites extends Writes[Metadata] {
 
-    def writes(meta: Metadata): JsValue = meta match {
-      case md: SpatialMetadata => Json.obj(
-        "collection" -> md.name,
-        "extent" -> EnvelopeSerializer(md.envelope),
-        "index-level" -> md.level,
-        "index-stats" -> Json.toJson(md.stats))
-      case md: NonSpatialMetadata => Json.obj("collection" -> md.name)
+    def writes(meta: Metadata): JsValue = meta.spatialMetadata match {
+      case Some(smd) => Json.obj(
+        "collection" -> meta.name,
+        "num-objects" -> meta.count,
+        "extent" -> EnvelopeSerializer(smd.envelope),
+        "index-level" -> smd.level,
+        "index-stats" -> Json.toJson(smd.stats))
+      case None => Json.obj("collection" -> meta.name, "num-objects" -> meta.count)
     }
   }
 

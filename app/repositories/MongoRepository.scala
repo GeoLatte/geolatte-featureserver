@@ -54,28 +54,30 @@ object MongoRepository {
 
   }
 
+  def count(database: String, collection: String) : Long = mongo(database)(collection).count()
+
   def metadata(database: String, collection: String): Option[Metadata] = {
-
-    def toSpatialMetadata(dbobj: DBObject) =
-      for {
-        mongoMeta <- SpatialCollectionMetadata.from(dbobj)
-        md = SpatialMetadata (envelope = mongoMeta.envelope, stats = mongoMeta.stats,
-          name = mongoMeta.name, level = mongoMeta.level)
-      } yield md
-
     import MetadataIdentifiers._
-    mongo(database)(MetadataCollection).findOne(MongoDBObject(CollectionField -> collection)) match {
-      case Some(md) => toSpatialMetadata(md)
-      case None => {
-        if (listCollections(database).exists( _ == collection)) None
-        else Some(NonSpatialMetadata(collection))
-      }
-    }
 
+    def toSpatialMetadata(dbobj: DBObject) = for {
+      mongoMeta <- SpatialCollectionMetadata.from(dbobj)
+      md = SpatialMetadata(envelope = mongoMeta.envelope, stats = mongoMeta.stats, level = mongoMeta.level)
+    } yield md
+
+
+    val spatialMetadata = for {
+      doc <- mongo(database)(MetadataCollection).findOne(MongoDBObject(CollectionField -> collection))
+      td <- toSpatialMetadata(doc)
+    } yield td
+
+    val cnt = count(database, collection)
+    if (listCollections(database).getOrElse(List[String]()).exists(_ == collection)) Some(Metadata(collection, cnt,spatialMetadata))
+    else None
 
   }
 
-  private def mkMortonContext(md: SpatialMetadata): MortonContext = new MortonContext(md.envelope, md.level)
+
+private def mkMortonContext (md: SpatialMetadata): MortonContext = new MortonContext (md.envelope, md.level)
 
 
 }

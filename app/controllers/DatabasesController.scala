@@ -60,7 +60,7 @@ object Databases extends Controller {
     implicit request =>
       MongoRepository.metadata(db, collection) match {
         case Some(md) => toResult(CollectionResource(md))
-        case none => NotFound(s"No metadata for collection $collection found in $db")
+        case none => NotFound(s"Collection $collection or database $db not found")
       }
   }
 

@@ -7,9 +7,7 @@ import org.geolatte.geom.Envelope
  *         creation-date: 7/24/13
  */
 
-trait Metadata
-
-case class NonSpatialMetadata(name: String) extends Metadata
+case class Metadata(name: String, count: Long, spatialMetadata: Option[SpatialMetadata] = None)
 
 
-case class SpatialMetadata(name: String, envelope: Envelope, stats: Map[String, Int], level : Int) extends Metadata
+case class SpatialMetadata(envelope: Envelope, stats: Map[String, Int], level : Int)
