@@ -10,8 +10,6 @@ import com.mongodb.casbah.Imports._
 
 import java.util
 import play.Logger
-import org.geolatte.geom.crs.CrsId
-import play.api.libs.json.{Json, Writes}
 import sun.misc.{BASE64Decoder, BASE64Encoder}
 
 
@@ -61,7 +59,7 @@ class MongoDbSink(val collection: MongoCollection, val mortoncontext: MortonCont
     def transform(f: Feature): Option[DBObject] = {
       try {
         val mc = mortoncode ofGeometry f.getGeometry
-        mcStats.put(mc, (mcStats.getOrElse(mc, 0) + 1))
+        mcStats.put(mc, mcStats.getOrElse(mc, 0) + 1)
         Some(MongoDbFeature(f, mc))
       } catch {
         case ex: IllegalArgumentException => {
@@ -305,35 +303,5 @@ object SpatialCollectionMetadata {
 }
 
 
-object EnvelopeSerializer {
 
-  private val pattern = "(\\d\\d\\d\\d):(-*[\\.\\d]+),(-*[\\.\\d]+),(-*[\\.\\d]+),(-*[\\.\\d]+)".r
-
-  def apply(bbox: Envelope): String = {
-    if (bbox == null) ""
-    else {
-      val srid = bbox.getCrsId.getCode
-      val builder = new StringBuilder()
-        .append(srid)
-        .append(":")
-        .append(List(bbox.getMinX, bbox.getMinY, bbox.getMaxX, bbox.getMaxY).mkString(","))
-      builder.toString
-    }
-  }
-
-  def unapply(str: String): Option[Envelope] =
-    cleaned(str) match {
-      case pattern(srid, minx, miny, maxx, maxy) => {
-        try {
-          Some(new Envelope(minx.toDouble, miny.toDouble, maxx.toDouble, maxy.toDouble, CrsId.parse(srid)))
-        } catch {
-          case _: Throwable => None
-        }
-      }
-      case _ => None
-    }
-
-  def cleaned(str: String): String = str.trim
-
-}
 

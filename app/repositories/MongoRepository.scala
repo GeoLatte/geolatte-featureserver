@@ -3,15 +3,17 @@ package repositories
 
 import org.geolatte.geom.curve.MortonContext
 import org.geolatte.geom.Envelope
-import com.mongodb.casbah.{MongoCollection, MongoClient}
+import com.mongodb.casbah.{WriteConcern, MongoClient}
 import org.geolatte.common.Feature
 import org.geolatte.nosql.mongodb.{SpatialCollectionMetadata, MetadataIdentifiers, MongoDbSource}
 import com.mongodb.casbah.commons.MongoDBObject
 import com.mongodb.DBObject
+import util.SpatialSpec
+import play.api.Logger
 
 /**
  * @author Karel Maesen, Geovise BVBA
- *         creation-date: 3/11/13
+ *
  */
 
 //this needs to move to a service layer
@@ -28,31 +30,27 @@ object MongoRepository {
 
   def isMetadata(name: String): Boolean = (name startsWith MetadataCollectionPrefix) || (name startsWith "system.")
 
-  def listCollections(dbname: String): Option[Traversable[String]] =
-    if (mongo.dbNames.exists(_ == dbname)) Some(mongo.getDB(dbname).collectionNames.filterNot(isMetadata(_)))
-    else None
-
   def createDb(dbname: String): Boolean =
-    if (mongo.dbNames.exists(_ == dbname)) false
+    if (existsDb(dbname)) false
     else {
       mongo(dbname).createCollection(MetadataCollection, MongoDBObject.empty)
       true
     }
 
   def deleteDb(dbname: String): Boolean =
-    if (mongo.dbNames.exists(_ == dbname)) {
+    if (existsDb(dbname) ) {
       mongo(dbname).dropDatabase
       true
     }
     else false
 
-  def query(database: String, collection: String, window: Envelope): Iterator[Feature] = {
-    val md = metadata(database, collection)
-    val coll = mongo(database)(collection)
-    val src = MongoDbSource(coll, mkMortonContext(md.get.asInstanceOf[SpatialMetadata]))
-    src.query(window)
+  def existsDb(dbname: String) : Boolean = mongo.dbNames.exists( _ == dbname)
 
-  }
+
+  def listCollections(dbname: String): Option[Traversable[String]] =
+    if (existsDb(dbname)) Some(mongo.getDB(dbname).collectionNames.filterNot(isMetadata(_)))
+    else None
+
 
   def count(database: String, collection: String) : Long = mongo(database)(collection).count()
 
@@ -76,8 +74,53 @@ object MongoRepository {
 
   }
 
+  //we check also the "hidden" names (e.g. metadata collection) so that puts will fail
+  def existsCollection(dbName: String, colName: String) : Boolean = mongo.getDB(dbName).collectionExists(colName)
 
-private def mkMortonContext (md: SpatialMetadata): MortonContext = new MortonContext (md.envelope, md.level)
+  //TODO -- these operations don't catch exceptions. if exceptions need to be catched here, then replace Boolean return values
+  // with error statuses
+
+  def createCollection(dbName: String, colName: String, spatialSpec: Option[SpatialSpec]) : Boolean = {
+    if (! existsDb(dbName) || existsCollection(dbName, colName)) false
+    else {
+      //we give the capped option explicitly so that creation is not deferred!
+      val created = mongo(dbName).createCollection(colName, MongoDBObject("capped" -> false))
+      Logger.info("Created: " + created.getFullName)
+      if (spatialSpec.isDefined) {
+        Logger.info(created.getFullName + " is spatially enabled")
+        val writeResult = mongo(dbName)(MetadataCollection).insert(MongoDBObject(
+          ExtentField -> spatialSpec.get.envelope,
+          IndexStatsField -> MongoDBObject.empty,
+          IndexLevelField  -> spatialSpec.get.level,
+          CollectionField -> colName
+        ), WriteConcern.Safe)
+        Logger.error(writeResult.getLastError().getErrorMessage)
+      }
+      true
+    }
+  }
+
+  def deleteCollection(dbName: String, colName: String) : Boolean = {
+    if (! existsDb(dbName) || !existsCollection(dbName, colName) ) false
+    else {
+      Logger.info(s"Starting removal of $dbName/$colName")
+      mongo(dbName)(colName).dropCollection()
+      mongo(dbName)(MetadataCollection).remove(MongoDBObject( CollectionField -> colName), WriteConcern.Safe)
+      Logger.info(s"Finalized removal of $dbName/$colName")
+      true
+    }
+  }
+
+  def query(database: String, collection: String, window: Envelope): Iterator[Feature] = {
+    val md = metadata(database, collection)
+    val coll = mongo(database)(collection)
+    val src = MongoDbSource(coll, mkMortonContext(md.get.asInstanceOf[SpatialMetadata]))
+    src.query(window)
+  }
+
+
+  private def mkMortonContext (md: SpatialMetadata): MortonContext = new MortonContext (md.envelope, md.level)
 
 
 }
+

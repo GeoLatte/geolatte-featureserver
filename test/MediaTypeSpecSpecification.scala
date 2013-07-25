@@ -1,8 +1,9 @@
-package util
+package test
 
 import org.specs2.mutable._
-import play.api.test.{FakeHeaders, FakeRequest}
 import config.ConfigurationValues.{Version, Format}
+import util.MediaTypeSpec
+import play.api.test.{FakeRequest, FakeHeaders}
 
 /**
  * @author Karel Maesen, Geovise BVBA

@@ -1,10 +1,11 @@
 package controllers
 
-import util.MediaTypeSpec
+import util.{CustomBodyParsers, SpatialSpec, MediaTypeSpec}
 import play.api.mvc.{RequestHeader, Result, Action, Controller}
 import repositories.MongoRepository
 import config.ConfigurationValues.Format
 import models._
+import play.api.libs.json.{JsValue, JsError, JsNull}
 
 /**
  * @author Karel Maesen, Geovise BVBA
@@ -53,14 +54,41 @@ object Databases extends Controller {
         case true => Ok(s"database $db dropped.")
         case false => NotFound(s"No database $db")
       }
-
   }
 
   def getCollection(db: String, collection: String) = Action {
     implicit request =>
       MongoRepository.metadata(db, collection) match {
         case Some(md) => toResult(CollectionResource(md))
-        case none => NotFound(s"Collection $collection or database $db not found")
+        case none => NotFound(s"Collection $db/$collection not found")
+      }
+  }
+
+  def createCollection(db: String, col: String) = Action (CustomBodyParsers.veryTolerantJson) {
+    implicit request => {
+      //interpret request body
+      import models.CollectionResourceReads._
+      val spatialSpec: Either[JsValue, Option[SpatialSpec]] = request.body match {
+        case JsNull => Right(None)
+        case js: JsValue => js.validate[SpatialSpec].fold(
+          invalid = errs => Left(JsError.toFlatJson(errs)),
+          valid = v => Right(Some(v)))
+      }
+      spatialSpec match {
+        case Right(opt) => MongoRepository.createCollection(db, col, opt) match {
+          case false => Conflict(s"$db doesn't exist, or $col already exists") //This is not very consistent: 404 and 409 conflated
+          case true => Ok(s"$db/$col created")
+        }
+        case Left(errs) => BadRequest("Invalid format: " + errs)
+      }
+    }
+  }
+
+  def deleteCollection(db: String, col: String) = Action {
+    implicit request =>
+      MongoRepository.deleteCollection(db, col) match {
+        case false => NotFound(s"Collection $db/$col not found.")
+        case true => Ok(s"Collection $db/$col deleted.")
       }
   }
 
