@@ -3,7 +3,6 @@ package org.geolatte.nosql.mongodb
 import org.specs2.mutable._
 import org.geolatte.geom.crs.CrsId
 import org.geolatte.geom.Envelope
-import util.EnvelopeSerializer
 
 /**
  * @author Karel Maesen, Geovise BVBA

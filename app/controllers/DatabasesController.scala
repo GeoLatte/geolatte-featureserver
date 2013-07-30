@@ -1,11 +1,13 @@
 package controllers
 
-import util.{CustomBodyParsers, SpatialSpec, MediaTypeSpec}
+import util._
+import util.CustomBodyParsers._
 import play.api.mvc.{RequestHeader, Result, Action, Controller}
 import repositories.MongoRepository
 import config.ConfigurationValues.Format
 import models._
 import play.api.libs.json.{JsValue, JsError, JsNull}
+
 
 /**
  * @author Karel Maesen, Geovise BVBA
@@ -40,7 +42,7 @@ object Databases extends Controller {
       }
   }
 
-  def createDb(db: String) = Action {
+  def createDb(db: String) = Action(tolerantNullableJson) {
     implicit request =>
       MongoRepository.createDb(db) match {
         case true => Created(s"database $db created")
@@ -48,7 +50,7 @@ object Databases extends Controller {
       }
   }
 
-  def deleteDb(db: String) = Action {
+  def deleteDb(db: String) = Action (tolerantNullableJson) {
     implicit request =>
       MongoRepository.deleteDb(db) match {
         case true => Ok(s"database $db dropped.")
@@ -64,7 +66,7 @@ object Databases extends Controller {
       }
   }
 
-  def createCollection(db: String, col: String) = Action (CustomBodyParsers.veryTolerantJson) {
+  def createCollection(db: String, col: String) = Action (tolerantNullableJson) {
     implicit request => {
       //interpret request body
       import models.CollectionResourceReads._
@@ -84,12 +86,11 @@ object Databases extends Controller {
     }
   }
 
-  def deleteCollection(db: String, col: String) = Action {
+  def deleteCollection(db: String, col: String) = Action(tolerantNullableJson) {
     implicit request =>
       MongoRepository.deleteCollection(db, col) match {
         case false => NotFound(s"Collection $db/$col not found.")
         case true => Ok(s"Collection $db/$col deleted.")
       }
   }
-
 }

@@ -20,7 +20,7 @@ object CustomBodyParsers {
    *
    * @param maxLength Max length allowed or returns EntityTooLarge HTTP response.
    */
-  def veryTolerantJson(maxLength: Int): BodyParser[JsValue] = BodyParser("json, maxLength=" + maxLength) {
+  def tolerantNullableJson(maxLength: Int): BodyParser[JsValue] = BodyParser("json, maxLength=" + maxLength) {
     request =>
       Traversable.takeUpTo[Array[Byte]](maxLength).apply(Iteratee.consume[Array[Byte]]().map {
         bytes => scala.util.control.Exception.allCatch[JsValue].either {
@@ -41,9 +41,9 @@ object CustomBodyParsers {
   }
 
   /**
-   * Parse the body as Json without checking the Content-Type.
+   * Parse the body as Json without checking the Content-Type, and allow null values
    */
-  def veryTolerantJson: BodyParser[JsValue] = veryTolerantJson(DEFAULT_MAX_TEXT_LENGTH)
+  def tolerantNullableJson: BodyParser[JsValue] = tolerantNullableJson(DEFAULT_MAX_TEXT_LENGTH)
 
 }
 
