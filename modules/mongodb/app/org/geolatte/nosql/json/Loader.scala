@@ -1,4 +1,4 @@
-package org.geolatte.nosql.loader
+package org.geolatte.nosql.json
 
 import org.geolatte.geom.crs.CrsId
 import org.geolatte.geom.curve._
@@ -6,9 +6,8 @@ import org.geolatte.geom.Envelope
 import org.geolatte.scala.Utils._
 import com.mongodb.casbah.Imports._
 import org.geolatte.nosql._
-import json.GeoJsonFileSource
-import mongodb._
 
+import mongodb._
 
 /**
  * @author Karel Maesen, Geovise BVBA
@@ -16,10 +15,9 @@ import mongodb._
  */
 object Loader {
 
-  def load() {
-    val ctxt = new MortonContext(new Envelope(-140.0, 15, -40.0, 50.0, CrsId.valueOf(4326)), 8)
-    val src = GeoJsonFileSource.fromFile("/tmp/tiger-1.json")
-    lazy val coll = MongoClient()("test")("tiger")
+  def load(file: String, collection: String, db: String = "test", ctxt: MortonContext = new MortonContext(new Envelope(-140.0, 15, -40.0, 50.0, CrsId.valueOf(4326)), 8) ) {
+    val src = GeoJsonFileSource.fromFile(file)
+    lazy val coll = MongoClient()(db)(collection)
     val sink = new MongoDbSink(coll, ctxt)
 
     val mongoSrc = MongoDbSource(coll, ctxt)

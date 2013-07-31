@@ -10,6 +10,8 @@ import sbtassembly.Plugin.AssemblyKeys._
 
 object GeolatteNoSqlBuild extends Build {
 
+   fork := true
+
    val appName         = "geolatte-nosql"
    val appVersion      = "0.1"
 
@@ -70,7 +72,8 @@ object GeolatteNoSqlBuild extends Build {
 
 
     val mongoDependencies = Seq(
-      "org.mongodb" %% "casbah" % "2.5.0"
+      "org.mongodb" %% "casbah" % "2.5.0",
+      "com.typesafe.play.extras" %% "iteratees-extras" % "1.0.1"
     )
 
     lazy val main = play.Project(
