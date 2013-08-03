@@ -1,6 +1,7 @@
 package controllers
 
 import play.api.mvc.{Action, Controller}
+import org.geolatte.nosql.json.ReactiveGeoJson
 
 /**
  * @author Karel Maesen, Geovise BVBA
@@ -8,8 +9,8 @@ import play.api.mvc.{Action, Controller}
  */
 object TxController extends Controller {
 
-    def loadInto(db: String, col: String) = Action {
-      Ok("placeholder")
+    def loadInto(db: String, col: String) = Action(ReactiveGeoJson.bodyParser) {
+      request => Ok(request.body.msg)
     }
 
 }

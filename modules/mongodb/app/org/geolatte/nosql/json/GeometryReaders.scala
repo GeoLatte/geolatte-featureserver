@@ -73,15 +73,16 @@ object GeometryReaders {
 
   def GeometryReads(implicit crs: CrsId) = new Reads[Geometry] {
 
+    def mkLineString(list: Seq[Positions]) : LineString = new LineString(positionList2PointSequence(list).get)
+
     def toGeometry(typeKey: String, pos: Positions): Geometry = (typeKey.toLowerCase, pos) match {
         case ("point", Position(pnt)) => pnt
-        case ("linestring", PositionList(list)) => new LineString(positionList2PointSequence(list).get)
+        case ("linestring", PositionList(list)) => mkLineString(list)
         case ("multilinestring", PositionList(list)) => {
-          val linestrings : Array[LineString] = list.map( l => toGeometry("linestring", l).asInstanceOf[LineString]).toArray
+          val linestrings : Array[LineString] = list.collect { case PositionList(l) => mkLineString(l) }.toArray
           new MultiLineString(linestrings)
         }
         case _ => throw new UnsupportedOperationException()
-
       }
 
     def reads(json: JsValue): JsResult[Geometry] = try {

@@ -10,7 +10,7 @@ import play.api.libs.iteratee.Enumerator
 import play.api.http.MimeTypes
 import org.geolatte.common.Feature
 import org.geolatte.scala.ChainedIterator
-import repositories.{SpatialMetadata, MongoRepository}
+import repositories.{Metadata, SpatialMetadata, MongoRepository}
 
 object FeatureCollection extends Controller {
 
@@ -33,8 +33,9 @@ object FeatureCollection extends Controller {
     try {
       val meta = MongoRepository.metadata(db, collection)
       meta match {
-        case md: SpatialMetadata => val windowOpt = for {
-          w <- Bbox(QueryParams.BBOX.extractOrElse(""), md.envelope.getCrsId)
+        case Some(md: Metadata) => val windowOpt = for {
+          smd <- md.spatialMetadata
+          w <- Bbox(QueryParams.BBOX.extractOrElse(""), smd.envelope.getCrsId)
         } yield w
           windowOpt match {
             case Some(window) => mkChunked(db, collection, window)
