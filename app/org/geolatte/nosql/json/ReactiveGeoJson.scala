@@ -66,8 +66,8 @@ object ReactiveGeoJson {
 
     val optFeature2State = Enumeratee.mapInput[Option[Feature]] ( of => of match {
       case Input.El(Some(f)) =>
-        if ( writer.add(f) )  Input.Empty else Input.El(State("Import Error"))
-      case Input.El(None) => Input.El(State("Import Error"))
+        if ( writer.add(f) )  Input.Empty else Input.El(State("GeoJson feature can not be added to collection"))
+      case Input.El(None) => Input.El(State("Json object is not a Feature"))
       case _ => Input.Empty
     })
     val flushAtEnd = Enumeratee.onEOF[State](writer.flush)
