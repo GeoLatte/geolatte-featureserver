@@ -4,8 +4,8 @@ import com.mongodb.casbah.Imports._
 import scala.Some
 import org.geolatte.geom.curve.{MortonCode, MortonContext}
 import org.geolatte.common.Feature
-import play.Logger
 import scala.collection.mutable.ArrayBuffer
+import play.api.Logger
 
 /**
  * @author Karel Maesen, Geovise BVBA
@@ -25,7 +25,10 @@ case class MongoDbFeatureCollection(collection: MongoCollection, spatialMetadata
     case Some(obj) => buffer += obj
       if (buffer.size == bufSize) flush()
       true
-    case None => false
+    case None => {
+      Logger.info("Warning: failure to read feature with envelope" + f.getGeometry.getEnvelope)
+      false
+    }
   }
 
   def convertFeature(f: Feature): Option[DBObject] = {
@@ -40,6 +43,7 @@ case class MongoDbFeatureCollection(collection: MongoCollection, spatialMetadata
 
   def flush(): Unit = {
     collection.insert(buffer: _*)
+    Logger.info("Flushing data to mongodb")
     buffer.clear
     updateMetadata()
   }

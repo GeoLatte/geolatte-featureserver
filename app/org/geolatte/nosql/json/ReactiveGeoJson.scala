@@ -50,7 +50,7 @@ object ReactiveGeoJson {
             State(s"CRS = $crs")
           })
           case "features" => (jsArray(jsValues(jsSimpleObject)) compose parseFeature(crs)) &>> featureValueParser
-          case k: String => jsSimpleObject.map(v => State(s"Ignoring property $k"))
+          case k: String => jsValue.map(v => State(s"Ignoring property $k"))
         }
       }
     }
