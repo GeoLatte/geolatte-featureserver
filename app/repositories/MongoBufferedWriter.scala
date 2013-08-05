@@ -1,8 +1,7 @@
 package repositories
 
-import scala.collection.mutable.ArrayBuffer
 import org.geolatte.common.Feature
-import org.geolatte.nosql.mongodb.{MongoDbFeatureCollection, MongoDbSink}
+import org.geolatte.nosql.mongodb.MongoDbFeatureCollection
 import org.geolatte.nosql.json.FeatureWriter
 
 /**

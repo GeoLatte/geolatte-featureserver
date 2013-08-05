@@ -10,7 +10,7 @@ import com.mongodb.casbah.Imports._
 
 import java.util
 import play.Logger
-import sun.misc.{BASE64Decoder, BASE64Encoder}
+import sun.misc.{BASE64Decoder, BASE64Encoder}      //TODO == replace with Apache commons-codec (sun.misc.* classes shouldnot be called directly)
 
 
 object MetadataIdentifiers {

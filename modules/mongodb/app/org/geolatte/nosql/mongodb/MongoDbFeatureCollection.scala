@@ -31,7 +31,7 @@ case class MongoDbFeatureCollection(collection: MongoCollection, spatialMetadata
   def convertFeature(f: Feature): Option[DBObject] = {
     try {
       val mc = mortoncode ofGeometry f.getGeometry
-      spatialMetadata.stats.put(mc, mcStats.getOrElse(mc, 0) + 1)
+      mcStats.put(mc, mcStats.getOrElse(mc, 0) + 1)
       Some(MongoDbFeature(f, mc))
     } catch {
       case ex: IllegalArgumentException => None
