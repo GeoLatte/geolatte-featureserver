@@ -6,6 +6,7 @@ import play.extras.iteratees._
 import org.geolatte.common.Feature
 import play.api.libs.json.JsObject
 import play.api.libs.json.JsNumber
+import org.geolatte.nosql.json.FeatureWriter
 
 
 /**
@@ -61,19 +62,21 @@ object ReactiveGeoJson {
     jsObject(mkCrsSensitiveValueHandler.select)
   }
 
-  def writeFeatures : Iteratee[Option[Feature], State] = {
-    val el = Enumeratee.mapInput[Option[Feature]] ( of => of match {
+  def writeFeatures(writer: FeatureWriter) : Iteratee[Option[Feature], State] = {
+
+    val optFeature2State = Enumeratee.mapInput[Option[Feature]] ( of => of match {
       case Input.El(Some(f)) =>
-        println (f)
-        Input.Empty
+        if ( writer.add(f) )  Input.Empty else Input.El(State("Import Error"))
       case Input.El(None) => Input.El(State("Import Error"))
       case _ => Input.Empty
     })
-    el &>> Iteratee.fold( State() )( stateFolder)
+    val flushAtEnd = Enumeratee.onEOF[State](writer.flush)
+    (optFeature2State compose flushAtEnd) &>> Iteratee.fold( State() )( stateFolder)
   }
 
-  def bodyParser = parser (
-   featureCollectionEnumeratee(writeFeatures)  &>> Iteratee.getChunks[State].map[State]( l => l.foldLeft(State())( stateFolder ))
-  )
+  def bodyParser(writer: FeatureWriter) = parser (
+      featureCollectionEnumeratee(writeFeatures(writer))  &>> Iteratee.getChunks[State].map[State]( l => l.foldLeft(State())( stateFolder ))
+    )
+
 
 }

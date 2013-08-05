@@ -3,13 +3,16 @@ package repositories
 
 import org.geolatte.geom.curve.MortonContext
 import org.geolatte.geom.Envelope
-import com.mongodb.casbah.{WriteConcern, MongoClient}
+import com.mongodb.casbah.{MongoCollection, WriteConcern, MongoClient}
 import org.geolatte.common.Feature
-import org.geolatte.nosql.mongodb.{SpatialCollectionMetadata, MetadataIdentifiers, MongoDbSource}
+import org.geolatte.nosql.mongodb._
 import com.mongodb.casbah.commons.MongoDBObject
-import com.mongodb.DBObject
+import com.mongodb.{DBCollection, DBObject}
 import util.SpatialSpec
 import play.api.Logger
+import org.geolatte.nosql.mongodb.Metadata
+import util.SpatialSpec
+import scala.Some
 
 /**
  * @author Karel Maesen, Geovise BVBA
@@ -39,7 +42,7 @@ object MongoRepository {
 
   def deleteDb(dbname: String): Boolean =
     if (existsDb(dbname) ) {
-      mongo(dbname).dropDatabase
+      mongo(dbname).dropDatabase()
       true
     }
     else false
@@ -57,15 +60,9 @@ object MongoRepository {
   def metadata(database: String, collection: String): Option[Metadata] = {
     import MetadataIdentifiers._
 
-    def toSpatialMetadata(dbobj: DBObject) = for {
-      mongoMeta <- SpatialCollectionMetadata.from(dbobj)
-      md = SpatialMetadata(envelope = mongoMeta.envelope, stats = mongoMeta.stats, level = mongoMeta.level)
-    } yield md
-
-
     val spatialMetadata = for {
       doc <- mongo(database)(MetadataCollection).findOne(MongoDBObject(CollectionField -> collection))
-      td <- toSpatialMetadata(doc)
+      td <- SpatialMetadata.from(doc)
     } yield td
 
     val cnt = count(database, collection)
@@ -100,6 +97,16 @@ object MongoRepository {
     }
   }
 
+  def getCollection(dbName: String, colName: String) : (Option[MongoCollection], Option[SpatialMetadata])  = {
+    if (! existsCollection(dbName, colName))  (None, None)
+    else {
+      val col = mongo(dbName)(colName)
+      val mdOpt = metadata(dbName, colName)
+      val spatialMetadata = for( md <- mdOpt; smd <- md.spatialMetadata) yield smd
+      (Some(col), spatialMetadata)
+    }
+  }
+
   def deleteCollection(dbName: String, colName: String) : Boolean = {
     if (! existsDb(dbName) || !existsCollection(dbName, colName) ) false
     else {
@@ -118,9 +125,7 @@ object MongoRepository {
     src.query(window)
   }
 
-
   private def mkMortonContext (md: SpatialMetadata): MortonContext = new MortonContext (md.envelope, md.level)
-
 
 }
 

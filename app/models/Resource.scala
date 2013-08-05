@@ -8,12 +8,11 @@ import play.api.libs.json.Reads._
 
 import controllers.routes
 import _root_.util.SpatialSpec
-import repositories.Metadata
 import scala.Some
 import play.api.data.validation.ValidationError
 
 //TODO -- remove the EnvelopeSerializer dep.
-import org.geolatte.nosql.mongodb.EnvelopeSerializer
+import org.geolatte.nosql.mongodb.{Metadata, EnvelopeSerializer}
 
 trait RenderableResource
 

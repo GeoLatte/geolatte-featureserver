@@ -10,7 +10,8 @@ import play.api.libs.iteratee.Enumerator
 import play.api.http.MimeTypes
 import org.geolatte.common.Feature
 import org.geolatte.scala.ChainedIterator
-import repositories.{Metadata, SpatialMetadata, MongoRepository}
+import repositories.{MongoRepository}
+import org.geolatte.nosql.mongodb.Metadata
 
 object FeatureCollection extends Controller {
 
