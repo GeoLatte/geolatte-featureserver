@@ -18,7 +18,9 @@ GET /api/databases/:db/:collection     controllers.Databases.getCollection(db: S
 PUT /api/databases/:db/:collection     controllers.Databases.createCollection(db: String, collection: String)
 DELETE /api/databases/:db/:collection  controllers.Databases.deleteCollection(db: String, collection: String)
 
-POST /api/databases/:db/:collection/tx/insert controllers.TxController.loadInto(db: String, collection: String)
+POST /api/databases/:db/:collection/tx/insert controllers.TxController.insert(db: String, collection: String)
+POST /api/databases/:db/:collection/tx/remove controllers.TxController.remove(db: String, collection: String)
+
 
 #GET /rest/:db/:collection              controllers.FeatureCollection.query(db: String, collection: String)
 
