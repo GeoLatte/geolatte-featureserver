@@ -13,6 +13,10 @@ import java.util
 import scala.collection.DefaultMap
 import org.geolatte.geom.crs.CrsId
 
+/**
+ * Note this code is currently not needed (we use geolatte-common for reading GeoJson. Since it is
+ * covered by test specs, I leave it for now in the code base
+ */
 
 object GeometryReaders {
 

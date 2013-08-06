@@ -12,7 +12,7 @@ import play.api.Logger
  *         creation-date: 8/5/13
  */
 case class MongoDbFeatureCollection(collection: MongoCollection, spatialMetadata: SpatialMetadata,
-                                    bufSize: Int = 1024) {
+                                    bufSize: Int = 10000) {
 
   lazy val mortonContext = new MortonContext(spatialMetadata.envelope, spatialMetadata.level)
   lazy val mortoncode = new MortonCode(mortonContext)
@@ -43,7 +43,7 @@ case class MongoDbFeatureCollection(collection: MongoCollection, spatialMetadata
 
   def flush(): Unit = {
     collection.insert(buffer: _*)
-    Logger.info("Flushing data to mongodb")
+    Logger.info(Thread.currentThread + " Flushing data to mongodb")
     buffer.clear
     updateMetadata()
   }

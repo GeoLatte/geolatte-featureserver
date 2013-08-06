@@ -16,7 +16,7 @@ import scala.Some
 object TxController extends Controller {
 
   type UpdateOp = (MongoCollection, Seq[MongoDBObject]) => WriteResult
-
+  import play.api.libs.concurrent.Execution.Implicits._
 
   def insert(db: String, col: String) = {
     val jsonWritingBodyParser = try {

@@ -19,28 +19,17 @@ class GeoJsonReactiveLoaderSpecs extends Specification {
   import scala.language.reflectiveCalls
   import scala.concurrent.ExecutionContext.Implicits.global
 
-  def generateFeature = """{"properties":{"foo":3, "bar": {"l3" : 3}}, "geometry": {"type": "LineString", "coordinates": [[1,2], [3,4]]}}"""
+  def generateFeature = """{"type" : "Feature", "properties":{"foo":3, "bar": {"l3" : 3}}, "geometry": {"type": "LineString", "coordinates": [[1,2], [3,4]]}}"""
 
   def genFeatures(n: Int) = (for (i <- 0 until n) yield generateFeature).fold("")((s, f) => s ++ f ++ ",").dropRight(1)
 
 
   def testEnumerator(size: Int, batchSize: Int = 64) = {
     val text = """{"crs": 31370, "features":[""" ++ genFeatures(size) ++ "]}"
-    val batched = text.toCharArray.grouped(batchSize)
+    val batched = text.getBytes("UTF-8").grouped(batchSize)
     (text, Enumerator.enumerate(batched))
   }
 
-  def collectFeatures(builder: VectorBuilder[Feature]) : Iteratee[Option[Feature], State] = {
-    val el = Enumeratee.mapInput[Option[Feature]] ( of => of match {
-      case Input.El(Some(f)) =>
-         builder += f
-        Input.Empty
-      case Input.El(None) => Input.El(State("Import Error"))
-      case _ => Input.Empty
-    })
-    // at the end discard the state messages but substitute the result
-    el &>> Iteratee.fold( State() )( stateFolder)
-  }
 
   def isValidFeatureList[A](result : List[A])  = {
     if ( result.filterNot(s => s match {
@@ -50,20 +39,21 @@ class GeoJsonReactiveLoaderSpecs extends Specification {
     else ko("list of features")
   }
 
-//  def test[B](inp: Enumerator[Array[Char]], enumeratee: Enumeratee[Array[Char], B]) = {
-//    val future = Iteratee.flatten(inp |>> ( enumeratee &>> Iteratee.getChunks)).run
-//    Await.result(future, Duration(5000, "millis"))
-//  }
 
   "The reactive GeoJsonTransformer" should {
 
     "read valid input and transform it to a stream of GeoJson Features" in {
       val testSize = 15
       val (text, enumerator) = testEnumerator(testSize)
-      val sink = new VectorBuilder[Feature]
-      val future = Iteratee.flatten(enumerator |>> (featureCollectionEnumeratee(collectFeatures(sink)) &>> Iteratee.getChunks)).run
+      var sink = new scala.collection.mutable.ArrayBuffer[Feature]()
+      val fw = new FeatureWriter {
+        def add(f: Feature): Boolean = {sink += f; true}
+        def flush() {}
+      }
+      val future = Iteratee.flatten(enumerator |>> mkStreamingIteratee(fw) ).run
       val states = Await.result(future, Duration(5000, "millis"))
-      val result = sink.result().toList
+      println(states)
+      val result = sink.toList
 
       (result must not be empty) and
         (result must beLike {

@@ -72,8 +72,7 @@ object GeolatteNoSqlBuild extends Build {
 
 
     val mongoDependencies = Seq(
-      "org.mongodb" %% "casbah" % "2.5.0",
-      "com.typesafe.play.extras" %% "iteratees-extras" % "1.0.1"
+      "org.mongodb" %% "casbah" % "2.5.0"
     )
 
     lazy val main = play.Project(
