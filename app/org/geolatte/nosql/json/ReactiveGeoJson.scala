@@ -18,8 +18,12 @@ import scala.collection.immutable.VectorBuilder
  */
 object ReactiveGeoJson {
 
-  // case class that we will fold the result of the parsing into
-  case class State(msg: String = "", errors: List[String])
+  /**
+   * Result for the GeoJson parsing
+   * @param msg the state message
+   * @param warnings the list with Warning messages
+   */
+  case class State(msg: String = "", warnings: List[String])
 
   object ParserStates extends Enumeration {
     type ParserState = Value
@@ -41,23 +45,23 @@ object ReactiveGeoJson {
 
     private def transition(t: JsonToken) = t match {
       case JsonToken.FIELD_NAME if List(START).contains(currentState) && jp.getCurrentName.equals(CRS_PROPERTY_NAME) => {
-        currentState = CRS_PROPERTY;
+        currentState = CRS_PROPERTY
         true
       }
       case JsonToken.FIELD_NAME if List(START, CRS_PROPERTY).contains(currentState) && jp.getCurrentName.equals(FEATURES_PROPERTY_NAME) => {
-        currentState = FEATURES_PROPERTY;
+        currentState = FEATURES_PROPERTY
         true
       }
       case JsonToken.START_ARRAY if currentState == FEATURES_PROPERTY => {
-        currentState = IN_FEATURES_ARRAY;
+        currentState = IN_FEATURES_ARRAY
         true
       }
       case JsonToken.START_OBJECT if List(IN_FEATURES_ARRAY, START_FEATURE).contains(currentState) => {
-        currentState = START_FEATURE;
+        currentState = START_FEATURE
         true
       }
       case JsonToken.END_ARRAY if List(IN_FEATURES_ARRAY, START_FEATURE).contains(currentState) => {
-        currentState = END_FEATURES_ARRAY;
+        currentState = END_FEATURES_ARRAY
         true
       }
       case _ => false
@@ -78,20 +82,25 @@ object ReactiveGeoJson {
       case ex: Throwable => Left(ex.getMessage)
     }
 
-    def readCRS = try {
+    private def readCRS = try {
       jp.nextToken
       CrsId.valueOf(jp.getIntValue)
     } catch {
-      case ex: Throwable => CrsId.UNDEFINED //TODO -- collect errors in State object
+      case e : Throwable => throw new RuntimeException("crs property cannot be parsed as an EPSG integer code.")
+    }
+
+    private def newCodec(newCrs : CrsId) = new JsonMapper(newCrs, true, false).getObjectMapper
+
+    private def updateCrsInJsonParser(newCrs: CrsId) = {
+      jp.setCodec( newCodec(newCrs) )
     }
 
     def run: State = {
+
       var cnt = 0
-      var errs = 0
-      var crs = CrsId.UNDEFINED
       val errMsgBuilder = new VectorBuilder[String]
       while (next != EOF) {
-        if (currentState == CRS_PROPERTY) crs = readCRS
+        if (currentState == CRS_PROPERTY) updateCrsInJsonParser(readCRS)
         if (currentState == START_FEATURE) {
           readFeature match {
             case Right(f) => if (featureWriter.add(f)) cnt += 1
@@ -102,12 +111,13 @@ object ReactiveGeoJson {
       }
       val msgs = errMsgBuilder.result().toList
       State("%d features read successfully; %d features failed.\n" format(cnt,msgs.size), msgs)
+
     }
+
 
   }
 
   object JsonStreamingParser {
-
     lazy val codec = (new JsonMapper).getObjectMapper
     lazy val jsonFactory = new JsonFactory(codec)
 

@@ -13,7 +13,7 @@ import scala.collection.immutable.VectorBuilder
  * @author Karel Maesen, Geovise BVBA
  *         creation-date: 8/2/13
  */
-class GeoJsonReactiveLoaderSpecs extends Specification {
+class ReactiveGeoJsonSpecs extends Specification {
 
 
   import scala.language.reflectiveCalls
@@ -51,10 +51,11 @@ class GeoJsonReactiveLoaderSpecs extends Specification {
         def flush() {}
       }
       val future = Iteratee.flatten(enumerator |>> mkStreamingIteratee(fw) ).run
-      val states = Await.result(future, Duration(5000, "millis"))
-      println(states)
+      val stateIteratee = Await.result(future, Duration(5000, "millis"))
+
       val result = sink.toList
 
+      (stateIteratee must beRight) and
       (result must not be empty) and
         (result must beLike {
           case l: List[_] if l.size == testSize => isValidFeatureList(l)
