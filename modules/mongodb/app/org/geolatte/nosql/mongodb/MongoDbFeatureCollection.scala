@@ -42,25 +42,7 @@ case class MongoDbFeatureCollection(collection: MongoCollection, spatialMetadata
     collection.insert(buffer: _*)
     Logger.info(Thread.currentThread + " Flushing data to mongodb")
     buffer.clear
-    updateMetadata()
-  }
-
-  private def updateMetadata(): Unit = {
-
     collection.ensureIndex(SpecialMongoProperties.MC)
-    import MetadataIdentifiers._
-
-    val metadata = MongoDBObject(
-      CollectionField -> collection.getName(),
-      ExtentField -> EnvelopeSerializer(mortonContext.getExtent),
-      IndexLevelField -> mortonContext.getDepth
-
-    )
-    val selector = MongoDBObject("collection" -> collection.getName())
-
-    collection.getDB().getCollection(MetadataIdentifiers.MetadataCollection)
-      .update(selector, metadata, true, false, WriteConcern.Safe)
   }
-
 
 }

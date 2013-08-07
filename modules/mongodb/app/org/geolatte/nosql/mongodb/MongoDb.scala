@@ -53,12 +53,9 @@ class MongoDbSink(val collection: MongoCollection, val mortoncontext: MortonCont
 
   def in(iterator: Iterator[Feature]) {
 
-    val mcStats = Map[String, Int]()
-
     def transform(f: Feature): Option[DBObject] = {
       try {
         val mc = mortoncode ofGeometry f.getGeometry
-        mcStats.put(mc, mcStats.getOrElse(mc, 0) + 1)
         Some(MongoDbFeature(f, mc))
       } catch {
         case ex: IllegalArgumentException => {
@@ -74,24 +71,7 @@ class MongoDbSink(val collection: MongoCollection, val mortoncontext: MortonCont
       val group = groupedObjIterator.next()
       collection.insert(group: _*)
     }
-    afterIn(mcStats)
-  }
-
-  private def afterIn(stats: Map[String, Int]) {
-
     collection.ensureIndex(SpecialMongoProperties.MC)
-    import MetadataIdentifiers._
-
-    val metadata = MongoDBObject(
-      CollectionField -> collection.getName(),
-      ExtentField -> EnvelopeSerializer(mortoncontext.getExtent),
-      IndexLevelField -> mortoncontext.getDepth
-
-    )
-    val selector = MongoDBObject("collection" -> collection.getName())
-
-    collection.getDB().getCollection(MetadataIdentifiers.MetadataCollection)
-      .update(selector, metadata, true, false, WriteConcern.Safe)
   }
 
 }

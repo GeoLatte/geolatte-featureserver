@@ -120,7 +120,7 @@ object MongoRepository {
   def query(database: String, collection: String, window: Envelope): Iterator[Feature] = {
     val md = metadata(database, collection)
     val coll = mongo(database)(collection)
-    val src = MongoDbSource(coll, mkMortonContext(md.get.asInstanceOf[SpatialMetadata]))
+    val src = MongoDbSource(coll, mkMortonContext(md.get.spatialMetadata.get))
     src.query(window)
   }
 

@@ -65,9 +65,11 @@ object FeatureCollection extends Controller {
     def apply(s: String, crs: CrsId): Option[Envelope] = {
       s match {
         case bbox_pattern(minx, miny, maxx, maxy) => {
-          try
-            Some(new Envelope(minx.toDouble, miny.toDouble, maxx.toDouble, maxy.toDouble, crs))
-          catch {
+          try {
+            val env = new Envelope(minx.toDouble, miny.toDouble, maxx.toDouble, maxy.toDouble, crs)
+            if (!env.isEmpty) Some(env)
+            else None
+          } catch {
             case _: Throwable => None
           }
         }
@@ -91,9 +93,9 @@ object FeatureCollection extends Controller {
     }
 
     import ChainedIterator._
-    val START: Iterator[String] = List("{ \"items\": [").iterator
+    val START: Iterator[String] = List("""{ "items": [""").iterator
 
-    lazy val END: Iterator[String] = List(s"], total: ${Counter.value} }").iterator
+    lazy val END: Iterator[String] = List(s"""], "total":  ${Counter.value}  }""").iterator
 
 
 
