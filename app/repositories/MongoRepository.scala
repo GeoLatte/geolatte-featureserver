@@ -87,7 +87,6 @@ object MongoRepository {
         Logger.info(created.getFullName + " is spatially enabled")
         val writeResult = mongo(dbName)(MetadataCollection).insert(MongoDBObject(
           ExtentField -> spatialSpec.get.envelope,
-          IndexStatsField -> MongoDBObject.empty,
           IndexLevelField  -> spatialSpec.get.level,
           CollectionField -> colName
         ), WriteConcern.Safe)

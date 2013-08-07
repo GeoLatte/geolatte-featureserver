@@ -17,10 +17,9 @@ object MetadataIdentifiers {
   val MetadataCollectionPrefix = "geolatte_nosql."
   val MetadataCollection = "geolatte_nosql.collections"
   val ExtentField = "extent"
-  val IndexStatsField = "index_stats"
   val IndexLevelField = "index_depth"
   val CollectionField = "collection"
-  val Fields = Set(ExtentField, IndexStatsField, CollectionField)
+  val Fields = Set(ExtentField, CollectionField)
 }
 
 object SpecialMongoProperties {
@@ -85,7 +84,6 @@ class MongoDbSink(val collection: MongoCollection, val mortoncontext: MortonCont
 
     val metadata = MongoDBObject(
       CollectionField -> collection.getName(),
-      IndexStatsField -> stats,
       ExtentField -> EnvelopeSerializer(mortoncontext.getExtent),
       IndexLevelField -> mortoncontext.getDepth
 

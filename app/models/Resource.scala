@@ -46,12 +46,10 @@ case class CollectionResource(md: Metadata) extends Jsonable {
         "collection" -> meta.name,
         "num-objects" -> meta.count,
         "extent" -> EnvelopeSerializer(smd.envelope),
-        "index-level" -> smd.level,
-        "index-stats" -> Json.toJson(smd.stats))
+        "index-level" -> smd.level)
       case None => Json.obj("collection" -> meta.name, "num-objects" -> meta.count)
     }
   }
-
 
   def toJson: JsValue = Json.toJson(md)
 

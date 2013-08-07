@@ -16,8 +16,6 @@ case class MongoDbFeatureCollection(collection: MongoCollection, spatialMetadata
 
   lazy val mortonContext = new MortonContext(spatialMetadata.envelope, spatialMetadata.level)
   lazy val mortoncode = new MortonCode(mortonContext)
-  private lazy val mcStats = scala.collection.mutable.Map(spatialMetadata.stats.toSeq: _*)
-
 
   private val buffer = new ArrayBuffer[DBObject](initialSize = bufSize)
 
@@ -34,7 +32,6 @@ case class MongoDbFeatureCollection(collection: MongoCollection, spatialMetadata
   def convertFeature(f: Feature): Option[DBObject] = {
     try {
       val mc = mortoncode ofGeometry f.getGeometry
-      mcStats.put(mc, mcStats.getOrElse(mc, 0) + 1)
       Some(MongoDbFeature(f, mc))
     } catch {
       case ex: IllegalArgumentException => None
@@ -55,7 +52,6 @@ case class MongoDbFeatureCollection(collection: MongoCollection, spatialMetadata
 
     val metadata = MongoDBObject(
       CollectionField -> collection.getName(),
-      IndexStatsField -> mcStats,
       ExtentField -> EnvelopeSerializer(mortonContext.getExtent),
       IndexLevelField -> mortonContext.getDepth
 
