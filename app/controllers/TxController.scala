@@ -1,6 +1,6 @@
 package controllers
 
-import play.api.mvc.{BodyParsers, Action, Controller}
+import play.api.mvc.{BodyParser, BodyParsers, Action, Controller}
 import org.geolatte.nosql.json.ReactiveGeoJson
 import repositories.{MongoRepository, MongoBufferedWriter}
 import com.mongodb.casbah.WriteConcern
@@ -15,43 +15,38 @@ import scala.Some
  */
 object TxController extends Controller {
 
+  /**
+   * An update operation on a MongoCollection using the sequence of MongoDBObjects as arguments
+   */
   type UpdateOp = (MongoCollection, Seq[MongoDBObject]) => WriteResult
+
   import play.api.libs.concurrent.Execution.Implicits._
 
   def insert(db: String, col: String) = {
-    val jsonWritingBodyParser = try {
-      val writer = new MongoBufferedWriter(db, col)
-      Some(ReactiveGeoJson.bodyParser(writer))
-    } catch {
-      case ex: Throwable => None
-    }
-    val parser = parse.using {
-      rh =>
-        jsonWritingBodyParser.getOrElse(parse.error(NotFound(s"$db/$col does not exist or is not a spatial collection")))
-    }
-    Action(parser) {
+    Action(mkJsonWritingBodyParser(db, col)) {
       request => Ok(request.body.msg)
     }
   }
 
   def remove(db: String, col: String) = mkUpdateAction(db, col)(
     extractor = extractKey(_, "query"),
-    updateOp = (coll, doc) => coll.remove(doc(0), WriteConcern.Safe))
+    updateOp = (coll, arguments) => coll.remove(arguments(0), WriteConcern.Safe))
 
   def update(db: String, col: String) = mkUpdateAction(db,col)(
     extractor = extractKey(_,"query", "update"),
-    updateOp = (coll, doc) => coll.update(doc(0), doc(1), concern=WriteConcern.Safe) )
+    updateOp = (coll, arguments) => coll.update(arguments(0), arguments(1), concern=WriteConcern.Safe) )
 
 
-  def mkUpdateAction( db: String, col: String) (extractor: MongoDBObject => Seq[MongoDBObject],
-                                                updateOp : UpdateOp ) =
+  private def mkUpdateAction( db: String, col: String)
+                            (extractor: MongoDBObject => Seq[MongoDBObject],
+                             updateOp : UpdateOp ) =
     Action(BodyParsers.parse.tolerantText) {
     implicit request => {
       val (collectionOpt, _) = MongoRepository.getCollection(db, col)
-      val reqBody = toDBObject(request.body) (extractor)
-      (collectionOpt, reqBody) match {
-        case (Some(collection), Right(doc)) =>
-          val result = updateOp(collection, doc)
+      val opArgumentsEither = toDBObject(request.body) (extractor)
+      (collectionOpt, opArgumentsEither) match {
+        case (Some(collection), Right(opArguments)) =>
+          val result = updateOp(collection, opArguments)
           if (result.getLastError.ok) Ok(s"Records affected ${result.getN}")
           else InternalServerError(s"Database error: ${result.getLastError.getErrorMessage}")
 
@@ -61,7 +56,7 @@ object TxController extends Controller {
     }
   }
 
-  def toDBObject(txt: String)(implicit extractor: MongoDBObject => Seq[MongoDBObject]): Either[String, Seq[MongoDBObject]] = {
+  private def toDBObject(txt: String)(implicit extractor: MongoDBObject => Seq[MongoDBObject]): Either[String, Seq[MongoDBObject]] = {
     try {
       Parser.parse(txt) match {
         case r: DBObject => Right(extractor(r))
@@ -73,13 +68,26 @@ object TxController extends Controller {
     }
   }
 
-  def extractKey(mobj: MongoDBObject, keys: String*): Seq[MongoDBObject] =
+  private def extractKey(mobj: MongoDBObject, keys: String*): Seq[MongoDBObject] =
     for( key <- keys) yield mobj.get(key) match {
       case Some(value: DBObject) => new MongoDBObject(value)
       case Some(_) => throw new RuntimeException(s"$key property is not an object")
       case None => throw new RuntimeException(s"No $key property in object")
     }
 
-
+  /**
+   * Creates a new BodyParser that deserializes GeoJson features in the input and
+   * writes them to the specified database and collection.
+   *
+   * @param db the database to write features to
+   * @param col the collection to write features to
+   * @return a new BodyParser
+   */
+  private def mkJsonWritingBodyParser(db: String, col: String) = try {
+    val writer = new MongoBufferedWriter(db, col)
+    ReactiveGeoJson.bodyParser(writer)
+  } catch {
+    case ex: Throwable => parse.error(NotFound(s"$db/$col does not exist or is not a spatial collection"))
+  }
 
 }

@@ -42,19 +42,9 @@ object MediaTypeSpec {
      * @param header the RequestHeader from which to extract the Accepted format and versions
      * @return
      */
-    def unapply(header : RequestHeader) : Option[(Format.Value, Version.Value)] = {
-
-      val supportedTypes = header.acceptedTypes.map{
-          case MediaTypeSpec(format,version) => Some(format,version)
-          case _ => None
-        }.filter(_.isDefined)
-
-      supportedTypes match {
-        case head :: _ => head
-        case _ => None
-      }
-    }
-
-
+  def unapply(header: RequestHeader): Option[(Format.Value, Version.Value)] = header.acceptedTypes.map {
+    case MediaTypeSpec(format, version) => Some(format, version)
+    case _ => None
+  }.flatten.headOption
 
 }

@@ -15,7 +15,8 @@ import play.api.libs.json.{JsValue, JsError, JsNull}
  */
 object Databases extends Controller {
 
-  //TODO -- also set the Vary response header.
+  //TODO -- also set the Vary response header
+  // TODO move into a separate trait
   def toResult[A <: RenderableResource](result: A)(implicit request: RequestHeader): Result = {
     (result, request) match {
       case (r : Jsonable, MediaTypeSpec(Format.JSON, version)) => Ok(r.toJson).as(MediaTypeSpec(Format.JSON, version))

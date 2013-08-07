@@ -155,5 +155,4 @@ object ReactiveGeoJson {
 
   def bodyParser(writer: FeatureWriter)(implicit ec: ExecutionContext) = BodyParser(rh => mkStreamingIteratee(writer))
 
-
 }
