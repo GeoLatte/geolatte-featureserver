@@ -5,13 +5,15 @@ import org.geolatte.geom.crs.CrsId
 import org.geolatte.common.dataformats.json.jackson.JsonMapper
 import play.api.mvc.{Action, Controller}
 import play.api.Logger
-import util.QueryParam
+import util.{MediaTypeSpec, QueryParam}
 import play.api.libs.iteratee.Enumerator
 import play.api.http.MimeTypes
 import org.geolatte.common.Feature
 import org.geolatte.scala.ChainedIterator
 import repositories.{MongoRepository}
-import org.geolatte.nosql.mongodb.Metadata
+import org.geolatte.nosql.mongodb.{SpatialMetadata, Metadata}
+import java.util.Date
+import config.ConfigurationValues.{Version, Format}
 
 object FeatureCollection extends Controller {
 
@@ -33,15 +35,14 @@ object FeatureCollection extends Controller {
   def doQuery(db: String, collection: String)(implicit queryStr: Map[String, Seq[String]]) =
     try {
       val meta = MongoRepository.metadata(db, collection)
-      meta match {
-        case Some(md: Metadata) => val windowOpt = for {
-          smd <- md.spatialMetadata
-          w <- Bbox(QueryParams.BBOX.extractOrElse(""), smd.envelope.getCrsId)
-        } yield w
-          windowOpt match {
+      val smd = for (md <- meta; s <- md.spatialMetadata) yield s
+      smd match {
+        case Some(smd: SpatialMetadata) =>
+          Bbox(QueryParams.BBOX.extractOrElse(""), smd.envelope.getCrsId) match {
             case Some(window) => mkChunked(db, collection, window)
             case None => BadRequest(s"BadRequest: No or invalid bbox parameter in query string.")
           }
+        case None => BadRequest(s"BadRequest: Not a spatial collection.")
       }
     } catch {
       case ex: NoSuchElementException => NotFound(s"${db}.${collection} not found in metadata")
@@ -50,8 +51,9 @@ object FeatureCollection extends Controller {
 
   def mkChunked(db: String, collection: String, window: Envelope) = {
     try {
-      val dataContent = toStream(MongoRepository.query(db, collection, window))
-      Ok.stream(dataContent).as(MimeTypes.JSON)
+      val start = System.currentTimeMillis()
+      val dataContent = toStream(MongoRepository.query(db, collection, window), start)
+      Ok.stream(dataContent).as(MediaTypeSpec(Format.JSON, Version.default))
     }
     catch {
       case ex: IllegalArgumentException => BadRequest(s"Error: " + ex.getMessage())
@@ -80,24 +82,25 @@ object FeatureCollection extends Controller {
   }
 
 
-  def toStream(features: Iterator[Feature]) = {
+  def toStream(features: Iterator[Feature], startTime: Long) = {
 
     val jsonMapper = new JsonMapper()
 
-    object Counter {
+    case class Counter(startTimeInMillies: Long) {
       private var num = 0
 
-      def inc: Unit = num += 1
+      def inc() {num += 1}
 
       def value = num
+
+      def millisSinceStart = System.currentTimeMillis() - startTimeInMillies
+
     }
 
+    val counter = Counter(startTime)
     import ChainedIterator._
-    val START: Iterator[String] = List("""{ "items": [""").iterator
-
-    lazy val END: Iterator[String] = List(s"""], "total":  ${Counter.value}  }""").iterator
-
-
+    val START: Iterator[String] = List(s"""{ "query-time": ${counter.millisSinceStart}, "items": [""").iterator
+    lazy val END: Iterator[String] = List(s"""], "total":  ${counter.value}, "totalTime": ${counter.millisSinceStart}  }""").iterator
 
     def seperatorAddingIterator(it: Iterator[String]) = new Iterator[String] {
       def hasNext: Boolean = it.hasNext
@@ -107,17 +110,14 @@ object FeatureCollection extends Controller {
       def next(): String = if (sep) {
         sep = false; ","
       } else {
-        Counter.inc; sep = true; it.next
+        counter.inc(); sep = true; it.next()
       }
     }
 
     val jsons = seperatorAddingIterator(features.map(jsonMapper.toJson(_)))
 
-
-    val str = START #:: jsons #:: END #:: Stream.empty
+    val str :Stream[Iterator[String]] = START #:: jsons #:: END #:: Stream.empty[Iterator[String]]
     val jsonStringIt = chain[String](str)
-
-
 
     val itStream = new java.io.InputStream {
 
@@ -132,7 +132,7 @@ object FeatureCollection extends Controller {
       }
 
       def read(): Int =
-        if (hasNext) currentJson.next else -1
+        if (hasNext) currentJson.next() else -1
     }
 
     Enumerator.fromStream(itStream)
