@@ -8,3 +8,4 @@ tmp
 .idea
 .idea_modules
 RUNNING_PID
+**.pyc

@@ -12,7 +12,7 @@ import org.geolatte.geom.crs.CrsId
 
 object EnvelopeSerializer {
 
-  private val pattern = "(\\d\\d\\d\\d):(-*[\\.\\d]+),(-*[\\.\\d]+),(-*[\\.\\d]+),(-*[\\.\\d]+)".r
+  private val pattern = "(\\d+):(-*[\\.\\d]+),(-*[\\.\\d]+),(-*[\\.\\d]+),(-*[\\.\\d]+)".r
 
   def apply(bbox: Envelope): String = {
     if (bbox == null) ""

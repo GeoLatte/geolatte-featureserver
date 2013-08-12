@@ -71,7 +71,24 @@ class MongoDbSink(val collection: MongoCollection, val mortoncontext: MortonCont
       val group = groupedObjIterator.next()
       collection.insert(group: _*)
     }
+    afterIn
+  }
+
+  private def afterIn = {
+
     collection.ensureIndex(SpecialMongoProperties.MC)
+    import MetadataIdentifiers._
+
+    val metadata = MongoDBObject(
+      CollectionField -> collection.getName(),
+      ExtentField -> EnvelopeSerializer(mortoncontext.getExtent),
+      IndexLevelField -> mortoncontext.getDepth
+
+    )
+    val selector = MongoDBObject("collection" -> collection.getName())
+
+    collection.getDB().getCollection(MetadataIdentifiers.MetadataCollection)
+      .update(selector, metadata, true, false, WriteConcern.Safe)
   }
 
 }
