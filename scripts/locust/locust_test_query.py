@@ -1,6 +1,13 @@
 from locust import Locust, TaskSet, task
-
+from locust import events
 from random import randint, random
+
+import time
+import json
+
+FILE = open("/tmp/locust-%s.log" % (time.ctime()), 'w')
+HEADER= "querytime, numFeatures, totalServerTime, responseTime\n"
+FILE.write(HEADER)
 
 class WebsiteTasks(TaskSet):
 
@@ -16,7 +23,7 @@ class WebsiteTasks(TaskSet):
 
 
     def genLength(self):
-        return randint(1000, 10000)
+        return randint(1000, 20000)
 
     def generateQuery(self):
         l = self.genLength()
@@ -27,10 +34,22 @@ class WebsiteTasks(TaskSet):
 
     @task
     def query(self):
-        self.client.get("api/databases/test/nstest/query", name="query", params={"bbox": self.generateQuery()})
+        start = time.time()
+        resp = self.client.get("api/databases/test/nstest/query", name="query", params={"bbox": self.generateQuery()})
+        if (resp.status_code == 200):
+            end = time.time()
+            js  = resp.json
+            msg = "%d, %d, %d, %f" % (js["query-time"], js["total"], js["totalTime"], (end - start) * 1000)
+            print(msg)
+            FILE.write(msg)
+            FILE.write("\n")
 
+    def exit_handler(self):
+        self.file.close()
+
+events.quitting += FILE.close
 
 class WebsiteUser(Locust):
     task_set = WebsiteTasks
-    min_wait = 5000
-    max_wait = 15000
+    min_wait = 1000
+    max_wait = 5000
