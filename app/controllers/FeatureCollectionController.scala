@@ -116,7 +116,7 @@ object FeatureCollection extends Controller {
 
     val jsons = seperatorAddingIterator(features.map(jsonMapper.toJson(_)))
 
-    val str :Stream[Iterator[String]] = START #:: jsons #:: END #:: Stream.empty[Iterator[String]]
+    lazy val str :Stream[Iterator[String]] = START #:: jsons #:: END #:: Stream.empty[Iterator[String]]
     val jsonStringIt = chain[String](str)
 
     val itStream = new java.io.InputStream {

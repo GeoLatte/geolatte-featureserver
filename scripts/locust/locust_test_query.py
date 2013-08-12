@@ -5,7 +5,7 @@ from random import randint, random
 import time
 import json
 
-FILE = open("/tmp/locust-%s.log" % (time.ctime()), 'w')
+FILE = open("/tmp/locust-%s.log" % (time.ctime()), 'w', 1)
 HEADER= "querytime, numFeatures, totalServerTime, responseTime\n"
 FILE.write(HEADER)
 
@@ -35,7 +35,7 @@ class WebsiteTasks(TaskSet):
     @task
     def query(self):
         start = time.time()
-        resp = self.client.get("api/databases/test/nstest/query", name="query", params={"bbox": self.generateQuery()})
+        resp = self.client.get("/api/databases/test/nstest/query", name="query", params={"bbox": self.generateQuery()})
         if (resp.status_code == 200):
             end = time.time()
             js  = resp.json
