@@ -23,6 +23,7 @@ POST /api/databases/:db/:collection/tx/remove controllers.TxController.remove(db
 POST /api/databases/:db/:collection/tx/update controllers.TxController.update(db: String, collection: String)
 
 GET /api/databases/:db/:collection/query         controllers.FeatureCollection.query(db: String, collection: String)
+GET /api/databases/:db/:collection/download      controllers.FeatureCollection.download(db: String, collection: String)
 
 #GET /rest/:db/:collection/metadata     controllers.MetadataResource.metadata(db: String, collection: String)
 
