@@ -117,11 +117,20 @@ object MongoRepository {
     }
   }
 
-  def query(database: String, collection: String, window: Envelope): Iterator[Feature] = {
+  private def getSpatialCollectionSource(database: String, collection: String) = {
     val md = metadata(database, collection)
     val coll = mongo(database)(collection)
-    val src = MongoDbSource(coll, mkMortonContext(md.get.spatialMetadata.get))
+     MongoDbSource(coll, mkMortonContext(md.get.spatialMetadata.get))
+  }
+
+  def query(database: String, collection: String, window: Envelope): Iterator[Feature] = {
+    val src = getSpatialCollectionSource(database, collection)
     src.query(window)
+  }
+
+  def getData(database: String, collection: String): Iterator[Feature] = {
+    val src = getSpatialCollectionSource(database, collection)
+    src.out()
   }
 
   private def mkMortonContext (md: SpatialMetadata): MortonContext = new MortonContext (md.envelope, md.level)
