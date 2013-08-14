@@ -1,12 +1,13 @@
 package controllers
 
-import play.api.mvc.{BodyParser, BodyParsers, Action, Controller}
+import play.api.mvc._
 import org.geolatte.nosql.json.ReactiveGeoJson
 import repositories.{MongoRepository, MongoBufferedWriter}
 import com.mongodb.casbah.WriteConcern
 import com.mongodb.util.{JSONParseException, JSON => Parser}
 import com.mongodb.casbah.Imports._
 import com.mongodb.WriteResult
+import scala.Some
 import scala.Some
 
 /**
@@ -35,6 +36,12 @@ object TxController extends Controller {
   def update(db: String, col: String) = mkUpdateAction(db,col)(
     extractor = extractKey(_,"query", "update"),
     updateOp = (coll, arguments) => coll.update(arguments(0), arguments(1), concern=WriteConcern.Safe) )
+
+  def reindex(db: String, col: String, level: Int) = {
+    Action {
+      request => MongoRepository.reindex(db, col, level)
+    }
+  }
 
 
   private def mkUpdateAction( db: String, col: String)

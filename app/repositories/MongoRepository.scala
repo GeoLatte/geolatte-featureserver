@@ -1,18 +1,22 @@
 package repositories
 
 
-import org.geolatte.geom.curve.MortonContext
+import org.geolatte.geom.curve.{MortonCode, MortonContext}
 import org.geolatte.geom.Envelope
 import com.mongodb.casbah.{MongoCollection, WriteConcern, MongoClient}
 import org.geolatte.common.Feature
 import org.geolatte.nosql.mongodb._
 import com.mongodb.casbah.commons.MongoDBObject
+import com.mongodb.casbah.Imports._
 import com.mongodb.{DBCollection, DBObject}
 import util.SpatialSpec
 import play.api.Logger
 import org.geolatte.nosql.mongodb.Metadata
 import util.SpatialSpec
 import scala.Some
+import play.api.mvc.Result
+import play.api.mvc.Results._
+
 
 /**
  * @author Karel Maesen, Geovise BVBA
@@ -117,7 +121,7 @@ object MongoRepository {
     }
   }
 
-  private def getSpatialCollectionSource(database: String, collection: String) = {
+  def getSpatialCollectionSource(database: String, collection: String) = {
     val md = metadata(database, collection)
     val coll = mongo(database)(collection)
      MongoDbSource(coll, mkMortonContext(md.get.spatialMetadata.get))
@@ -136,6 +140,42 @@ object MongoRepository {
     val src = getSpatialCollectionSource(database, collection)
     src.out()
   }
+
+  def reindex(database: String, collection: String, level: Int) :Result = {
+    MongoRepository.getCollection(database, collection) match {
+              //TODO -- HTTP result codes in repository breaks layered design
+              case (None, _) => NotFound(s"$database/$collection does not exist.")
+              case (_ , None) => BadRequest(s"Can't reindex non-spatial collection.")
+              case (Some(coll), Some(smd)) =>
+                doReindex(coll, smd, level)
+                Ok("Reindex succeeded.")
+            }
+  }
+
+  private def doReindex(implicit collection: MongoCollection, smd: SpatialMetadata, level: Int) = {
+    val mc = new MortonContext(smd.envelope, level)
+    val newMortonCode = new MortonCode(mc)
+    collection.map( obj => updateSpatialMetadata(obj, newMortonCode))
+    updateSpatialMetadata(level)
+  }
+
+  private def updateSpatialMetadata(newLevel: Int)(implicit coll: MongoCollection) = {
+    import MetadataIdentifiers._
+    val mdColl = coll.getDB().getCollection(MetadataCollection)
+    mdColl.update( MongoDBObject( CollectionField -> coll.name) , $set(Seq(IndexLevelField -> newLevel)))
+  }
+
+  private def updateSpatialMetadata(obj: MongoDBObject, newMortonCode : MortonCode)(implicit coll: MongoCollection) = {
+    import SpecialMongoProperties._
+    (for {
+      feature <- MongoDbFeature.toFeature(obj)
+      newMcVal = newMortonCode ofGeometry feature.getGeometry
+    } yield newMcVal) match {
+      case Some(m) => coll.update( MongoDBObject("_id" -> obj._id.get), $set(Seq(MC -> m)))
+      case None => Logger.warn("During reindex, object with id %s failed" format obj._id.get)
+    }
+  }
+
 
   private def mkMortonContext (md: SpatialMetadata): MortonContext = new MortonContext (md.envelope, md.level)
 
