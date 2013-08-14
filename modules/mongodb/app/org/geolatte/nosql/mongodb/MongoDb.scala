@@ -10,7 +10,10 @@ import com.mongodb.casbah.Imports._
 
 import java.util
 import play.Logger
-import sun.misc.{BASE64Decoder, BASE64Encoder}      //TODO == replace with Apache commons-codec (sun.misc.* classes shouldnot be called directly)
+import sun.misc.{BASE64Decoder, BASE64Encoder}
+import org.geolatte.scala.ChainedIterator
+
+//TODO == replace with Apache commons-codec (sun.misc.* classes shouldnot be called directly)
 
 
 object MetadataIdentifiers {
@@ -161,24 +164,28 @@ class MongoDbSource(val collection: MongoCollection, val mortoncontext: MortonCo
   def query(window: Envelope): Iterator[Feature] = {
 
     // this is an alternative strategy
-    //TODO -- reuse this e.g. by grouping by N mortoncodes in qds and chaining the OR-queries.
-    //    /*
-    //    * chain a stream iterators into a a very lazy ChainedIterator
-    //    */
-    //    def chain(iters: Stream[Iterator[Feature]]) = new ChainedIterator(iters)
-    //
-    //    // Use a stream such that the mapping of a querydocument to a DBCursor happens lazily
-    //    val qds = optimize(window, mortoncode).toStream
-    //    //TODO -- clean up filtering, is now too convoluted
-    //    chain(
-    //      qds.map( qd => toFeatureIterator(collection.find(qd)).filter(f => window.intersects(f.envelope)))
-    //    )
-    val qds = optimize(window, mortoncode)
-    val qListBuilder = MongoDBList.newBuilder
-    qds.foreach(qd => qListBuilder += qd)
-    val query = MongoDBObject("$or" -> qListBuilder.result)
-    toFeatureIterator(collection.find(query))
-      .filter(f => window.intersects(f.envelope))
+
+        /*
+        * chain a stream iterators into a a very lazy ChainedIterator
+        */
+        def chain(iters: Stream[Iterator[Feature]]) = new ChainedIterator(iters)
+
+        // Use a stream such that the mapping of a querydocument to a DBCursor happens lazily
+        val mcQueryWindow = mortoncode ofEnvelope window
+        val qds = optimize(window, mortoncode).toStream
+        //TODO -- clean up filtering, is now too convoluted
+        chain(
+          qds.map( qd => {
+            Logger.debug("original was %s : now doing %s" format(mcQueryWindow.toString, qd.toString))
+            toFeatureIterator(collection.find(qd)).filter(f => window.intersects(f.envelope))}
+          )
+        )
+//    val qds = optimize(window, mortoncode)
+//    val qListBuilder = MongoDBList.newBuilder
+//    qds.foreach(qd => qListBuilder += qd)
+//    val query = MongoDBObject("$or" -> qListBuilder.result)
+//    toFeatureIterator(collection.find(query))
+//      .filter(f => window.intersects(f.envelope))
   }
 
   private def toFeatureIterator(originalIterator: Iterator[DBObject]): Iterator[FeatureWithEnvelope] = {

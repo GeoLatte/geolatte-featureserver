@@ -123,9 +123,13 @@ object MongoRepository {
      MongoDbSource(coll, mkMortonContext(md.get.spatialMetadata.get))
   }
 
-  def query(database: String, collection: String, window: Envelope): Iterator[Feature] = {
+  def query(database: String, collection: String, window: Envelope): Either[String,Iterator[Feature]] = {
     val src = getSpatialCollectionSource(database, collection)
-    src.query(window)
+    try {
+      Right(src.query(window))
+    } catch {
+      case e: IllegalArgumentException => Left("BoundingBox not within extent.")
+    }
   }
 
   def getData(database: String, collection: String): Iterator[Feature] = {

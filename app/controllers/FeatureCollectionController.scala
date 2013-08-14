@@ -40,18 +40,23 @@ object FeatureCollection extends Controller {
       }
   }
 
+  private def qetQueryResult(db: String, collection: String, smd: SpatialMetadata)(implicit queryStr: Map[String, Seq[String]]) = {
+    Bbox(QueryParams.BBOX.extractOrElse(""), smd.envelope.getCrsId) match {
+      case Some(window) =>
+        MongoRepository.query(db, collection, window) match {
+          case Left(msg) => BadRequest(msg)
+          case Right(q) => mkChunked(q)
+        }
+      case None => BadRequest(s"BadRequest: No or invalid bbox parameter in query string.")
+    }
+  }
+
   def doQuery(db: String, collection: String)(implicit queryStr: Map[String, Seq[String]]) =
     try {
       val meta = MongoRepository.metadata(db, collection)
       val smd = for (md <- meta; s <- md.spatialMetadata) yield s
       smd match {
-        case Some(smd: SpatialMetadata) =>
-          Bbox(QueryParams.BBOX.extractOrElse(""), smd.envelope.getCrsId) match {
-            case Some(window) =>
-              val q = MongoRepository.query(db, collection, window)
-              mkChunked(q)
-            case None => BadRequest(s"BadRequest: No or invalid bbox parameter in query string.")
-          }
+        case Some(smd: SpatialMetadata) => qetQueryResult(db, collection, smd)
         case None => BadRequest(s"BadRequest: Not a spatial collection.")
       }
     } catch {
