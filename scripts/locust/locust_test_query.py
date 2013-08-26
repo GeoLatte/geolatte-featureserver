@@ -12,9 +12,19 @@ HEADER= "querytime, numFeatures, totalServerTime, responseTime\n"
 class Status:
     def __init__(self):
         self.hatch_complete = False
+        self.count = 0
 
     def set_hatch_complete(self):
+        self.start_time = time.time()
         self.hatch_complete = True
+        self.count = 0
+
+    def increment(self):
+        self.count += 1
+
+    def stop(self):
+        self.total_time = (time.time() - self.start_time)
+
 
 STATUS = Status()
 
@@ -27,6 +37,16 @@ def on_hatch_complete(num):
 def write_to_file(msg):
     if (STATUS.hatch_complete):
         FILE.write(msg)
+
+def update_status():
+    if (STATUS.hatch_complete):
+        STATUS.increment()
+
+def on_quitting():
+       STATUS.stop()
+       FILE.write("throughput:" + str(float(STATUS.count)/float(STATUS.total_time)) + " \n")
+       FILE.close
+
 
 class WebsiteTasks(TaskSet):
 
@@ -59,8 +79,8 @@ class WebsiteTasks(TaskSet):
             end = time.time()
             js  = resp.json
             msg = "%d, %d, %d, %f\n" % (js["query-time"], js["total"], js["totalTime"], (end - start) * 1000)
-            #print(msg)
             write_to_file(msg)
+            update_status()
 
 
     def exit_handler(self):
@@ -68,10 +88,10 @@ class WebsiteTasks(TaskSet):
 
 
 
-events.quitting += FILE.close
+events.quitting += on_quitting
 events.hatch_complete += on_hatch_complete
 
 class WebsiteUser(Locust):
     task_set = WebsiteTasks
-    min_wait = 1000
-    max_wait = 5000
+    min_wait = 250
+    max_wait = 2500
