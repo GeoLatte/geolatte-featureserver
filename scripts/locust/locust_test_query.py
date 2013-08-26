@@ -7,7 +7,26 @@ import json
 
 FILE = open("/tmp/locust-%s.log" % (time.ctime()), 'w', 1)
 HEADER= "querytime, numFeatures, totalServerTime, responseTime\n"
-FILE.write(HEADER)
+
+
+class Status:
+    def __init__(self):
+        self.hatch_complete = False
+
+    def set_hatch_complete(self):
+        self.hatch_complete = True
+
+STATUS = Status()
+
+
+def on_hatch_complete(num):
+    STATUS.set_hatch_complete()
+    FILE.write("num. users: " + str(num) + "\n")
+    FILE.write(HEADER)
+
+def write_to_file(msg):
+    if (STATUS.hatch_complete):
+        FILE.write(msg)
 
 class WebsiteTasks(TaskSet):
 
@@ -39,15 +58,18 @@ class WebsiteTasks(TaskSet):
         if (resp.status_code == 200):
             end = time.time()
             js  = resp.json
-            msg = "%d, %d, %d, %f" % (js["query-time"], js["total"], js["totalTime"], (end - start) * 1000)
-            print(msg)
-            FILE.write(msg)
-            FILE.write("\n")
+            msg = "%d, %d, %d, %f\n" % (js["query-time"], js["total"], js["totalTime"], (end - start) * 1000)
+            #print(msg)
+            write_to_file(msg)
+
 
     def exit_handler(self):
         self.file.close()
 
+
+
 events.quitting += FILE.close
+events.hatch_complete += on_hatch_complete
 
 class WebsiteUser(Locust):
     task_set = WebsiteTasks
