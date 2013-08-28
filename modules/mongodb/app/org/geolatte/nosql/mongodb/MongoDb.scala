@@ -208,18 +208,14 @@ object MongoDbSource {
  */
 object MongoDbFeature {
 
-  val geometryEncoder = Wkb.newEncoder()
-  val geometryDecoder = Wkb.newDecoder()
-  val base64Encoder = new BASE64Encoder();
-  val base64Decoder = new BASE64Decoder();
-
-
   def propertyMap(feature: Feature): Seq[(String, Any)] = {
     feature.getProperties.map(p => (p, feature.getProperty(p))).toSeq
   }
 
   def geometryProperties(feature: Feature, mortoncode: String): Seq[(String, Any)] = {
     val geom = feature.getGeometry
+    val geometryEncoder = Wkb.newEncoder()
+    val base64Encoder = new BASE64Encoder()
     val wkbBASE64 = base64Encoder.encode(geometryEncoder.encode(geom, ByteOrder.XDR).toByteArray)
     val bbox = EnvelopeSerializer(geom.getEnvelope)
     import SpecialMongoProperties._
@@ -246,6 +242,8 @@ object MongoDbFeature {
     import SpecialMongoProperties._
 
     lazy private val geometry: Geometry = {
+      val base64Decoder = new BASE64Decoder()
+      val geometryDecoder = Wkb.newDecoder()
       val bytes = base64Decoder.decodeBuffer(obj.as[String](WKB))
       geometryDecoder.decode(ByteBuffer.from(bytes))
     }

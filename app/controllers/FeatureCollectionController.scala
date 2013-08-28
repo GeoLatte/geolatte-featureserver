@@ -12,6 +12,8 @@ import org.geolatte.scala.ChainedIterator
 import repositories.MongoRepository
 import org.geolatte.nosql.mongodb.SpatialMetadata
 import config.ConfigurationValues.{Version, Format}
+import config.AppExecutionContexts
+
 
 object FeatureCollection extends Controller {
 
@@ -27,6 +29,10 @@ object FeatureCollection extends Controller {
     request =>
       implicit val queryStr = request.queryString
       Logger.info(s"Query string ${queryStr} on $db, collection $collection")
+//      Async {
+//        import AppExecutionContexts.streamContext
+//        scala.concurrent.Future { doQuery(db, collection) }
+//      }
       doQuery(db, collection)
   }
 
@@ -51,7 +57,7 @@ object FeatureCollection extends Controller {
     }
   }
 
-  def doQuery(db: String, collection: String)(implicit queryStr: Map[String, Seq[String]]) =
+  def doQuery(db: String, collection: String)(implicit queryStr: Map[String, Seq[String]])  =
     try {
       val meta = MongoRepository.metadata(db, collection)
       val smd = for (md <- meta; s <- md.spatialMetadata) yield s
@@ -66,7 +72,6 @@ object FeatureCollection extends Controller {
 
   def mkChunked(it: Iterator[Feature], start: Long = System.currentTimeMillis()) = {
     try {
-
       val dataContent = toStream(it, start)
       Ok.stream(dataContent).as(MediaTypeSpec(Format.JSON, Version.default))
     }
