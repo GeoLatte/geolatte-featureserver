@@ -72,7 +72,7 @@ object GeolatteNoSqlBuild extends Build {
 
 
     val mongoDependencies = Seq(
-      "org.mongodb" %% "casbah" % "2.5.0"
+        "org.reactivemongo" %% "play2-reactivemongo" % "0.9"
     )
 
     lazy val main = play.Project(

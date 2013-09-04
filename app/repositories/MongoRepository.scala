@@ -1,21 +1,25 @@
 package repositories
 
 
-import org.geolatte.geom.curve.{MortonCode, MortonContext}
+import org.geolatte.geom.curve.MortonContext
 import org.geolatte.geom.Envelope
-import com.mongodb.casbah.{MongoCollection, WriteConcern, MongoClient}
 import org.geolatte.common.Feature
 import org.geolatte.nosql.mongodb._
-import com.mongodb.casbah.commons.MongoDBObject
-import com.mongodb.casbah.Imports._
-import com.mongodb.{DBCollection, DBObject}
-import util.SpatialSpec
 import play.api.Logger
 import org.geolatte.nosql.mongodb.Metadata
-import util.SpatialSpec
 import scala.Some
-import play.api.mvc.Result
-import play.api.mvc.Results._
+import play.modules.reactivemongo.ReactiveMongoPlugin
+import reactivemongo.core.commands.{Count, CreateCollection}
+import scala.concurrent.Future
+import reactivemongo.bson.BSONDocument
+import reactivemongo.api.collections.default.BSONCollection
+import play.api.libs.iteratee.Enumerator
+import reactivemongo.api.FailoverStrategy
+
+//TODO -- configure the proper execution context
+import config.AppExecutionContexts.streamContext
+import reactivemongo.api.collections.default.BSONCollectionProducer
+
 
 
 /**
@@ -30,149 +34,165 @@ object MongoRepository {
   import MetadataIdentifiers._
 
   //TODO -- make the client configurable
-  val mongo = MongoClient()
+  import play.api.Play.current
+  def driver = ReactiveMongoPlugin.driver
+  def connection = ReactiveMongoPlugin.connection
 
 
-  def listDatabases(): Traversable[String] = mongo.dbNames
+
+  //TODO -- this is now hardcoded since ReactiveMongo apparently doesn't have a method to
+  def listDatabases: Traversable[String] = List("nstest", "test", "tiger")
 
   def isMetadata(name: String): Boolean = (name startsWith MetadataCollectionPrefix) || (name startsWith "system.")
 
-  def createDb(dbname: String): Boolean =
-    if (existsDb(dbname)) false
+  def createDb(dbname: String): Future[Boolean] =
+    if (existsDb(dbname)) Future.successful( false )
     else {
-      mongo(dbname).createCollection(MetadataCollection, MongoDBObject.empty)
-      true
+      val db = connection(dbname)
+      val cmd = new CreateCollection(name = MetadataCollection, autoIndexId = Some(true))
+      db.command( cmd )
     }
 
-  def deleteDb(dbname: String): Boolean =
+  def deleteDb(dbname: String): Future[Boolean] =
     if (existsDb(dbname) ) {
-      mongo(dbname).dropDatabase()
-      true
+      connection(dbname).drop()
     }
-    else false
+    else Future.successful(false)
 
-  def existsDb(dbname: String) : Boolean = mongo.dbNames.exists( _ == dbname)
-
-
-  def listCollections(dbname: String): Option[Traversable[String]] =
-    if (existsDb(dbname)) Some(mongo.getDB(dbname).collectionNames.filterNot(isMetadata(_)))
-    else None
+  def existsDb(dbname: String) : Boolean = listDatabases.exists( _ == dbname)
 
 
-  def count(database: String, collection: String) : Long = mongo(database)(collection).count()
+  def listCollections(dbname: String): Future[List[String]] =
+    if (existsDb(dbname)) connection.db(dbname).collectionNames.map( _.filterNot(isMetadata(_)))
+    else Future.failed(new NoSuchElementException(s"database $dbname doesn't exist"))
 
-  def metadata(database: String, collection: String): Option[Metadata] = {
+
+  def count(database: String, collection: String) : Future[Int] = {
+    val cmd = new Count( collection )
+    connection.db(database).command(cmd)
+  }
+
+  def metadata(database: String, collection: String): Future[Metadata] = {
     import MetadataIdentifiers._
 
-    val spatialMetadata = for {
-      doc <- mongo(database)(MetadataCollection).findOne(MongoDBObject(CollectionField -> collection))
-      td <- SpatialMetadata.from(doc)
-    } yield td
+    val metaCollection : BSONCollection = connection(database).collection(MetadataCollection)
+    val metadataCursor = metaCollection.find(BSONDocument(CollectionField -> collection)).cursor[BSONDocument]
 
-    val cnt = count(database, collection)
-    if (listCollections(database).getOrElse(List[String]()).exists(_ == collection)) Some(Metadata(collection, cnt,spatialMetadata))
-    else None
-
+    val futureSmd = metadataCursor.headOption().map {
+      _ match {
+        case Some(doc) => SpatialMetadata.from(doc)
+        case _ => None
+      }
+    }
+    val futureCnt = count(database, collection)
+    for {
+      smd <- futureSmd
+      cnt <- futureCnt
+    } yield Metadata(collection, cnt,smd)
   }
 
   //we check also the "hidden" names (e.g. metadata collection) so that puts will fail
-  def existsCollection(dbName: String, colName: String) : Boolean = mongo.getDB(dbName).collectionExists(colName)
+  def existsCollection(dbName: String, colName: String) : Future[Boolean] = for {
+    names <- connection.db(dbName).collectionNames
+    found = names.exists( _ == colName)
+  } yield found
 
-  //TODO -- these operations don't catch exceptions. if exceptions need to be catched here, then replace Boolean return values
-  // with error statuses
 
-  def createCollection(dbName: String, colName: String, spatialSpec: Option[SpatialSpec]) : Boolean = {
-    if (! existsDb(dbName) || existsCollection(dbName, colName)) false
-    else {
-      //we give the capped option explicitly so that creation is not deferred!
-      val created = mongo(dbName).createCollection(colName, MongoDBObject("capped" -> false))
-      Logger.info("Created: " + created.getFullName)
-      if (spatialSpec.isDefined) {
-        Logger.info(created.getFullName + " is spatially enabled")
-        val writeResult = mongo(dbName)(MetadataCollection).insert(MongoDBObject(
-          ExtentField -> spatialSpec.get.envelope,
-          IndexLevelField  -> spatialSpec.get.level,
-          CollectionField -> colName
-        ), WriteConcern.Safe)
-        Logger.error(writeResult.getLastError().getErrorMessage)
-      }
-      true
+//  //TODO -- these operations don't catch exceptions. if exceptions need to be catched here, then replace Boolean return values
+//  // with error statuses
+//
+//  def createCollection(dbName: String, colName: String, spatialSpec: Option[SpatialSpec]) : Boolean = {
+//    if (! existsDb(dbName) || existsCollection(dbName, colName)) false
+//    else {
+//      //we give the capped option explicitly so that creation is not deferred!
+//      val created = connection(dbName).createCollection(colName, MongoDBObject("capped" -> false))
+//      Logger.info("Created: " + created.getFullName)
+//      if (spatialSpec.isDefined) {
+//        Logger.info(created.getFullName + " is spatially enabled")
+//        val writeResult = connection(dbName)(MetadataCollection).insert(MongoDBObject(
+//          ExtentField -> spatialSpec.get.envelope,
+//          IndexLevelField  -> spatialSpec.get.level,
+//          CollectionField -> colName
+//        ), WriteConcern.Safe)
+//        Logger.error(writeResult.getLastError().getErrorMessage)
+//      }
+//      true
+//    }
+//  }
+
+  def getCollection(dbName: String, colName: String) : Future[ (Option[BSONCollection], Option[SpatialMetadata]) ]  =
+  existsCollection(dbName, colName).flatMap {
+    case false => Future{(None, None)}
+    case true => {
+      val col : BSONCollection = connection(dbName).collection[BSONCollection](colName)
+      metadata(dbName, colName).map(md => (Some(col), md.spatialMetadata))
+
     }
   }
 
-  def getCollection(dbName: String, colName: String) : (Option[MongoCollection], Option[SpatialMetadata])  = {
-    if (! existsCollection(dbName, colName))  (None, None)
-    else {
-      val col = mongo(dbName)(colName)
-      val mdOpt = metadata(dbName, colName)
-      val spatialMetadata = for( md <- mdOpt; smd <- md.spatialMetadata) yield smd
-      (Some(col), spatialMetadata)
-    }
-  }
 
-  def deleteCollection(dbName: String, colName: String) : Boolean = {
-    if (! existsDb(dbName) || !existsCollection(dbName, colName) ) false
-    else {
-      Logger.info(s"Starting removal of $dbName/$colName")
-      mongo(dbName)(colName).dropCollection()
-      mongo(dbName)(MetadataCollection).remove(MongoDBObject( CollectionField -> colName), WriteConcern.Safe)
-      Logger.info(s"Finalized removal of $dbName/$colName")
-      true
-    }
-  }
+
 
   def getSpatialCollectionSource(database: String, collection: String) = {
-    val md = metadata(database, collection)
-    val coll = mongo(database)(collection)
-     MongoDbSource(coll, mkMortonContext(md.get.spatialMetadata.get))
+    val futureMd = metadata(database, collection)
+    val coll = connection(database).collection(collection)
+    futureMd.map( md => MongoDbSource(coll, mkMortonContext( md.spatialMetadata.get )))
   }
 
-  def query(database: String, collection: String, window: Envelope): Either[String,Iterator[Feature]] = {
-    val src = getSpatialCollectionSource(database, collection)
-    try {
-      Right(src.query(window))
-    } catch {
-      case e: IllegalArgumentException => Left("BoundingBox not within extent.")
-    }
+  def query(database: String, collection: String, window: Envelope): Future[Enumerator[Feature]] = {
+    getSpatialCollectionSource(database, collection).map(_.query(window))
   }
 
-  def getData(database: String, collection: String): Iterator[Feature] = {
-    val src = getSpatialCollectionSource(database, collection)
-    src.out()
+  def getData(database: String, collection: String): Future[Enumerator[Feature]] = {
+    getSpatialCollectionSource(database, collection).map(_.out())
   }
 
-  def reindex(database: String, collection: String, level: Int) :Result = {
-    MongoRepository.getCollection(database, collection) match {
-              //TODO -- HTTP result codes in repository breaks layered design
-              case (None, _) => NotFound(s"$database/$collection does not exist.")
-              case (_ , None) => BadRequest(s"Can't reindex non-spatial collection.")
-              case (Some(coll), Some(smd)) =>
-                doReindex(coll, smd, level)
-                Ok("Reindex succeeded.")
-            }
-  }
+//  def reindex(database: String, collection: String, level: Int) :Result = {
+//    MongoRepository.getCollection(database, collection) match {
+//              //TODO -- HTTP result codes in repository breaks layered design
+//              case (None, _) => NotFound(s"$database/$collection does not exist.")
+//              case (_ , None) => BadRequest(s"Can't reindex non-spatial collection.")
+//              case (Some(coll), Some(smd)) =>
+//                doReindex(coll, smd, level)
+//                Ok("Reindex succeeded.")
+//            }
+//  }
+//
+//  private def doReindex(implicit collection: MongoCollection, smd: SpatialMetadata, level: Int) = {
+//    val mc = new MortonContext(smd.envelope, level)
+//    val newMortonCode = new MortonCode(mc)
+//    collection.map( obj => updateSpatialMetadata(obj, newMortonCode))
+//    updateSpatialMetadata(level)
+//  }
+//
+//  private def updateSpatialMetadata(newLevel: Int)(implicit coll: MongoCollection) = {
+//    import MetadataIdentifiers._
+//    val mdColl = coll.getDB().getCollection(MetadataCollection)
+//    mdColl.update( MongoDBObject( CollectionField -> coll.name) , $set(Seq(IndexLevelField -> newLevel)))
+//  }
+//
+//  private def updateSpatialMetadata(obj: MongoDBObject, newMortonCode : MortonCode)(implicit coll: MongoCollection) = {
+//    import SpecialMongoProperties._
+//    (for {
+//      feature <- MongoDbFeature.toFeature(obj)
+//      newMcVal = newMortonCode ofGeometry feature.getGeometry
+//    } yield newMcVal) match {
+//      case Some(m) => coll.update( MongoDBObject("_id" -> obj._id.get), $set(Seq(MC -> m)))
+//      case None => Logger.warn("During reindex, object with id %s failed" format obj._id.get)
+//    }
+//  }
 
-  private def doReindex(implicit collection: MongoCollection, smd: SpatialMetadata, level: Int) = {
-    val mc = new MortonContext(smd.envelope, level)
-    val newMortonCode = new MortonCode(mc)
-    collection.map( obj => updateSpatialMetadata(obj, newMortonCode))
-    updateSpatialMetadata(level)
-  }
-
-  private def updateSpatialMetadata(newLevel: Int)(implicit coll: MongoCollection) = {
-    import MetadataIdentifiers._
-    val mdColl = coll.getDB().getCollection(MetadataCollection)
-    mdColl.update( MongoDBObject( CollectionField -> coll.name) , $set(Seq(IndexLevelField -> newLevel)))
-  }
-
-  private def updateSpatialMetadata(obj: MongoDBObject, newMortonCode : MortonCode)(implicit coll: MongoCollection) = {
-    import SpecialMongoProperties._
-    (for {
-      feature <- MongoDbFeature.toFeature(obj)
-      newMcVal = newMortonCode ofGeometry feature.getGeometry
-    } yield newMcVal) match {
-      case Some(m) => coll.update( MongoDBObject("_id" -> obj._id.get), $set(Seq(MC -> m)))
-      case None => Logger.warn("During reindex, object with id %s failed" format obj._id.get)
+  def deleteCollection(dbName: String, colName: String) : Future[Boolean] = {
+    for {
+      collectionExists <- existsCollection(dbName, colName)
+      if collectionExists
+    } yield {
+      Logger.info(s"Starting removal of $dbName/$colName")
+      //TODO -- when I don't specify FailoverStrategy explicitly, the scala compiler crashes!
+      connection(dbName).collection(colName, FailoverStrategy()).drop()
+      connection(dbName).collection(MetadataCollection, FailoverStrategy()).remove(BSONDocument( CollectionField -> colName) )
+      Logger.info(s"Finalized removal of $dbName/$colName")
+      true
     }
   }
 

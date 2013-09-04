@@ -35,7 +35,7 @@ class WebsiteTasks(TaskSet):
     @task
     def query(self):
         start = time.time()
-        resp = self.client.get("/featureserver/rest/tables/public.nstest", name="query", params={"bbox": self.generateQuery()})
+        resp = self.client.get("/featureserver/rest/tables/public.nstest.json", name="query", params={"bbox": self.generateQuery()})
         if (resp.status_code == 200):
             end = time.time()
             js  = resp.json

@@ -4,10 +4,11 @@ import org.geolatte.geom.crs.CrsId
 import org.geolatte.geom.curve._
 import org.geolatte.geom.Envelope
 import org.geolatte.scala.Utils._
-import com.mongodb.casbah.Imports._
 import org.geolatte.nosql._
 
 import mongodb._
+import reactivemongo.api.MongoDriver
+import scala.concurrent.ExecutionContext
 
 /**
  * @author Karel Maesen, Geovise BVBA
@@ -15,13 +16,16 @@ import mongodb._
  */
 object Loader {
 
-  def load(file: String, collection: String, db: String = "test", ctxt: MortonContext = new MortonContext(new Envelope(-140.0, 15, -40.0, 50.0, CrsId.valueOf(4326)), 8) ) {
+  def load(file: String, collectionName: String, db: String = "test", ctxt: MortonContext = new MortonContext(new Envelope(-140.0, 15, -40.0, 50.0, CrsId.valueOf(4326)), 8) ) {
+
+    import reactivemongo.api.collections.default.BSONCollectionProducer
+    import ExecutionContext.Implicits.global
+
     val src = GeoJsonFileSource.fromFile(file)
-    lazy val coll = MongoClient()(db)(collection)
+    val driver = new MongoDriver
+    val connection = driver.connection(List("localhost"))
+    lazy val coll = connection(db).collection(collectionName)
     val sink = new MongoDbSink(coll, ctxt)
-
-    val mongoSrc = MongoDbSource(coll, ctxt)
-
     time(sink.in(src.out))
   }
 

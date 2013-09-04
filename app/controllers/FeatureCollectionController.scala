@@ -6,16 +6,22 @@ import org.geolatte.common.dataformats.json.jackson.JsonMapper
 import play.api.mvc.{Action, Controller}
 import play.api.Logger
 import util.{MediaTypeSpec, QueryParam}
-import play.api.libs.iteratee.Enumerator
+import play.api.libs.iteratee._
 import org.geolatte.common.Feature
-import org.geolatte.scala.ChainedIterator
 import repositories.MongoRepository
 import org.geolatte.nosql.mongodb.SpatialMetadata
 import config.ConfigurationValues.{Version, Format}
 import config.AppExecutionContexts
+import scala.concurrent.Future
+import scala.Some
+import util.QueryParam
 
 
 object FeatureCollection extends Controller {
+
+  //TODO -- check choice of execution context
+
+  import AppExecutionContexts.streamContext
 
   object QueryParams {
     //we leave bbox as a String parameter because an Envelope needs a CrsId
@@ -29,55 +35,43 @@ object FeatureCollection extends Controller {
     request =>
       implicit val queryStr = request.queryString
       Logger.info(s"Query string ${queryStr} on $db, collection $collection")
-//      Async {
-//        import AppExecutionContexts.streamContext
-//        scala.concurrent.Future { doQuery(db, collection) }
-//      }
-      doQuery(db, collection)
+      Async {
+        doQuery(db, collection)
+      }
+
   }
 
   def download(db: String, collection: String) = Action{
     request =>
-      Logger.info(s"Downloading $db/$collection.")
-      if (!MongoRepository.existsCollection(db, collection)) NotFound("s${db}/${collection} not found")
-      else {
-        val it: Iterator[Feature] = MongoRepository.getData(db, collection)
-        mkChunked(it)
+      Async {
+        Logger.info(s"Downloading $db/$collection.")
+
+        MongoRepository.existsCollection(db, collection).flatMap {
+          case false => Future.successful(NotFound("s${db}/${collection} not found"))
+          case true => MongoRepository.getData(db, collection) map ( fs => mkChunked(fs))
+        }
       }
+
+  }
+
+  def doQuery(db: String, collection: String)(implicit queryStr: Map[String, Seq[String]])  = {
+      val fmeta = MongoRepository.metadata(db, collection)
+      fmeta.flatMap ( f => f.spatialMetadata match {
+              case Some(smd: SpatialMetadata) => qetQueryResult(db, collection, smd)
+              case None => Future.successful(BadRequest(s"BadRequest: Not a spatial collection."))
+      })
   }
 
   private def qetQueryResult(db: String, collection: String, smd: SpatialMetadata)(implicit queryStr: Map[String, Seq[String]]) = {
     Bbox(QueryParams.BBOX.extractOrElse(""), smd.envelope.getCrsId) match {
       case Some(window) =>
-        MongoRepository.query(db, collection, window) match {
-          case Left(msg) => BadRequest(msg)
-          case Right(q) => mkChunked(q)
-        }
-      case None => BadRequest(s"BadRequest: No or invalid bbox parameter in query string.")
+        MongoRepository.query(db, collection, window) map (q => mkChunked(q))
+      case None => Future.successful(BadRequest(s"BadRequest: No or invalid bbox parameter in query string."))
     }
   }
 
-  def doQuery(db: String, collection: String)(implicit queryStr: Map[String, Seq[String]])  =
-    try {
-      val meta = MongoRepository.metadata(db, collection)
-      val smd = for (md <- meta; s <- md.spatialMetadata) yield s
-      smd match {
-        case Some(smd: SpatialMetadata) => qetQueryResult(db, collection, smd)
-        case None => BadRequest(s"BadRequest: Not a spatial collection.")
-      }
-    } catch {
-      case ex: NoSuchElementException => NotFound(s"${db}.${collection} not found in metadata")
-    }
-
-
-  def mkChunked(it: Iterator[Feature], start: Long = System.currentTimeMillis()) = {
-    try {
-      val dataContent = toStream(it, start)
-      Ok.stream(dataContent).as(MediaTypeSpec(Format.JSON, Version.default))
-    }
-    catch {
-      case ex: IllegalArgumentException => BadRequest(s"Error: " + ex.getMessage())
-    }
+  def mkChunked(features : Enumerator[Feature]) = {
+      Ok.stream( toStream(features) andThen Enumerator.eof ).as(MediaTypeSpec(Format.JSON, Version.default))
   }
 
   object Bbox {
@@ -102,60 +96,41 @@ object FeatureCollection extends Controller {
   }
 
 
-  def toStream(features: Iterator[Feature], startTime: Long) = {
+  def toStream(features: Enumerator[Feature], chunkSize: Int = 1024 * 8) : Enumerator[Array[Byte]] = {
 
+    val START = s"""{"type": "FeatureCollection", "features": ["""
+    val END  = s"""]}"""
     val jsonMapper = new JsonMapper()
 
-    case class Counter(startTimeInMillies: Long) {
-      private var num = 0
-
-      def inc() {num += 1}
-
-      def value = num
-
-      def millisSinceStart = System.currentTimeMillis() - startTimeInMillies
-
-    }
-
-    val counter = Counter(startTime)
-    import ChainedIterator._
-    val START: Iterator[String] = List(s"""{"type": "FeatureCollection", "query-time": ${counter.millisSinceStart}, "features": [""").iterator
-    lazy val END: Iterator[String] = List(s"""], "total":  ${counter.value}, "totalTime": ${counter.millisSinceStart}  }""").iterator
-
-    def seperatorAddingIterator(it: Iterator[String]) = new Iterator[String] {
-      def hasNext: Boolean = it.hasNext
-
-      var sep = false
-
-      def next(): String = if (sep) {
-        sep = false; ","
-      } else {
-        counter.inc(); sep = true; it.next()
-      }
-    }
-
-    val jsons = seperatorAddingIterator(features.map(jsonMapper.toJson(_)))
-
-    lazy val str :Stream[Iterator[String]] = START #:: jsons #:: END #:: Stream.empty[Iterator[String]]
-    val jsonStringIt = chain[String](str)
-
-    val itStream = new java.io.InputStream {
-
-      def advance = if (jsonStringIt.hasNext) jsonStringIt.next.iterator else Iterator.empty
-
-      var currentJson = advance
-
-      def hasNext: Boolean = {
-        currentJson.hasNext || {
-          currentJson = advance; currentJson.hasNext
-        }
+    //this is due to James Roper (see https://groups.google.com/forum/#!topic/play-framework/PrPTIrLdPmY)
+    class CommaSeparate extends Enumeratee.CheckDone[String, String] {
+      def continue[A](k: K[String, A]) = Cont {
+        case in @ (Input.Empty) => this &> k(in)
+        case in: Input.El[String] => Enumeratee.map[String](", " + _) &> k(in)
+        case Input.EOF => Done(Cont(k), Input.EOF)
       }
 
-      def read(): Int =
-        if (hasNext) currentJson.next() else -1
     }
 
-    Enumerator.fromStream(itStream)
+    def toString(f: Feature) = try {
+//      Logger.info("Wrote feature: " + f.getId)
+      jsonMapper.toJson(f)
+    } catch {
+      case ex: Throwable =>
+        Logger.error("Failure: " + ex.getMessage)
+        "null"
+    }
+
+    val commaSeparate = new CommaSeparate
+    val jsons = features.map( toString(_) ) &> commaSeparate
+    val jsonCollectionEnumerator = Enumerator(START) andThen jsons andThen Enumerator(END)
+
+
+    val toBytes = Enumeratee.map[String]( _.getBytes("UTF-8") )
+    //TODO Can we find a way to count the number of elements?
+    //TODO can we reorder the byte arrays to larger size, regular-sized byte-chunks?
+//    val toByteArray = Enumeratee.grouped( Enumeratee.take(chunkSize) &>> Iteratee.getChunks  )
+    jsonCollectionEnumerator &> toBytes
   }
 
 }

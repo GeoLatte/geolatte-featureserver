@@ -4,16 +4,21 @@ import org.geolatte.common._
 import dataformats.json.jackson.JsonMapper
 import java.io.{IOException, FileNotFoundException}
 import org.geolatte.geom.Envelope
+import reactivemongo.api.Cursor
+import play.api.libs.iteratee.{Enumerator, Iteratee}
+
+
+//TODO -- references to Cursors should be replaced by Enumerator !!!!
 
 /**
  * A Sink for data
  */
 trait Sink[A] {
-  def in(iterator: Iterator[A]): Unit
+  def in(enumerator: Enumerator[A]): Unit
 }
 
 trait Source[A] {
-  def out(): Iterator[A]
+  def out(): Enumerator[A]
 }
 
 /**
@@ -25,7 +30,7 @@ trait Source[A] {
 // See ProgInScala, section 12.5 for this style
 trait WindowQueryable[A] extends Source[A] {
 
-  def query(window: Envelope): Iterator[A]
+  def query(window: Envelope): Enumerator[A]
 
 }
 
@@ -42,8 +47,8 @@ object StdOutSink {
    */
  def apply[A](f: A => String): Sink[A] =
     new Sink[A] {
-      def in(iterator: Iterator[A]) {
-        iterator.foreach((a) => println( f(a)) )
+      def in(enumerator: Enumerator[A]) {
+        enumerator.apply(Iteratee.foreach { a => println( f(a) )})
       }
 
     }

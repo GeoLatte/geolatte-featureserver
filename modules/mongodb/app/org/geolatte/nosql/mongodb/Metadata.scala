@@ -1,7 +1,7 @@
 package org.geolatte.nosql.mongodb
 
 import org.geolatte.geom.Envelope
-import com.mongodb.casbah.Imports._
+import reactivemongo.bson.BSONDocument
 
 /**
  * @author Karel Maesen, Geovise BVBA
@@ -16,7 +16,7 @@ object SpatialMetadata {
 
   import MetadataIdentifiers._
 
-  def from(dbObj: DBObject): Option[SpatialMetadata] = {
+  def from(dbObj: BSONDocument): Option[SpatialMetadata] = {
       for {
         h <- dbObj.getAs[String](ExtentField)
         env <- EnvelopeSerializer.unapply(h)

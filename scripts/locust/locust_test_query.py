@@ -51,13 +51,13 @@ def on_quitting():
 class WebsiteTasks(TaskSet):
 
     def genCoordinateX(self):
-        minX = 0
-        maxX = 200000
+        minX = 20000
+        maxX = 180000
         return minX + random() * (maxX - minX)
 
     def genCoordinateY(self):
-        minY = 0
-        maxY = 200000
+        minY = 20000
+        maxY = 180000
         return minY + random() * (maxY - minY)
 
 
@@ -75,12 +75,11 @@ class WebsiteTasks(TaskSet):
     def query(self):
         start = time.time()
         resp = self.client.get("/api/databases/test/nstest/query", name="query", params={"bbox": self.generateQuery()})
-        if (resp.status_code == 200):
-            end = time.time()
-            js  = resp.json
-            msg = "%d, %d, %d, %f\n" % (js["query-time"], js["total"], js["totalTime"], (end - start) * 1000)
-            write_to_file(msg)
-            update_status()
+        # if (resp.status_code == 200):
+        #     end = time.time()
+        #     msg = "%f\n" % ((end - start) * 1000)
+        #     write_to_file(msg)
+        #     update_status()
 
 
     def exit_handler(self):
