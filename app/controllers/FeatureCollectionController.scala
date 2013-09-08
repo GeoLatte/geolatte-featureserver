@@ -97,23 +97,18 @@ object FeatureCollection extends Controller {
 
 
   def toStream(features: Enumerator[Feature], chunkSize: Int = 1024 * 8) : Enumerator[Array[Byte]] = {
-
-    val START = s"""{"type": "FeatureCollection", "features": ["""
-    val END  = s"""]}"""
     val jsonMapper = new JsonMapper()
 
     //this is due to James Roper (see https://groups.google.com/forum/#!topic/play-framework/PrPTIrLdPmY)
     class CommaSeparate extends Enumeratee.CheckDone[String, String] {
       def continue[A](k: K[String, A]) = Cont {
         case in @ (Input.Empty) => this &> k(in)
-        case in: Input.El[String] => Enumeratee.map[String](", " + _) &> k(in)
+        case in: Input.El[String] => Enumeratee.map[String]("\n\r" + _) &> k(in)
         case Input.EOF => Done(Cont(k), Input.EOF)
       }
-
     }
 
     def toString(f: Feature) = try {
-//      Logger.info("Wrote feature: " + f.getId)
       jsonMapper.toJson(f)
     } catch {
       case ex: Throwable =>
@@ -123,12 +118,10 @@ object FeatureCollection extends Controller {
 
     val commaSeparate = new CommaSeparate
     val jsons = features.map( toString(_) ) &> commaSeparate
-    val jsonCollectionEnumerator = Enumerator(START) andThen jsons andThen Enumerator(END)
-
 
     val toBytes = Enumeratee.map[String]( _.getBytes("UTF-8") )
     //TODO Can we find a way to count the number of elements?
-    jsonCollectionEnumerator &> toBytes
+    jsons &> toBytes
   }
 
 }

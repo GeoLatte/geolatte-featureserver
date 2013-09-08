@@ -36,8 +36,8 @@ object MongoRepository {
 
   //TODO -- make the client configurable
   import play.api.Play.current
-  def driver = new MongoDriver
-  def connection = driver.connection(List("localhost"))
+  val driver = new MongoDriver
+  val connection = driver.connection(List("localhost"))
 
   //TODO --clean up and add test for database existence.
   import scala.collection.JavaConverters._
