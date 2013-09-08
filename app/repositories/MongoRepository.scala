@@ -14,7 +14,8 @@ import scala.concurrent.Future
 import reactivemongo.bson.BSONDocument
 import reactivemongo.api.collections.default.BSONCollection
 import play.api.libs.iteratee.Enumerator
-import reactivemongo.api.FailoverStrategy
+import reactivemongo.api.{MongoDriver, FailoverStrategy}
+import play.Application
 
 //TODO -- configure the proper execution context
 import config.AppExecutionContexts.streamContext
@@ -27,7 +28,7 @@ import reactivemongo.api.collections.default.BSONCollectionProducer
  *
  */
 
-//this needs to move to a service layer
+//TODO this needs to move to a service layer
 object MongoRepository {
 
 
@@ -35,13 +36,16 @@ object MongoRepository {
 
   //TODO -- make the client configurable
   import play.api.Play.current
-  def driver = ReactiveMongoPlugin.driver
-  def connection = ReactiveMongoPlugin.connection
+  def driver = new MongoDriver
+  def connection = driver.connection(List("localhost"))
 
+  //TODO --clean up and add test for database existence.
+  import scala.collection.JavaConverters._
+  lazy val configuredDatabases = current.configuration.getStringList("fs.dbs").get.asScala
 
+  //TODO -- this is now hardcoded since ReactiveMongo apparently doesn't have a method to list available databases
 
-  //TODO -- this is now hardcoded since ReactiveMongo apparently doesn't have a method to
-  def listDatabases: Traversable[String] = List("nstest", "test", "tiger")
+  def listDatabases: Traversable[String] = configuredDatabases
 
   def isMetadata(name: String): Boolean = (name startsWith MetadataCollectionPrefix) || (name startsWith "system.")
 

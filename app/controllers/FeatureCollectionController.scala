@@ -128,8 +128,6 @@ object FeatureCollection extends Controller {
 
     val toBytes = Enumeratee.map[String]( _.getBytes("UTF-8") )
     //TODO Can we find a way to count the number of elements?
-    //TODO can we reorder the byte arrays to larger size, regular-sized byte-chunks?
-//    val toByteArray = Enumeratee.grouped( Enumeratee.take(chunkSize) &>> Iteratee.getChunks  )
     jsonCollectionEnumerator &> toBytes
   }
 

@@ -9,3 +9,4 @@ tmp
 .idea_modules
 RUNNING_PID
 **.pyc
+*.log

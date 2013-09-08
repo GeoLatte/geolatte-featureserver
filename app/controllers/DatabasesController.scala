@@ -9,6 +9,7 @@ import models._
 import play.api.libs.json.{JsValue, JsError, JsNull}
 import scala.util.{Failure, Success}
 import scala.concurrent.Future
+import play.Logger
 
 
 /**
@@ -41,7 +42,10 @@ object Databases extends Controller {
     implicit request =>
       val fc = MongoRepository.listCollections(db)
        Async {
-            fc.map ( colls => toResult(DatabaseResource(db, colls)) ).fallbackTo(
+            fc.map ( colls => {
+              Logger.info("collections found: " + colls)
+              toResult(DatabaseResource(db, colls))
+            } ).fallbackTo(
               Future {NotFound(s"No database $db")}
             )
           }
