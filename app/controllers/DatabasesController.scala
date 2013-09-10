@@ -2,14 +2,19 @@ package controllers
 
 import util._
 import util.CustomBodyParsers._
-import play.api.mvc.{RequestHeader, Result, Action, Controller}
+import play.api.mvc._
 import repositories.MongoRepository
 import config.ConfigurationValues.Format
 import models._
 import play.api.libs.json.{JsValue, JsError, JsNull}
-import scala.util.{Failure, Success}
 import scala.concurrent.Future
 import play.Logger
+import models.DatabaseResource
+import util.SpatialSpec
+import models.CollectionResource
+import models.DatabasesResource
+import scala.Some
+import scala.util.Success
 
 
 /**
@@ -33,8 +38,9 @@ object Databases extends Controller {
   def list() = {
     Action {
       implicit request =>
-        val dbs = MongoRepository.listDatabases
-        toResult(DatabasesResource(dbs))
+        Async {
+          MongoRepository.listDatabases.map( dbs => toResult(DatabasesResource(dbs)) )
+        }
     }
   }
 
@@ -59,6 +65,9 @@ object Databases extends Controller {
         f.map{
           case true => Created(s"database $db created")
           case false => Conflict(s"datase $db already exists.")
+        }.recover{ case t =>
+          Logger.error("Error creating database", t)
+          InternalServerError(s"${t.getMessage}")
         }
       }
   }
@@ -80,32 +89,55 @@ object Databases extends Controller {
       }
   }
 
-//  def createCollection(db: String, col: String) = Action (tolerantNullableJson) {
-//    implicit request => {
-//      //interpret request body
-//      import models.CollectionResourceReads._
-//      val spatialSpec: Either[JsValue, Option[SpatialSpec]] = request.body match {
-//        case JsNull => Right(None)
-//        case js: JsValue => js.validate[SpatialSpec].fold(
-//          invalid = errs => Left(JsError.toFlatJson(errs)),
-//          valid = v => Right(Some(v)))
-//      }
-//      spatialSpec match {
-//        case Right(opt) => MongoRepository.createCollection(db, col, opt) match {
-//          case false => Conflict(s"$db doesn't exist, or $col already exists") //This is not very consistent: 404 and 409 conflated
-//          case true => Ok(s"$db/$col created")
-//        }
-//        case Left(errs) => BadRequest("Invalid format: " + errs)
-//      }
-//    }
-//  }
+  def createCollection(db: String, col: String) = Action(tolerantNullableJson) {
+    implicit request => {
+      //interpret request body
+      import models.CollectionResourceReads._
+
+      val spatialSpec: Either[JsValue, Option[SpatialSpec]] = request.body match {
+        case JsNull => Right(None)
+        case js: JsValue => js.validate[SpatialSpec].fold(
+          invalid = errs => Left(JsError.toFlatJson(errs)),
+          valid = v => Right(Some(v)))
+      }
+
+      def doCreate() = spatialSpec match {
+        case Right(opt) => {
+          MongoRepository.createCollection(db, col, opt) map {
+            case false => InternalServerError(s"Server error while creating ${db}/${col}")
+            case true => Ok(s"$db/$col created")
+          }
+        }
+        case Left(errs) => Future.successful(BadRequest("Invalid format: " + errs))
+      }
+
+      Async {
+        (for {
+          dbExists <- MongoRepository.existsDb(db)
+          colExists <- MongoRepository.existsCollection(db, col)
+        } yield (dbExists, colExists)) flatMap {
+          case (false, _) => Future.successful(NotFound(s"Database ${db} does not exist"))
+          case (true, false) => doCreate()
+          case (true, true) => Future.successful(Conflict(s"Collection ${col} already exists."))
+        }
+      }
+    }
+  }
 
   def deleteCollection(db: String, col: String) = Action(tolerantNullableJson) {
     implicit request =>
       Async{
-        MongoRepository.deleteCollection(db, col) map {
-          case false => NotFound(s"Collection $db/$col not found.")
-          case true => Ok(s"Collection $db/$col deleted.")
+        val existenceCondition = for {
+          dbExists <- MongoRepository.existsDb(db)
+          colExists <- MongoRepository.existsCollection(db,col)
+        } yield dbExists && colExists
+
+        existenceCondition.flatMap {
+          case true => MongoRepository.deleteCollection(db,col) map {
+            case false => InternalServerError(s"Database delete error.")
+            case true => Ok(s"Collection $db/$col deleted.")
+          }
+          case false => Future.successful(NotFound(s"Collection $db/$col not found."))
         }
       }
   }

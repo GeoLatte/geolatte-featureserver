@@ -15,7 +15,7 @@ DELETE /api/databases/:db              controllers.Databases.deleteDb(db : Strin
 
 
 GET /api/databases/:db/:collection     controllers.Databases.getCollection(db: String, collection: String)
-#PUT /api/databases/:db/:collection     controllers.Databases.createCollection(db: String, collection: String)
+PUT /api/databases/:db/:collection     controllers.Databases.createCollection(db: String, collection: String)
 DELETE /api/databases/:db/:collection  controllers.Databases.deleteCollection(db: String, collection: String)
 
 #POST /api/databases/:db/:collection/tx/insert controllers.TxController.insert(db: String, collection: String)

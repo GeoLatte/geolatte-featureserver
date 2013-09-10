@@ -57,9 +57,7 @@ object SpecialMongoProperties {
 }
 
 trait FeatureWithEnvelope extends Feature {
-
   def envelope: Envelope
-
 }
 
 class MongoDbSink(val collection: BSONCollection, val mortoncontext: MortonContext) extends Sink[Feature] {
@@ -87,14 +85,6 @@ class MongoDbSink(val collection: BSONCollection, val mortoncontext: MortonConte
           }
         }
       }
-
-      //we call flatten to remove the None items generated when mapping toFeature
-//      val groupedObjIterator = (iterator.map(transform(_)).flatten) grouped GROUP_SIZE
-//      while (groupedObjIterator.hasNext) {
-//        val group = groupedObjIterator.next()
-//        collection.insert(group: _*)
-//      }
-
 
       val convertingToDoc = Enumeratee.map[Feature]( f => transform(f) )
       val filterOutNoneVals = Enumeratee.collect[Option[BSONDocument]]{ case Some(doc) => doc }
@@ -201,26 +191,7 @@ class MongoDbSource(val collection: BSONCollection, val mortoncontext: MortonCon
    * @throws IllegalArgumentException if Envelope does not fall within context of the mortoncode
    */
   def query(window: Envelope): Enumerator[Feature] = {
-
-    // this is an alternative strategy
-
-        /*
-        * chain a stream iterators into a a very lazy ChainedIterator
-        */
-//        def chain(iters: Stream[Enumerator[Feature]]) = new ChainedIterator(iters)
-
-        // Use a stream such that the mapping of a querydocument to a DBCursor happens lazily
-        val mcQueryWindow = mortoncode ofEnvelope window
-//        val qds = optimize(window, mortoncode).toStream
-        //TODO -- clean up filtering, is now too convoluted
-//        chain(
-//          qds.map( qd => {
-////            Logger.debug("original was %s : now doing %s" format(mcQueryWindow.toString, qd.toString))
-//            val cursor: Cursor[BSONDocument] = collection.find(qd).cursor
-//            toFeatureIterator(cursor).through(Enumeratee.filter(f => window.intersects(f.envelope))}
-//          )
-//        )
-
+    val mcQueryWindow = mortoncode ofEnvelope window
     val qds : Traversable[BSONValue] = optimize(window, mortoncode)
     val docArr = BSONArray(qds)
     val query = BSONDocument("$or" -> docArr)

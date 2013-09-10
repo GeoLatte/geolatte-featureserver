@@ -1,6 +1,7 @@
 package org.geolatte.nosql.json
 
 import org.geolatte.common.Feature
+import scala.concurrent.Future
 
 /**
  * @author Karel Maesen, Geovise BVBA
@@ -9,7 +10,7 @@ import org.geolatte.common.Feature
 trait FeatureWriter {
 
 
-  def add(f: Feature) : Boolean
+  def add(f: Feature) : Future[Boolean]
 
   def flush() : Unit
 
