@@ -55,6 +55,8 @@ object MongoRepository {
     )
   }
 
+  def getMetadata(dbName: String) = connection.db(dbName).collection(MetadataCollection)
+
   def isMetadata(name: String): Boolean = (name startsWith MetadataCollectionPrefix) || (name startsWith "system.")
 
   def createDb(dbname: String): Future[Boolean] = {

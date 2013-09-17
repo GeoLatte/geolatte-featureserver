@@ -28,7 +28,7 @@
         <appender-ref ref="FILE"/>
     </root>
 
-    <logger name="application" level="info" additivity="false">
+    <logger name="application" level="debug" additivity="false">
         <appender-ref ref="STDOUT"/>
         <appender-ref ref="FILE"/>
     </logger>

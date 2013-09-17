@@ -9,8 +9,9 @@ import reactivemongo.bson.BSONDocument
 import reactivemongo.api.indexes.Index
 import reactivemongo.api.indexes.IndexType.Ascending
 import play.api.Logger
-import scala.concurrent.ExecutionContext
+import scala.concurrent.{Future, ExecutionContext}
 import play.api.libs.iteratee.Enumerator
+import scala.util.{Failure, Success}
 
 /**
  * @author Karel Maesen, Geovise BVBA
@@ -22,16 +23,10 @@ case class MongoDbFeatureCollection(collection: BSONCollection, spatialMetadata:
   lazy val mortonContext = new MortonContext(spatialMetadata.envelope, spatialMetadata.level)
   lazy val mortoncode = new MortonCode(mortonContext)
 
-  private val buffer = new ArrayBuffer[BSONDocument](initialSize = bufSize)
-
-  def add(f: Feature): Boolean = convertFeature(f) match {
-    case Some(obj) => buffer += obj
-      if (buffer.size == bufSize) flush()
-      true
-    case None => {
-      Logger.info("Warning: failure to read feature with envelope" + f.getGeometry.getEnvelope)
-      false
-    }
+  def add(features: Seq[Feature]): Unit = {
+//    Logger.debug(s"Adding feature: $f")
+    val docs = features.map( f => convertFeature(f)).collect { case Some(doc) => doc }
+    insert(docs)
   }
 
   def convertFeature(f: Feature): Option[BSONDocument] = {
@@ -39,25 +34,30 @@ case class MongoDbFeatureCollection(collection: BSONCollection, spatialMetadata:
       val mc = mortoncode ofGeometry f.getGeometry
       Some(MongoDbFeature(f, mc))
     } catch {
-      case ex: IllegalArgumentException => None
+      case ex: IllegalArgumentException => {
+        Logger.warn(s"Failed to convert feature $f to BSON: ${ex.getMessage}")
+        None
+      }
     }
   }
 
-  def flush(): Unit = {
+  def insert(docs : Seq[BSONDocument]) = {
     //TODO -- configure proper execution contexts
     import ExecutionContext.Implicits.global
-    collection.bulkInsert(Enumerator.enumerate(buffer))
-    Logger.info(Thread.currentThread + " Flushing data to mongodb")
-    buffer.clear
+    Logger.info(Thread.currentThread + " Flushing data to mongodb (" + docs.size + " features)")
+    collection.bulkInsert(Enumerator.enumerate(docs)).onComplete {
+      case Success(num) => Logger.info(s"Successfully inserted $num features")
+      case Failure(f) => Logger.warn(s"Insert failed with error: ${f.getMessage}")
+    }
 
     //TODO this is duplicate code from MongoDbSink
 
-    val idxManager = collection.indexesManager
-    val futureComplete = idxManager.create( new Index(Seq((SpecialMongoProperties.MC, Ascending))))
-
-    futureComplete.onFailure {
-      case ex => Logger.warn("Failure on creating mortoncode index on collection %s" format collection.name)
-    }
+//    val idxManager = collection.indexesManager
+//    val futureComplete = idxManager.create( new Index(Seq((SpecialMongoProperties.MC, Ascending))))
+//
+//    futureComplete.onFailure {
+//      case ex => Logger.warn("Failure on creating mortoncode index on collection %s" format collection.name)
+//    }
     //END duplicate
 
   }

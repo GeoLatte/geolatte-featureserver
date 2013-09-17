@@ -7,7 +7,7 @@ import scala.concurrent.duration.Duration
 import org.geolatte.nosql.json.ReactiveGeoJson._
 import org.geolatte.common.Feature
 import org.geolatte.geom.crs.CrsId
-import scala.collection.immutable.VectorBuilder
+import config.ConfigurationValues
 
 /**
  * @author Karel Maesen, Geovise BVBA
@@ -17,17 +17,16 @@ class ReactiveGeoJsonSpecs extends Specification {
 
 
   import scala.language.reflectiveCalls
-  import scala.concurrent.ExecutionContext.Implicits.global
 
   def generateFeature = """{"type" : "Feature", "properties":{"foo":3, "bar": {"l3" : 3}}, "geometry": {"type": "LineString", "coordinates": [[1,2], [3,4]]}}"""
 
-  def genFeatures(n: Int) = (for (i <- 0 until n) yield generateFeature).fold("")((s, f) => s ++ f ++ ",").dropRight(1)
+  def genFeatures(n: Int) = (for (i <- 0 until n) yield generateFeature).fold("")((s, f) => s ++ f ++ ConfigurationValues.jsonSeparator).dropRight(1)
 
 
   def testEnumerator(size: Int, batchSize: Int = 64) = {
-    val text = """{"crs": 31370, "features":[""" ++ genFeatures(size) ++ "]}"
-    val batched = text.getBytes("UTF-8").grouped(batchSize)
-    (text, Enumerator.enumerate(batched))
+    val text = genFeatures(size)
+    val batched = text.getBytes("UTF-8").grouped(batchSize).toList
+    (text, Enumerator(batched:_*))
   }
 
 
@@ -43,14 +42,14 @@ class ReactiveGeoJsonSpecs extends Specification {
   "The reactive GeoJsonTransformer" should {
 
     "read valid input and transform it to a stream of GeoJson Features" in {
-      val testSize = 15
+
+      val testSize = 500
       val (text, enumerator) = testEnumerator(testSize)
       var sink = new scala.collection.mutable.ArrayBuffer[Feature]()
       val fw = new FeatureWriter {
-        def add(f: Feature): Boolean = {sink += f; true}
-        def flush() {}
+        def add(features: Seq[Feature]) = {sink ++= features }
       }
-      val future = Iteratee.flatten(enumerator |>> mkStreamingIteratee(fw) ).run
+      val future = enumerator |>>> mkStreamingIteratee(CrsId.valueOf(31370), fw)
       val stateIteratee = Await.result(future, Duration(5000, "millis"))
 
       val result = sink.toList

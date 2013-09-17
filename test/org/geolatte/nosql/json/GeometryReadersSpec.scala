@@ -30,7 +30,6 @@ class GeometryReadersSpec extends Specification {
       result.equals(linestring(-1, c(-87.067872, 33.093221), c(90.2, 40.0)))
     }
 
-
     "read a valid MultiLineString GeoJson " in {
       val result = geomJsonMultiLineString.validate[Geometry].asOpt.get
       result.equals(multilinestring(-1, linestring(c(-87.067872, 33.093221), c(90.2, 40.0)), linestring(c(-87.067872, 33.093221), c(90.2, 40.0))))

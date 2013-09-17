@@ -1,5 +1,6 @@
 package org.geolatte.nosql.mongodb
 
+import reactivemongo.bson._
 import org.geolatte.common.Feature
 import collection.JavaConversions._
 import org.geolatte.geom.codec.Wkb
@@ -7,24 +8,18 @@ import org.geolatte.geom.{Geometry, Envelope, ByteBuffer, ByteOrder}
 import org.geolatte.geom.curve.{MortonContext, MortonCode}
 import org.geolatte.nosql.{WindowQueryable, Source, Sink}
 
-import java.util
 import play.Logger
 import sun.misc.{BASE64Decoder, BASE64Encoder}
-import org.geolatte.scala.ChainedIterator
-import reactivemongo.api.collections.default.BSONCollection
 import scala.concurrent.{ExecutionContext, Future}
-import reactivemongo.bson._
-import reactivemongo.api.indexes.Index
 import reactivemongo.api.indexes.IndexType.Ascending
-import reactivemongo.core.commands.{LastError, GetLastError}
 import reactivemongo.api.Cursor
 import play.api.libs.iteratee._
 import reactivemongo.api.indexes.Index
 import scala.Some
 import reactivemongo.api.collections.default.BSONCollection
 import reactivemongo.core.commands.GetLastError
-import reactivemongo.bson.BSONString
 import scala.util.{Failure, Success}
+import java.util.Date
 
 
 //TODO == replace with Apache commons-codec (sun.misc.* classes shouldnot be called directly)
@@ -62,7 +57,6 @@ trait FeatureWithEnvelope extends Feature {
 
 class MongoDbSink(val collection: BSONCollection, val mortoncontext: MortonContext) extends Sink[Feature] {
 
-  import scala.collection.mutable.Map
 
   private val GROUP_SIZE = 5000
   val mortoncode = new MortonCode(mortoncontext)
@@ -182,7 +176,7 @@ class MongoDbSource(val collection: BSONCollection, val mortoncontext: MortonCon
   val mortoncode = new MortonCode(mortoncontext)
 
   //is there no way to get around the ugly typecast? Enumeratee methods aren't covariant (so that is now the problem)
-  def out(): Enumerator[Feature] = toFeatureIterator(collection.find(BSONDocument()).cursor) &> Enumeratee.map(f => f.asInstanceOf[Feature])
+  def out(): Enumerator[Feature] = toFeatureEnumerator(collection.find(BSONDocument()).cursor) &> Enumeratee.map(f => f.asInstanceOf[Feature])
 
   /**
    *
@@ -195,10 +189,10 @@ class MongoDbSource(val collection: BSONCollection, val mortoncontext: MortonCon
     val qds : Traversable[BSONValue] = optimize(window, mortoncode)
     val docArr = BSONArray(qds)
     val query = BSONDocument("$or" -> docArr)
-    toFeatureIterator(collection.find(query).cursor) &> Enumeratee.collect{ case f if window.intersects(f.envelope) => f }
+    toFeatureEnumerator(collection.find(query).cursor) &> Enumeratee.collect{ case f if window.intersects(f.envelope) => f }
   }
 
-  private def toFeatureIterator(cursor: Cursor[BSONDocument]): Enumerator[FeatureWithEnvelope] = {
+  private def toFeatureEnumerator(cursor: Cursor[BSONDocument]): Enumerator[FeatureWithEnvelope] = {
     val toFeature: Enumeratee[BSONDocument, Option[FeatureWithEnvelope]] = Enumeratee.map[BSONDocument]{ doc => MongoDbFeature.toFeature(doc) }
     val optFilter: Enumeratee[Option[FeatureWithEnvelope], FeatureWithEnvelope] = Enumeratee.collect{ case Some(f) => f}
     cursor.enumerate through toFeature through optFilter
@@ -236,14 +230,9 @@ object MongoDbFeature {
   }
 
   def apply(feature: Feature, mortoncode: String) = {
-    import DefaultBSONHandlers._
     val elems = propertyMap(feature) ++ geometryProperties(feature, mortoncode)
-    BSONDocument( elems.map{
-      case (k, v: String) => (k, BSONString(v))
-      case (k, v: Int) => (k, BSONInteger(v))
-      case (k, v: Double) => (k, BSONDouble(v))
-      //TODO -- there should be  much better solution than this!!
-    } )
+    val bson = BSONDocument( elems.map{ case (k,v) => k -> toBSONValue(v)})
+    bson
   }
 
   def toFeature(obj: BSONDocument): Option[DBObjectFeature] = {
@@ -269,7 +258,10 @@ object MongoDbFeature {
     }
 
 
-    lazy private val propertyMap = obj.elements.filter { case (k,v) => !isSpecialMongoProperty(k) }.toMap
+    lazy private val propertyMap = obj.elements.filter {
+      case (k,v) => !isSpecialMongoProperty(k)
+      case _ => false
+    }.toMap
 
     //TODO -- dangerouse get on bbox option + convoluted
     val envelope = EnvelopeSerializer.unapply(obj.getAs[String](BBOX).get).getOrElse(geometry.getEnvelope)
@@ -278,13 +270,16 @@ object MongoDbFeature {
       (inclSpecial && ("id".equals(propertyName) || "geometry".equals(propertyName))) ||
         (propertyMap.keys.contains(propertyName))
 
-    def getProperties: util.Collection[String] = propertyMap.keys
+    def getProperties: java.util.Collection[String] = propertyMap.keys
 
     def getProperty(propertyName: String): AnyRef =
       if (propertyName == null) throw new IllegalArgumentException("Null parameter passed.")
-      else propertyMap.get(propertyName).getOrElse(null) //when None, we return null to conform to the interface definition
+      else propertyMap.get(propertyName) match {
+        case None => null
+        case Some(bsonVal) => fromBSONValue(bsonVal)
+      }
 
-    def getId: AnyRef = obj.get(ID).getOrElse("no id")
+    def getId: AnyRef = obj.get(ID).getOrElse( obj.getAs[BSONObjectID]("_id").get.stringify)
 
     def getGeometry: Geometry = geometry
 
@@ -294,6 +289,41 @@ object MongoDbFeature {
 
     def hasGeometry: Boolean = true
 
+  }
+
+  //TODO -- make BSON to Scala native type mapping reusable
+  private def fromBSONValue(bsonVal: BSONValue) : AnyRef= {
+    bsonVal match {
+      case BSONNull => null
+      case v : BSONInteger => int2Integer(v.value)
+      case v : BSONDouble => double2Double(v.value)
+      case v : BSONBoolean => boolean2Boolean(v.value)
+      case v : BSONLong => long2Long(v.value)
+      case v : BSONString => v.value
+      case v : BSONArray =>  v.values.map(el => fromBSONValue(el)).toArray
+      case v : BSONDateTime => new Date(v.value)
+      case _ => {
+        Logger.warn(s"Received value ${bsonVal.toString} (code: ${bsonVal.code}) but could not convert it to base type.")
+        null
+      }
+    }
+  }
+
+  private def toBSONValue(v: Any): BSONValue = {
+    v match {
+      case null => BSONNull
+      case e: Int => BSONInteger(e)
+      case e: Long => BSONLong(e)
+      case e: Double => BSONDouble(e)
+      case e: Boolean => BSONBoolean(e)
+      case e: Date => BSONDateTime(e.getTime)
+      case e: String => BSONString(e)
+      case t: Traversable[_] => BSONArray(t.map(el => toBSONValue(el)))
+      case _ => {
+        Logger.warn(s"Received value $v of type ${v.getClass} but could not convert to BSONValue")
+        BSONNull
+      }
+    }
   }
 
 }

@@ -1,16 +1,15 @@
 package org.geolatte.nosql.json
 
+import play.api.mvc.BodyParser
+import org.geolatte.nosql.json.GeometryReaders._
 import org.geolatte.geom.crs.CrsId
-import play.api.libs.iteratee._
+import play.api.libs.json.{JsPath, JsError, JsSuccess, Json}
+import play.api.data.validation.ValidationError
 import org.geolatte.common.Feature
-import play.api.mvc.{Results, Result, BodyParser}
-import java.io._
-import scala.concurrent.{Await, ExecutionContext, Future}
-import scala.concurrent.duration.Duration
-import org.geolatte.common.dataformats.json.jackson.JsonMapper
-import org.codehaus.jackson.{JsonParser, JsonToken, JsonFactory}
-import scala.collection.immutable.VectorBuilder
-
+import play.api.libs.iteratee.Iteratee
+import play.Logger
+import config.ConfigurationValues
+import scala.concurrent.ExecutionContext
 
 /**
  * @author Karel Maesen, Geovise BVBA
@@ -23,136 +22,88 @@ object ReactiveGeoJson {
    * @param msg the state message
    * @param warnings the list with Warning messages
    */
-  case class State(msg: String = "", warnings: List[String])
+  case class State(msg: String = "", warnings: List[String] =  List(), dataRemaining: String = "")
 
-  object ParserStates extends Enumeration {
-    type ParserState = Value
-    val START, CRS_PROPERTY, FEATURES_PROPERTY, IN_FEATURES_ARRAY, START_FEATURE, END_FEATURES_ARRAY, EOF = Value
+  /**
+   * Converts a Json validation error sequence for a Feature into a single error message String.
+   * @param errors
+   * @return
+   */
+  def proccessErrors(errors: Seq[(JsPath, Seq[ValidationError])]): String = {
+    errors map {
+      case (jspath, valerrors) => jspath + " :" + valerrors.map(ve => ve.message).mkString("; ")
+    } mkString("\n")
   }
 
-  trait JsonStreamingParser {
-
-    import ParserStates._
-
-    val FEATURES_PROPERTY_NAME = "features"
-    val CRS_PROPERTY_NAME = "crs"
-
-    def jp: JsonParser
-
-    var currentState: ParserStates.Value = START
-
-    def featureWriter: FeatureWriter
-
-    private def transition(t: JsonToken) = t match {
-      case JsonToken.FIELD_NAME if List(START).contains(currentState) && jp.getCurrentName.equals(CRS_PROPERTY_NAME) => {
-        currentState = CRS_PROPERTY
-        true
+  /**
+   * Parses a String representation of a GeoJson Feature to a Feature
+   *
+   * In case
+   * @param featureStr
+   * @return
+   */
+  def parseFeatureString(crs: CrsId,  featureStr: String) : Either[(String, String), Feature] = {
+//    Logger.debug(s"feature string is ($crs): " + featureStr)
+    implicit val featureReader = FeatureReads(crs)
+    try {
+      val jsVal = Json.parse(featureStr)
+      jsVal.validate[Feature] match {
+        case JsSuccess(f, _)  => Right(f)
+        case JsError(errors) => Left(proccessErrors(errors), "")
       }
-      case JsonToken.FIELD_NAME if List(START, CRS_PROPERTY).contains(currentState) && jp.getCurrentName.equals(FEATURES_PROPERTY_NAME) => {
-        currentState = FEATURES_PROPERTY
-        true
-      }
-      case JsonToken.START_ARRAY if currentState == FEATURES_PROPERTY => {
-        currentState = IN_FEATURES_ARRAY
-        true
-      }
-      case JsonToken.START_OBJECT if List(IN_FEATURES_ARRAY, START_FEATURE).contains(currentState) => {
-        currentState = START_FEATURE
-        true
-      }
-      case JsonToken.END_ARRAY if List(IN_FEATURES_ARRAY, START_FEATURE).contains(currentState) => {
-        currentState = END_FEATURES_ARRAY
-        true
-      }
-      case _ => false
-    }
-
-    def next: ParserStates.Value = {
-      var t = jp.nextToken
-      while (t != null && !transition(t)) {
-        t = jp.nextToken
-      }
-      if (t == null) EOF
-      else currentState
-    }
-
-    def readFeature = try {
-      Right(jp.readValueAs(classOf[Feature]))
     } catch {
-      case ex: Throwable => Left(ex.getMessage)
-    }
-
-    private def readCRS = try {
-      jp.nextToken
-      CrsId.valueOf(jp.getIntValue)
-    } catch {
-      case e : Throwable => throw new RuntimeException("crs property cannot be parsed as an EPSG integer code.")
-    }
-
-    private def newCodec(newCrs : CrsId) = new JsonMapper(newCrs, true, false).getObjectMapper
-
-    private def updateCrsInJsonParser(newCrs: CrsId) = {
-      jp.setCodec( newCodec(newCrs) )
-    }
-
-    def run: State = {
-
-      var cnt = 0
-      val errMsgBuilder = new VectorBuilder[String]
-      while (next != EOF) {
-        if (currentState == CRS_PROPERTY) updateCrsInJsonParser(readCRS)
-        if (currentState == START_FEATURE) {
-          readFeature match {
-            case Right(f) => if (featureWriter.add(f)) cnt += 1
-                             else errMsgBuilder += ("Writer did not accept feature with envelope: %s" format f.getGeometry.getEnvelope.toString)
-            case Left(ex) => errMsgBuilder += ex
-          }
-        }
+      case ex : Throwable => {
+        Logger.debug("Exception in parsing: " + ex)
+        Left( (ex.getMessage, featureStr) )
       }
-      val msgs = errMsgBuilder.result().toList
-      State("%d features read successfully; %d features failed.\n" format(cnt,msgs.size), msgs)
-
-    }
-
-
-  }
-
-  object JsonStreamingParser {
-    lazy val codec = (new JsonMapper).getObjectMapper
-    lazy val jsonFactory = new JsonFactory(codec)
-
-    def apply[T](in: InputStream, writer: FeatureWriter) = new JsonStreamingParser {
-      lazy val jp = jsonFactory.createJsonParser(in)
-      val featureWriter = writer
-    }
-
-  }
-
-  def mkStreamingIteratee(writer: FeatureWriter)(implicit ec: ExecutionContext): Iteratee[Array[Byte], Either[Result, State]] = {
-    val pOutput = new PipedOutputStream()
-    val pInput = new PipedInputStream(pOutput)
-
-    val worker = Future {
-      val reader = JsonStreamingParser(pInput, writer)
-      reader.run
-    }
-
-    Iteratee.fold[Array[Byte], PipedOutputStream](pOutput) {
-      (pOutput, data) =>
-        pOutput.write(data)
-        pOutput
-    }.mapDone {
-      pOutput =>
-        pOutput.close()
-        try {
-          val s = Await.result(worker, Duration(60, "sec"))
-          Right(s)
-        } catch {
-          case t: Throwable => Left(Results.InternalServerError(t.getMessage))
-        }
     }
   }
 
-  def bodyParser(writer: FeatureWriter)(implicit ec: ExecutionContext) = BodyParser(rh => mkStreamingIteratee(writer))
+  def processChunk(crs: CrsId, writer: FeatureWriter, state: State, chunk: Array[Byte]) : State = {
+    val chunkAsString = new String(chunk, "UTF8")
+    Logger.debug("Processing Chunk....")
+//    Logger.debug("Incoming chunk is: " + chunkAsString)
+//    Logger.debug("Previous remaining state is: " + state.dataRemaining)
+    val toProcess = state.dataRemaining + chunkAsString
+
+    val featureStrings = toProcess.split(ConfigurationValues.jsonSeparator)
+    Logger.debug(s"split results in ${featureStrings.size} elements" )
+
+    val parseResults = for {
+      fs <- featureStrings
+    } yield parseFeatureString(crs, fs)
+
+
+    val validBsons = parseResults.collect {
+      case Right(f) => f
+    }
+
+    writer.add(validBsons)
+
+
+    //if the last warning is a json parse exception (identified by the Left having a non-empty second element
+    // then the error-message (if any) should not be included in the warnings list (since it will be reparsed
+    //on the next chunk
+    val newWarnings = parseResults.last match {
+      case Left((_, "")) => parseResults collect { case Left((msg, _)) => msg }
+      case _ => parseResults.slice(0, parseResults.size -1) collect { case Left((msg, _)) => msg }
+    }
+
+    //potentially the last string in featureStrings fails to parse because it is not complete
+    //in that case the whole string should be reparsed on the next iteration.
+    val remainingData = parseResults.last match {
+      case Left((_, rem)) => rem
+      case _ => ""
+    }
+
+    State(state.msg, state.warnings ++ newWarnings, remainingData)
+  }
+
+  def mkStreamingIteratee(crs: CrsId, writer: FeatureWriter) =
+    Iteratee.fold( State() ) { (state: State, chunk: Array[Byte]) => processChunk(crs, writer, state, chunk) } mapDone(state => Right(state) )
+
+  def bodyParser(crs: CrsId, writer: FeatureWriter)(implicit ec: ExecutionContext) = BodyParser("GeoJSON feature BodyParser") { request =>
+    mkStreamingIteratee(crs, writer)
+  }
 
 }

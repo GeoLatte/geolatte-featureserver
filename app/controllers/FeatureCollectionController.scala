@@ -11,7 +11,7 @@ import org.geolatte.common.Feature
 import repositories.MongoRepository
 import org.geolatte.nosql.mongodb.SpatialMetadata
 import config.ConfigurationValues.{Version, Format}
-import config.AppExecutionContexts
+import config.{ConfigurationValues, AppExecutionContexts}
 import scala.concurrent.Future
 import scala.Some
 import util.QueryParam
@@ -103,7 +103,7 @@ object FeatureCollection extends Controller {
     class CommaSeparate extends Enumeratee.CheckDone[String, String] {
       def continue[A](k: K[String, A]) = Cont {
         case in @ (Input.Empty) => this &> k(in)
-        case in: Input.El[String] => Enumeratee.map[String]("\n\r" + _) &> k(in)
+        case in: Input.El[String] => Enumeratee.map[String](ConfigurationValues.jsonSeparator + _) &> k(in)
         case Input.EOF => Done(Cont(k), Input.EOF)
       }
     }

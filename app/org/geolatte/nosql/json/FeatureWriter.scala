@@ -9,10 +9,7 @@ import scala.concurrent.Future
  */
 trait FeatureWriter {
 
-
-  def add(f: Feature) : Future[Boolean]
-
-  def flush() : Unit
+  def add(features: Seq[Feature])
 
 }
 

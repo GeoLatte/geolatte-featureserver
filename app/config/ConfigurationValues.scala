@@ -25,5 +25,9 @@ object ConfigurationValues {
     override def unapply (s: String): Option[Value] = values.find(_.toString == "v" + s.replace(".","_"))
   }
 
+  /**
+   * The separator to use between any two Json strings when streaming JSON
+   */
+  val jsonSeparator = "\n"
 
 }
