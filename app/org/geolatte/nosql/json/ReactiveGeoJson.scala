@@ -100,7 +100,7 @@ object ReactiveGeoJson {
   }
 
   def mkStreamingIteratee(crs: CrsId, writer: FeatureWriter) =
-    Iteratee.fold( State() ) { (state: State, chunk: Array[Byte]) => processChunk(crs, writer, state, chunk) } mapDone(state => Right(state) )
+    Iteratee.fold( State() ) { (state: State, chunk: Array[Byte]) => processChunk(crs, writer, state, chunk) } mapDone( state => Right(state) )
 
   def bodyParser(crs: CrsId, writer: FeatureWriter)(implicit ec: ExecutionContext) = BodyParser("GeoJSON feature BodyParser") { request =>
     mkStreamingIteratee(crs, writer)

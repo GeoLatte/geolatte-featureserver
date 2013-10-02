@@ -12,6 +12,8 @@ import org.geolatte.common.Feature
 import java.util
 import scala.collection.DefaultMap
 import org.geolatte.geom.crs.CrsId
+import play.api.data.validation.ValidationError
+import scala.util.{Success, Try}
 
 /**
  * Note this code is currently not needed (we use geolatte-common for reading GeoJson. Since it is
@@ -75,26 +77,31 @@ object GeometryReaders {
     }
   }
 
+  implicit val crsIdReads = (__ \ "properties" \ "name").read[String].map(epsg => Try(CrsId.parse(epsg))).collect(ValidationError("Exception on parsing of EPSG text")) {
+    case Success(crs) => crs
+  }
+
   def GeometryReads(implicit crs: CrsId) = new Reads[Geometry] {
 
-    def mkLineString(list: Seq[Positions]) : LineString = new LineString(positionList2PointSequence(list).get)
+    def mkLineString(list: Seq[Positions]): LineString = new LineString(positionList2PointSequence(list).get)
 
     def toGeometry(typeKey: String, pos: Positions): Geometry = (typeKey.toLowerCase, pos) match {
-        case ("point", Position(pnt)) => pnt
-        case ("linestring", PositionList(list)) => mkLineString(list)
-        case ("multilinestring", PositionList(list)) => {
-          val linestrings : Array[LineString] = list.collect { case PositionList(l) => mkLineString(l) }.toArray
-          new MultiLineString(linestrings)
-        }
-        case _ => throw new UnsupportedOperationException()
+      case ("point", Position(pnt)) => pnt
+      case ("linestring", PositionList(list)) => mkLineString(list)
+      case ("multilinestring", PositionList(list)) => {
+        val linestrings: Array[LineString] = list.collect {
+          case PositionList(l) => mkLineString(l)
+        }.toArray
+        new MultiLineString(linestrings)
       }
+      case _ => throw new UnsupportedOperationException()
+    }
 
     def reads(json: JsValue): JsResult[Geometry] = try {
       JsSuccess(toGeometry(
         (json \ "type").as[String],
         (json \ "coordinates").as(PositionReads)
       ))
-
     } catch {
       case ex: Throwable => JsError(ex.getMessage)
     }
@@ -150,7 +157,7 @@ object GeometryReaders {
     def getProperty(propertyName: String): AnyRef = properties.get(propertyName).get
 
     def getId = id match {
-      case Some(v) => v;
+      case Some(v) => v
       case _ => Integer.valueOf(-1)
     }
 

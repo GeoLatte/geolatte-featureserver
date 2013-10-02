@@ -15,6 +15,31 @@ import org.geolatte.geom.crs.CrsId
  */
 class GeometryReadersSpec extends Specification {
 
+  "The CRS Reader " should {
+
+    "read a valid named CRS representation" in {
+      val crs: CrsId = crsJson.validate[CrsId].asOpt.get
+      crs.getCode == 4326
+    }
+
+    "return a JsError when validating an invalid CRS representation" in {
+      val result = crsInvalidJson.validate[CrsId]
+      result match {
+        case _: JsError => success
+        case _ => failure
+      }
+    }
+
+    "return a JsError with a ValidationError when validating an CRS with an unparseable EPSG string" in {
+      val result = crsUnparseableEPGSJson.validate[CrsId]
+      result match {
+        case err: JsError => success
+        case _ => failure
+      }
+    }
+
+
+  }
 
   "The GeoJSon reader" should {
 
@@ -40,11 +65,10 @@ class GeometryReadersSpec extends Specification {
   "The GeoJSon reader" should {
 
     "Use the CrsId  declared when creating the GeometryReads" in {
-          implicit val geometryReaders = GeometryReads(CrsId.valueOf(31370))
-          val result = geomJsonLineString.validate[Geometry].asOpt.get
-          println(result.getCrsId)
-          result.getCrsId.equals(CrsId.valueOf(31370))
-        }
+      implicit val geometryReaders = GeometryReads(CrsId.valueOf(31370))
+      val result = geomJsonLineString.validate[Geometry].asOpt.get
+      result.getCrsId.equals(CrsId.valueOf(31370))
+    }
   }
 
   "The Feature reader" should {
@@ -74,18 +98,28 @@ class GeometryReadersSpec extends Specification {
 
     "fail on reading an invalid GeoJson feature (no geometry)" in {
       val result = noGeometry.validate[Feature]
-      result must beLike { case JsError(error) => ok }
+      result must beLike {
+        case JsError(error) => ok
+      }
     }
 
     "fail on reading an invalid GeoJson feature (no properties)" in {
-          val result = noProperties.validate[Feature]
-          result must beLike { case JsError(error) => ok }
-        }
+      val result = noProperties.validate[Feature]
+      result must beLike {
+        case JsError(error) => ok
+      }
+    }
 
 
   }
 
   // TEST DATA
+
+  val crsJson = Json.parse( """{"type":"name","properties":{"name":"EPSG:4326"}}""")
+
+  val crsInvalidJson = Json.parse( """{"type":"name","something-else":{"name":"EPSG:4326"}}""")
+
+  val crsUnparseableEPGSJson = Json.parse( """{"type":"name","properties":{"name":"no valid code"}}""")
 
   val geomJsonPnt = Json.obj("type" -> "Point", "coordinates" -> Json.arr(-87.067872, 33.093221))
 
