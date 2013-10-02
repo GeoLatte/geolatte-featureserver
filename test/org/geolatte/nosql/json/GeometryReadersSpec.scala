@@ -8,6 +8,7 @@ import org.geolatte.geom._
 import org.geolatte.common.Feature
 import org.specs2.execute.Result
 import org.geolatte.geom.crs.CrsId
+import scala.collection.mutable.ListBuffer
 
 /**
  * @author Karel Maesen, Geovise BVBA
@@ -19,7 +20,7 @@ class GeometryReadersSpec extends Specification {
 
     "read a valid named CRS representation" in {
       val crs: CrsId = crsJson.validate[CrsId].asOpt.get
-      crs.getCode == 4326
+      crs.getCode == 31370
     }
 
     "return a JsError when validating an invalid CRS representation" in {
@@ -38,12 +39,34 @@ class GeometryReadersSpec extends Specification {
       }
     }
 
+  }
+
+  "The PointsReader" should {
+
+    "read a valid point Position" in {
+        val json = Json.parse("[84.5,23.3]")
+        val result = json.validate[Positions].asOpt.get
+        result must_== new Position(84.5, 23.3)
+    }
+
+    "read a valid array of point positions" in {
+      val json = Json.parse("[[80.0, 20.3], [90.0, 30.0]]")
+      val result = json.validate[Positions].asOpt.get
+      result must_== PositionList(ListBuffer(new Position(80.0, 20.3), new Position(90.0, 30.0)))
+    }
+
+    "read a valid array of array of point positions" in {
+      val json = Json.parse("[[[80.0, 20.3], [90.0, 30.0]], [[80.0, 20.3], [90.0, 30.0]]]")
+      val result = json.validate[Positions].asOpt.get
+      val pl = PositionList(ListBuffer(new Position(80.0, 20.3), new Position(90.0, 30.0)))
+      result must_== PositionList(ListBuffer(pl, pl))
+    }
 
   }
 
   "The GeoJSon reader" should {
 
-    implicit val defaultGeometryReaders = GeometryReads(CrsId.UNDEFINED)
+    implicit val defaultGeometryReaders = GeometryReads( CrsId.valueOf(4326) )
 
     "read a valid POINT GeoJson" in {
       val geom = geomJsonPnt.validate[Geometry].asOpt.get
@@ -52,14 +75,32 @@ class GeometryReadersSpec extends Specification {
 
     "read a valid LineString GeoJson" in {
       val result = geomJsonLineString.validate[Geometry].asOpt.get
-      result.equals(linestring(-1, c(-87.067872, 33.093221), c(90.2, 40.0)))
+      result.equals(linestring(4326, c(-87.067872, 33.093221), c(90.2, 40.0)))
     }
 
     "read a valid MultiLineString GeoJson " in {
       val result = geomJsonMultiLineString.validate[Geometry].asOpt.get
-      result.equals(multilinestring(-1, linestring(c(-87.067872, 33.093221), c(90.2, 40.0)), linestring(c(-87.067872, 33.093221), c(90.2, 40.0))))
+      result.equals(multilinestring(4326, linestring(c(-87.067872, 33.093221), c(90.2, 40.0)), linestring(c(-87.067872, 33.093221), c(90.2, 40.0))))
     }
 
+    "use the default crs defined in the readers as an implicit parameter when the Geometry has no CRS field" in {
+      val geom = geomJsonPnt.validate[Geometry].asOpt.get
+      geom.getCrsId must_== CrsId.valueOf(4326)
+    }
+
+    "use the crs field when present" in {
+      val geom = geomJsonPntWithCrs.validate[Geometry].asOpt.get
+      geom.getCrsId must_== CrsId.valueOf(31370)
+    }
+
+    "return a JsError when the coordinates array is invalid" in {
+         val json = Json.parse("""{"type" : "MultiLineString", "coordinates" : [[[80.0, 20.3], 99999], [[80.0, 20.3], [90.0, 30.0]]]}""")
+         val result = json.validate[Geometry]
+         result match {
+           case _ : JsError => success
+           case _ => failure
+         }
+       }
   }
 
   "The GeoJSon reader" should {
@@ -115,13 +156,15 @@ class GeometryReadersSpec extends Specification {
 
   // TEST DATA
 
-  val crsJson = Json.parse( """{"type":"name","properties":{"name":"EPSG:4326"}}""")
+  val crsJson = Json.parse( """{"type":"name","properties":{"name":"EPSG:31370"}}""")
 
   val crsInvalidJson = Json.parse( """{"type":"name","something-else":{"name":"EPSG:4326"}}""")
 
   val crsUnparseableEPGSJson = Json.parse( """{"type":"name","properties":{"name":"no valid code"}}""")
 
   val geomJsonPnt = Json.obj("type" -> "Point", "coordinates" -> Json.arr(-87.067872, 33.093221))
+
+  val geomJsonPntWithCrs = Json.obj("type" -> "Point", "crs" -> crsJson, "coordinates" -> Json.arr(-87.067872, 33.093221))
 
   val geomJsonLineString = Json.obj("type" -> "LineString",
     "coordinates" -> Json.arr(Json.arr(-87.067872, 33.093221), Json.arr(90.2, 40.0)))

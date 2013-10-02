@@ -14,11 +14,9 @@ import scala.collection.DefaultMap
 import org.geolatte.geom.crs.CrsId
 import play.api.data.validation.ValidationError
 import scala.util.{Success, Try}
+import scala.annotation.tailrec
+import scala.collection.mutable.ListBuffer
 
-/**
- * Note this code is currently not needed (we use geolatte-common for reading GeoJson. Since it is
- * covered by test specs, I leave it for now in the code base
- */
 
 object GeometryReaders {
 
@@ -26,15 +24,17 @@ object GeometryReaders {
 
   object EmptyPosition extends Positions
 
-  case class Position(pnt: Point) extends Positions {
-    def this(x: Double, y: Double)(implicit crs: CrsId) = this(Points.create2D(x, y, crs))
-  }
+  case class InvalidPosition(msg: String) extends Positions
 
-  case class PositionList(list: Seq[Positions]) extends Positions
+  case class Position(x: Double, y: Double) extends Positions
 
-  def positionList2PointSequence(seq: Seq[Positions]): Option[PointSequence] = {
+  case class PositionList(list: ListBuffer[Positions]) extends Positions
+
+
+  def positionList2PointSequence(seq: Seq[Positions])(implicit crs: CrsId): Option[PointSequence] = {
     val seqPnts = seq.map {
-      case Position(pnt) => pnt
+      case Position(x, y) => Points.create2D(x, y, crs)
+      case InvalidPosition(msg) => throw new IllegalStateException(msg)
     }
     seqPnts match {
       case Seq() => Some(EmptyPointSequence.INSTANCE)
@@ -47,60 +47,60 @@ object GeometryReaders {
     }
   }
 
-  def positions2PointSequence(pos: Positions): Option[PointSequence] = {
-    import PointSequenceBuilders._
-    pos match {
-      case EmptyPosition => Some(EmptyPointSequence.INSTANCE)
-      case Position(pnt) => Some(fixedSized(1, pnt.getDimensionalFlag, pnt.getCrsId).add(pnt).toPointSequence)
-      case PositionList(l) => positionList2PointSequence(l)
-    }
-  }
+  implicit val PositionReads: Reads[Positions] = new Reads[Positions] {
 
-  def PositionReads(implicit crs: CrsId): Reads[Positions] = new Reads[Positions] {
+    def readArray[T](values: Seq[T]): Positions = {
 
-    def readArray[T](values: Seq[T]): Positions =
+      def toPos(el: Any) = el match {
+        case JsArray(a) => readArray(a)
+        case _ => InvalidPosition("Irregular structure in coordinates array")
+      }
+
       values match {
         case Nil => EmptyPosition
-        case Seq((x: JsNumber), (y: JsNumber)) => new Position(x.value.doubleValue(), y.value.doubleValue())
+        case Seq((x: JsNumber), (y: JsNumber)) => Position(x.value.doubleValue(), y.value.doubleValue())
         case psv: Seq[_] => {
-          val pss = for (v <- psv) yield v match {
-            case JsArray(a) => readArray(a)
-            case _ => throw new IllegalStateException() // improve error-handling
-          }
-          PositionList(pss)
+          val pl = psv.foldLeft(ListBuffer[Positions]())( (result, el) => result :+ toPos(el) )
+          PositionList(pl)
         }
       }
+    }
 
     def reads(json: JsValue): JsResult[Positions] = json match {
       case JsArray(arr) => JsSuccess(readArray(arr))
       case _ => JsError("No array for coordinates property")
     }
+
   }
 
   implicit val crsIdReads = (__ \ "properties" \ "name").read[String].map(epsg => Try(CrsId.parse(epsg))).collect(ValidationError("Exception on parsing of EPSG text")) {
     case Success(crs) => crs
   }
 
-  def GeometryReads(implicit crs: CrsId) = new Reads[Geometry] {
+  def GeometryReads(implicit defaultCrs: CrsId) = new Reads[Geometry] {
 
     def mkLineString(list: Seq[Positions]): LineString = new LineString(positionList2PointSequence(list).get)
 
-    def toGeometry(typeKey: String, pos: Positions): Geometry = (typeKey.toLowerCase, pos) match {
-      case ("point", Position(pnt)) => pnt
-      case ("linestring", PositionList(list)) => mkLineString(list)
-      case ("multilinestring", PositionList(list)) => {
-        val linestrings: Array[LineString] = list.collect {
-          case PositionList(l) => mkLineString(l)
-        }.toArray
-        new MultiLineString(linestrings)
+    def toGeometry(typeKey: String, pos: Positions, geomcrs: Option[CrsId]): Geometry = {
+      val crs = geomcrs.getOrElse(defaultCrs)
+      (typeKey.toLowerCase, pos) match {
+        case ("point", Position(x, y)) => Points.create2D(x, y, crs)
+        case ("linestring", PositionList(list)) => mkLineString(list)
+        case ("multilinestring", PositionList(list)) => {
+          val linestrings: Array[LineString] = list.collect {
+            case PositionList(l) => mkLineString(l)
+          }.toArray
+          new MultiLineString(linestrings)
+        }
+        case _ => throw new UnsupportedOperationException()
       }
-      case _ => throw new UnsupportedOperationException()
     }
 
     def reads(json: JsValue): JsResult[Geometry] = try {
       JsSuccess(toGeometry(
         (json \ "type").as[String],
-        (json \ "coordinates").as(PositionReads)
+        (json \ "coordinates").as(PositionReads),
+        (json \ "crs").asOpt(crsIdReads)
       ))
     } catch {
       case ex: Throwable => JsError(ex.getMessage)
@@ -118,7 +118,7 @@ object GeometryReaders {
 
     def readValue(json: JsValue): AnyRef = json match {
       case JsBoolean(b) => b: java.lang.Boolean
-      case JsNumber(n) => n.toLong: java.lang.Long
+      case JsNumber(n) => n
       case JsString(s) => s
       case JsArray(l) => l.map(readValue)
       case JsObject(o) => {
