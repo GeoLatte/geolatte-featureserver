@@ -95,7 +95,6 @@ object FeatureCollection extends Controller {
 
   }
 
-
   def toStream(features: Enumerator[Feature], chunkSize: Int = 1024 * 8) : Enumerator[Array[Byte]] = {
     val jsonMapper = new JsonMapper()
 

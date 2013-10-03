@@ -108,7 +108,7 @@ object TxController extends Controller {
    */
   private def mkJsonWritingBodyParser(db: String, col: String) : BodyParser[State] = {
       val writer = new MongoWriter(db, col)
-      ReactiveGeoJson.bodyParser(CrsId.parse("4326"), writer)
+      ReactiveGeoJson.bodyParser(writer)
   }
 
 

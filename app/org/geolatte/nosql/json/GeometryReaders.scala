@@ -118,7 +118,11 @@ object GeometryReaders {
 
     def readValue(json: JsValue): AnyRef = json match {
       case JsBoolean(b) => b: java.lang.Boolean
-      case JsNumber(n) => n
+      case JsNumber(n) => {
+        if (n.isValidInt) Integer.valueOf(n.toInt)
+        else if (n.isValidLong) java.lang.Long.valueOf(n.toLong)
+        else java.lang.Double.valueOf(n.toDouble)
+      }
       case JsString(s) => s
       case JsArray(l) => l.map(readValue)
       case JsObject(o) => {
