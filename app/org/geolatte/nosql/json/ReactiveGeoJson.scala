@@ -51,7 +51,8 @@ object ReactiveGeoJson {
 
   def processChunk(writer: FeatureWriter, state: State, chunk: Array[Byte]) : State = {
     val chunkAsString = new String(chunk, "UTF8")
-    Logger.debug("Processing Chunk....")
+//    Logger.debug("Processing Chunk....")
+//    Logger.debug(chunkAsString)
     val toProcess = state.dataRemaining + chunkAsString
 
     val featureStrings = toProcess.split(ConfigurationValues.jsonSeparator)
@@ -67,8 +68,11 @@ object ReactiveGeoJson {
         val json = Json.parse(fStr)
         val optCrsDeclaration = json.asOpt[CrsId](crsDeclarationReads)
         optCrsDeclaration match {
-          case Some(newCrs) => ( features , State( curState.msg, curState.warnings, "", FeatureReads(newCrs) ) )
-          case None => parseAsString(json, curState.copy(dataRemaining = ""), features)(state.featureReads)
+          case Some(newCrs) => {
+            Logger.info("Setting CRS to " + newCrs)
+            ( features , State( curState.msg, curState.warnings, "", FeatureReads(newCrs) ) )
+          }
+          case None => parseAsString(json, curState.copy(dataRemaining = ""), features)(curState.featureReads)
         }
       } catch {
         case ex : JsonParseException => (features, curState.copy(dataRemaining = fStr))
