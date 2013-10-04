@@ -3,11 +3,8 @@ package util
 import scala.util.Random
 import org.geolatte.geom._
 import org.geolatte.geom.crs.CrsId
-import org.geolatte.geom.curve.MortonContext
-import org.geolatte.nosql.mongodb.MongoDbSink
 import org.geolatte.common.Feature
 import org.geolatte.common.dataformats.json.jackson.DefaultFeature
-import repositories.MongoRepository
 import play.api.libs.iteratee.{Iteratee, Enumerator}
 import scala.concurrent.{ExecutionContext, Future}
 
@@ -65,7 +62,9 @@ case class TestDataGenerator(ll: Point, ur: Point, minLength: Double, maxLength:
 
     val it = new Iterator[Feature] {
       var cnt = 0
+
       def hasNext: Boolean = cnt < num
+
       def next(): Feature = {
         val f = feature(cnt)
         cnt += 1
@@ -73,15 +72,9 @@ case class TestDataGenerator(ll: Point, ur: Point, minLength: Double, maxLength:
       }
     }
 
-    import reactivemongo.api.collections.default.BSONCollectionProducer
     import ExecutionContext.Implicits.global
-
-    val ctxt: MortonContext = new MortonContext(new Envelope(ll, ur), level)
-    val coll = MongoRepository.connection(dbName).collection(colName)
-    val sink = new MongoDbSink(coll, ctxt)
-
-
-    sink.in( Enumerator.enumerate(it) )
+    val sink = new MongoDbSink(dbName, colName)
+    sink.in(Enumerator.enumerate(it))
 
   }
 

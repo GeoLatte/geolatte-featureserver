@@ -6,7 +6,6 @@ import collection.JavaConversions._
 import org.geolatte.geom.codec.Wkb
 import org.geolatte.geom.{Geometry, Envelope, ByteBuffer, ByteOrder}
 import org.geolatte.geom.curve.{MortonContext, MortonCode}
-import org.geolatte.nosql.{WindowQueryable, Source, Sink}
 
 import play.Logger
 import sun.misc.{BASE64Decoder, BASE64Encoder}
@@ -20,6 +19,7 @@ import reactivemongo.api.collections.default.BSONCollection
 import reactivemongo.core.commands.GetLastError
 import scala.util.{Failure, Success}
 import java.util.Date
+import util.{EnvelopeSerializer, Source}
 
 
 //TODO == replace with Apache commons-codec (sun.misc.* classes shouldnot be called directly)
@@ -55,68 +55,8 @@ trait FeatureWithEnvelope extends Feature {
   def envelope: Envelope
 }
 
-class MongoDbSink(val collection: BSONCollection, val mortoncontext: MortonContext) extends Sink[Feature] {
 
 
-  private val GROUP_SIZE = 5000
-  val mortoncode = new MortonCode(mortoncontext)
-
-  private def beforeIn = {
-    val idxManager = collection.indexesManager
-    idxManager.list().flatMap(indexes => Future.sequence(indexes.map(idxManager.delete(_))))
-  }
-
-  def in(features: Enumerator[Feature])  = {
-
-      def transform(f: Feature): Option[BSONDocument] = {
-        try {
-          val mc = mortoncode ofGeometry f.getGeometry
-          Some(MongoDbFeature(f, mc))
-        } catch {
-          case ex: IllegalArgumentException => {
-            Logger.warn(" Can't save feature with envelope " + f.getGeometry.getEnvelope.toString)
-            None
-          }
-        }
-      }
-
-      val convertingToDoc = Enumeratee.map[Feature]( f => transform(f) )
-      val filterOutNoneVals = Enumeratee.collect[Option[BSONDocument]]{ case Some(doc) => doc }
-      val bulkInsert = collection.bulkInsertIteratee(bulkSize = GROUP_SIZE)
-      features apply ((convertingToDoc compose filterOutNoneVals) transform bulkInsert)
-
-      afterIn.onComplete{
-        case Success(le) if le.ok => Logger.info("Successfully rebuilt index and updated properties")
-        case Failure(t) => Logger.info("Failure on reindex", t)
-        case Success(le) => Logger.info("Failed to rebuild index. Message is " + le.errMsg)
-      }
-
-    }
-
-  private def afterIn = {
-
-    val idxManager = collection.indexesManager
-    val futureComplete = idxManager.create( new Index(Seq((SpecialMongoProperties.MC, Ascending))))
-
-    futureComplete.onFailure {
-      case ex => Logger.warn("Failure on creating mortoncode index on collection %s" format collection.name)
-    }
-
-    import MetadataIdentifiers._
-
-    val metadata = BSONDocument(
-      CollectionField -> collection.name,
-      ExtentField -> EnvelopeSerializer(mortoncontext.getExtent),
-      IndexLevelField -> mortoncontext.getDepth
-
-    )
-    val selector = BSONDocument("collection" -> collection.name)
-    val mdCollection = collection.db.collection[BSONCollection](MetadataIdentifiers.MetadataCollection)
-    //TODO set getlasterror as defined values in ConfigurationValues object
-    mdCollection.update(selector = selector, update = metadata, writeConcern = new GetLastError(true, None, true),  upsert = true, multi = false )
-  }
-
-}
 
 
 trait MortonCodeQueryOptimizer {
@@ -167,8 +107,7 @@ trait SubdividingMCQueryOptimizer extends MortonCodeQueryOptimizer {
 
 
 class MongoDbSource(val collection: BSONCollection, val mortoncontext: MortonContext)
-  extends Source[Feature]
-  with WindowQueryable[Feature] {
+  extends Source[Feature] {
 
   //we require a MortonCodeQueryOptimizer to be mixed in on instantiation
   this: MortonCodeQueryOptimizer =>
@@ -264,7 +203,7 @@ object MongoDbFeature {
       case _ => false
     }.toMap
 
-    //TODO -- dangerouse get on bbox option + convoluted
+    //TODO -- dangerous get on bbox option + convoluted
     val envelope = EnvelopeSerializer.unapply(obj.getAs[String](BBOX).get).getOrElse(geometry.getEnvelope)
 
     def hasProperty(propertyName: String, inclSpecial: Boolean): Boolean =

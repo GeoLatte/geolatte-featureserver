@@ -1,10 +1,10 @@
-package org.geolatte.scala
+package util
 
 /**
  * @author Karel Maesen, Geovise BVBA
- * creation-date: 3/5/13
+ *         creation-date: 10/4/13
  */
-object Utils {
+object Timer {
 
   def time[A]( a: => A ): A = {
     val now = System.currentTimeMillis
@@ -13,5 +13,6 @@ object Utils {
     println("Operation took: %d millis." format time)
     result
   }
+
 
 }

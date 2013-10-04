@@ -2,6 +2,7 @@ package org.geolatte.nosql.mongodb
 
 import org.geolatte.geom.Envelope
 import reactivemongo.bson.BSONDocument
+import util.EnvelopeSerializer
 
 /**
  * @author Karel Maesen, Geovise BVBA

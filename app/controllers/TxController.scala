@@ -9,11 +9,10 @@ import config.AppExecutionContexts
 import org.geolatte.nosql.json.{MongoWriter, ReactiveGeoJson}
 import scala.concurrent.Future
 import repositories.MongoRepository
-import play.modules.reactivemongo.json.BSONFormats._
 import play.api.libs.json.{Json, JsObject}
 import org.codehaus.jackson.JsonParseException
-import org.geolatte.geom.crs.CrsId
 import org.geolatte.nosql.json.ReactiveGeoJson.State
+import play.modules.reactivemongo.json.BSONFormats.BSONDocumentFormat
 
 /**
  * @author Karel Maesen, Geovise BVBA

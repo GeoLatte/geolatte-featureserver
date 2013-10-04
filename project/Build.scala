@@ -26,9 +26,11 @@ object GeolatteNoSqlBuild extends Build {
   )
 
    //Dependencies
-  lazy val commonDependencies = Seq(
+  lazy val dependencies = Seq(
     "org.specs2" %% "specs2" % "1.14" % "test",    
     "org.geolatte" % "geolatte-geom" %  "0.12-SNAPSHOT",
+    "org.reactivemongo" %% "reactivemongo" % "0.9",
+     "org.reactivemongo" %% "play2-reactivemongo" % "0.9",
     "org.geolatte" % "geolatte-common" % "0.7-SNAPSHOT"
       exclude("org.codehaus.jackson", "jackson-core-lgpl")     //needs to exclude these because they conflict with Play's more recent Jackson
       exclude("org.codehaus.jackson", "jackson-mapper-lgpl")
@@ -50,7 +52,7 @@ object GeolatteNoSqlBuild extends Build {
   		commonBuildSettings ++ 
   		releaseSettings ++ 
   		Seq(
-    		libraryDependencies ++= commonDependencies,
+    		libraryDependencies ++= dependencies,
     		releaseProcess := releaseSteps,
     		fork in test := true,  //Fork a new JVM for running tests
     		javaOptions in (Test,run) += "-XX:MaxPermSize=128m"
@@ -70,22 +72,10 @@ object GeolatteNoSqlBuild extends Build {
     //pushChanges                             // Push changes
   )
 
-
-    val mongoDependencies = Seq(
-        "org.reactivemongo" %% "play2-reactivemongo" % "0.9"
-    )
-
     lazy val main = play.Project(
     	appName,
-    	dependencies = commonDependencies,
+    	dependencies = dependencies,
     	settings = defaultSettings ++ buildInfoSettings
-  	).dependsOn(mongodb)
-
-  	lazy val mongodb = play.Project(
-  		"mongodb",
-  		dependencies = commonDependencies ++ mongoDependencies,
-      	path = file("modules/mongodb"),
-      	settings = defaultSettings
-	)
+  	)
 
 }

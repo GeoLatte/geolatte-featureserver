@@ -55,12 +55,12 @@ object ReactiveGeoJson {
 //    Logger.debug(chunkAsString)
     val toProcess = state.dataRemaining + chunkAsString
 
-    val featureStrings = toProcess.split(ConfigurationValues.jsonSeparator)
-    Logger.debug(s"split results in ${featureStrings.size} elements" )
+    val jsonStrings = toProcess.split(ConfigurationValues.jsonSeparator)
+    Logger.debug(s"split results in ${jsonStrings.size} elements" )
 
     val crsDeclarationReads = (__ \ "crs").read[CrsId]
 
-    val (fs, newState) = featureStrings.foldLeft( (List[Feature](), state.copy(dataRemaining="")) )( (res : (List[Feature], State), fStr : String )  => {
+    val (fs, newState) = jsonStrings.foldLeft( (List[Feature](), state.copy(dataRemaining="")) )( (res : (List[Feature], State), fStr : String )  => {
       val (features, curState) = res
       if (!curState.dataRemaining.isEmpty) Logger.warn(s"Invalid JSON: could not parse ${curState.dataRemaining}")
       try {

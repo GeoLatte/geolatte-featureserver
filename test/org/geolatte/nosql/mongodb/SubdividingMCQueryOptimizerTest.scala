@@ -1,0 +1,60 @@
+package org.geolatte.nosql.mongodb
+
+import org.specs2.mutable._
+import org.geolatte.geom.curve._
+import org.geolatte.geom.Envelope
+import org.geolatte.geom.crs.CrsId
+import reactivemongo.bson._
+
+/**
+ * @author Karel Maesen, Geovise BVBA
+ * creation-date: 3/7/13
+ */
+class SubdividingMCQueryOptimizerTest extends Specification {
+
+  val wgs84 = CrsId.valueOf(4326)
+
+  val ctxt = new MortonContext(new Envelope(0, 0, 100, 100, wgs84), 3)
+  val mortoncode = new MortonCode(ctxt)
+  val optimizer = new SubdividingMCQueryOptimizer(){}
+
+  "The optimizer given a window with morton code of maximal length" should {
+
+    val window = new Envelope(2,2,3,3, wgs84)
+
+    "return the mortoncode of the window" in {
+        val result = optimizer.optimize(window, mortoncode)
+        result must contain( BSONDocument("_mc" -> BSONString("000")) )
+        result must contain(BSONDocument("_mc" -> BSONString("00")))
+        result must contain(BSONDocument("_mc" -> BSONString("0")))
+        result must contain(BSONDocument("_mc" -> BSONString("")))
+        result.size must_== 4
+    }
+  }
+
+  "The optimizer given a small query window at the center" should {
+    val window = new Envelope(49, 49, 51, 51, wgs84)
+
+    "4 queries at lowest level " in {
+      val result = optimizer.optimize(window, mortoncode)
+      result must contain(BSONDocument("_mc" -> BSONString("")))
+      result must contain(BSONDocument("_mc" -> BSONString("0")))
+      result must contain(BSONDocument("_mc" -> BSONString("1")))
+      result must contain(BSONDocument("_mc" -> BSONString("2")))
+      result must contain(BSONDocument("_mc" -> BSONString("3")))
+      result must contain(BSONDocument("_mc" -> BSONString("03")))
+      result must contain(BSONDocument("_mc" -> BSONString("12")))
+      result must contain(BSONDocument("_mc" -> BSONString("30")))
+      result must contain(BSONDocument("_mc" -> BSONString("21")))
+      result must contain(BSONDocument("_mc" -> BSONString("033")))
+      result must contain(BSONDocument("_mc" -> BSONString("122")))
+      result must contain(BSONDocument("_mc" -> BSONString("300")))
+      result must contain(BSONDocument("_mc" -> BSONString("211")))
+      result.size must_== 13
+
+    }
+
+  }
+
+
+}

@@ -1,4 +1,4 @@
-package org.geolatte.nosql.mongodb
+package util
 
 import org.geolatte.geom.Envelope
 import org.geolatte.geom.crs.CrsId

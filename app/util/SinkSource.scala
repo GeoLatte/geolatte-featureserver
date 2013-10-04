@@ -1,4 +1,4 @@
-package org.geolatte.nosql
+package util
 
 import org.geolatte.common._
 import dataformats.json.jackson.JsonMapper
@@ -19,19 +19,6 @@ trait Sink[A] {
 
 trait Source[A] {
   def out(): Enumerator[A]
-}
-
-/**
- * A stackable modification trait that can be mixed in
- * into a Source so that it allows for window querying
- *
- *
- */
-// See ProgInScala, section 12.5 for this style
-trait WindowQueryable[A] extends Source[A] {
-
-  def query(window: Envelope): Enumerator[A]
-
 }
 
 /*
