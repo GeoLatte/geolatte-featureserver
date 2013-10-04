@@ -24,7 +24,6 @@ case class MongoDbFeatureCollection(collection: BSONCollection, spatialMetadata:
   lazy val mortoncode = new MortonCode(mortonContext)
 
   def add(features: Seq[Feature]): Unit = {
-//    Logger.debug(s"Adding feature: $f")
     val docs = features.map( f => convertFeature(f)).collect { case Some(doc) => doc }
     insert(docs)
   }

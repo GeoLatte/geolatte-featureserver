@@ -230,7 +230,8 @@ object MongoDbFeature {
   }
 
   def apply(feature: Feature, mortoncode: String) = {
-    val elems = propertyMap(feature) ++ geometryProperties(feature, mortoncode)
+    val idProp = if (feature.getId != null) Seq( ("id" -> feature.getId) ) else Seq()
+    val elems = propertyMap(feature) ++ geometryProperties(feature, mortoncode) ++ idProp
     val bson = BSONDocument( elems.map{ case (k,v) => k -> toBSONValue(v)})
     bson
   }
@@ -279,7 +280,12 @@ object MongoDbFeature {
         case Some(bsonVal) => fromBSONValue(bsonVal)
       }
 
-    def getId: AnyRef = obj.get(ID).getOrElse( obj.getAs[BSONObjectID]("_id").get.stringify)
+    def getId: AnyRef = {
+      obj.get(ID) match {
+        case Some(idVal) => fromBSONValue(idVal)
+        case None => obj.getAs[BSONObjectID]("_id").get.stringify
+      }
+    }
 
     def getGeometry: Geometry = geometry
 

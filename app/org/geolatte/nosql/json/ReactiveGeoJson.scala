@@ -60,7 +60,6 @@ object ReactiveGeoJson {
 
     val crsDeclarationReads = (__ \ "crs").read[CrsId]
 
-
     val (fs, newState) = featureStrings.foldLeft( (List[Feature](), state.copy(dataRemaining="")) )( (res : (List[Feature], State), fStr : String )  => {
       val (features, curState) = res
       if (!curState.dataRemaining.isEmpty) Logger.warn(s"Invalid JSON: could not parse ${curState.dataRemaining}")
