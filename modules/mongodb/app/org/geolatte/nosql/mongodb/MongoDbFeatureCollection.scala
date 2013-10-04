@@ -3,15 +3,14 @@ package org.geolatte.nosql.mongodb
 import scala.Some
 import org.geolatte.geom.curve.{MortonCode, MortonContext}
 import org.geolatte.common.Feature
-import scala.collection.mutable.ArrayBuffer
 import reactivemongo.api.collections.default.BSONCollection
 import reactivemongo.bson.BSONDocument
 import reactivemongo.api.indexes.Index
 import reactivemongo.api.indexes.IndexType.Ascending
 import play.api.Logger
-import scala.concurrent.{Future, ExecutionContext}
 import play.api.libs.iteratee.Enumerator
 import scala.util.{Failure, Success}
+import scala.concurrent.ExecutionContext
 
 /**
  * @author Karel Maesen, Geovise BVBA
@@ -49,16 +48,15 @@ case class MongoDbFeatureCollection(collection: BSONCollection, spatialMetadata:
       case Failure(f) => Logger.warn(s"Insert failed with error: ${f.getMessage}")
     }
 
-    //TODO this is duplicate code from MongoDbSink
+  }
 
-//    val idxManager = collection.indexesManager
-//    val futureComplete = idxManager.create( new Index(Seq((SpecialMongoProperties.MC, Ascending))))
-//
-//    futureComplete.onFailure {
-//      case ex => Logger.warn("Failure on creating mortoncode index on collection %s" format collection.name)
-//    }
-    //END duplicate
-
+  def updateIndex() = {
+    //TODO -- configure proper execution contexts
+    import ExecutionContext.Implicits.global
+    val idxManager = collection.indexesManager
+    idxManager.ensure( new Index(Seq((SpecialMongoProperties.MC, Ascending)))) onFailure {
+      case ex => Logger.warn("Failure on creating mortoncode index on collection %s" format collection.name)
+    }
   }
 
 }

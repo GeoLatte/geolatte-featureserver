@@ -14,7 +14,6 @@ import scala.collection.DefaultMap
 import org.geolatte.geom.crs.CrsId
 import play.api.data.validation.ValidationError
 import scala.util.{Success, Try}
-import scala.annotation.tailrec
 import scala.collection.mutable.ListBuffer
 
 

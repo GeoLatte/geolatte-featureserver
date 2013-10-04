@@ -9,7 +9,9 @@ import scala.concurrent.Future
  */
 trait FeatureWriter {
 
-  def add(features: Seq[Feature])
+  def add(features: Seq[Feature]) : Unit
+
+  def updateIndex() : Unit
 
 }
 

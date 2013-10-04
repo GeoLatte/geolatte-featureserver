@@ -25,4 +25,10 @@ class MongoWriter(db: String, collection: String) extends FeatureWriter {
     for (writer <- futureWriter) yield writer.add(features)
   }
 
+  def updateIndex() : Unit = {
+    for (write <- futureWriter) {
+      write.updateIndex()
+    }
+  }
+
 }
