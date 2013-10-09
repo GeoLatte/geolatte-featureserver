@@ -14,6 +14,7 @@ import play.api.libs.json.JsSuccess
 import play.api.data.validation.ValidationError
 import reactivemongo.bson.BSONDocument
 import org.codehaus.jackson.JsonParseException
+import java.io.IOException
 
 /**
  * @author Karel Maesen, Geovise BVBA
@@ -75,6 +76,7 @@ object ReactiveGeoJson {
         }
       } catch {
         case ex : JsonParseException => (features, curState.copy(dataRemaining = fStr))
+        case ex : IOException => Logger.debug(s"IOException: ${ex.getMessage} on string: '$fStr'"); (features, curState.copy(dataRemaining = fStr))
       }
     })
 
