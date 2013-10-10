@@ -44,13 +44,6 @@ object TxController extends Controller {
     updateOp = (coll, arguments) => coll.update(arguments(0), arguments(1), GetLastError(awaitJournalCommit = true))
   )
 
-  //  def reindex(db: String, col: String, level: Int) = {
-  //    Action {
-  //      request => MongoRepository.reindex(db, col, level)
-  //    }
-  //  }
-
-
   private def mkUpdateAction(db: String, col: String)
                             (extractor: BSONDocument => Seq[BSONDocument],
                              updateOp: UpdateOp) =
