@@ -33,7 +33,7 @@ case class MongoWriter(db: String, collection: String) extends FeatureWriter {
   type CollectionInfo = (BSONCollection, SpatialMetadata, MortonCode)
 
   val fCollectionInfo: Future[CollectionInfo] = MongoRepository.getCollection(db, collection) map {
-    case (Some(dbcoll), Some(smd)) =>
+    case (dbcoll, Some(smd)) =>
       lazy val mortonContext = new MortonContext(smd.envelope, smd.level)
       lazy val mortoncode = new MortonCode(mortonContext)
       (dbcoll, smd, mortoncode)

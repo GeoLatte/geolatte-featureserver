@@ -3,23 +3,21 @@ package controllers
 import org.geolatte.geom.Envelope
 import org.geolatte.geom.crs.CrsId
 import org.geolatte.common.dataformats.json.jackson.JsonMapper
-import play.api.mvc.{Action, Controller}
+import play.api.mvc.{Result, SimpleResult, Action, Controller}
 import play.api.Logger
-import util.{MediaTypeSpec, QueryParam}
+import util.MediaTypeSpec
 import play.api.libs.iteratee._
 import org.geolatte.common.Feature
 import repositories.MongoRepository
 import org.geolatte.nosql.mongodb.SpatialMetadata
 import config.ConfigurationValues.{Version, Format}
 import config.{ConfigurationValues, AppExecutionContexts}
-import scala.concurrent.Future
 import scala.Some
 import util.QueryParam
+import controllers.Exceptions._
 
 
-object FeatureCollection extends Controller {
-
-  //TODO -- check choice of execution context
+object FeatureCollection extends AbstractNoSqlController {
 
   import AppExecutionContexts.streamContext
 
@@ -28,49 +26,40 @@ object FeatureCollection extends Controller {
     val BBOX = QueryParam("bbox", (s: String) => Some(s))
   }
 
-  //temporary fixed value
-  val WGS_84 = CrsId.valueOf(4326)
 
   def query(db: String, collection: String) = Action {
     request =>
       implicit val queryStr = request.queryString
-      Logger.info(s"Query string ${queryStr} on $db, collection $collection")
       Async {
-        doQuery(db, collection)
+        Logger.info(s"Query string $queryStr on $db, collection $collection")
+        MongoRepository.metadata(db, collection).flatMap(f => f.spatialMetadata match {
+          case Some(smd: SpatialMetadata) => qetQueryResult(db, collection, smd)
+          case None => throw new NoSpatialMetadataException()
+        }).recover {
+          case ex: InvalidQueryException => BadRequest(s"${ex.getMessage}")
+        }.recover (commonExceptionHandler(db, collection))
       }
-
   }
 
-  def download(db: String, collection: String) = Action{
+  def download(db: String, collection: String) = Action {
     request =>
       Async {
         Logger.info(s"Downloading $db/$collection.")
-
-        MongoRepository.existsCollection(db, collection).flatMap {
-          case false => Future.successful(NotFound("s${db}/${collection} not found"))
-          case true => MongoRepository.getData(db, collection) map ( fs => mkChunked(fs))
+        MongoRepository.getData(db, collection).map( fs => mkChunked(fs) ).recover {
+          commonExceptionHandler(db, collection)
         }
       }
-
-  }
-
-  def doQuery(db: String, collection: String)(implicit queryStr: Map[String, Seq[String]])  = {
-      val fmeta = MongoRepository.metadata(db, collection)
-      fmeta.flatMap ( f => f.spatialMetadata match {
-              case Some(smd: SpatialMetadata) => qetQueryResult(db, collection, smd)
-              case None => Future.successful(BadRequest(s"BadRequest: Not a spatial collection."))
-      })
   }
 
   private def qetQueryResult(db: String, collection: String, smd: SpatialMetadata)(implicit queryStr: Map[String, Seq[String]]) = {
     Bbox(QueryParams.BBOX.extractOrElse(""), smd.envelope.getCrsId) match {
       case Some(window) =>
         MongoRepository.query(db, collection, window) map (q => mkChunked(q))
-      case None => Future.successful(BadRequest(s"BadRequest: No or invalid bbox parameter in query string."))
+      case None => throw new InvalidQueryException(s"BadRequest: No or invalid bbox parameter in query string.")
     }
   }
 
-  def mkChunked(features : Enumerator[Feature]) = {
+  private def mkChunked(features : Enumerator[Feature]) = {
       Ok.stream( toStream(features) andThen Enumerator.eof ).as(MediaTypeSpec(Format.JSON, Version.default))
   }
 
@@ -92,10 +81,9 @@ object FeatureCollection extends Controller {
         case _ => None
       }
     }
-
   }
 
-  def toStream(features: Enumerator[Feature], chunkSize: Int = 1024 * 8) : Enumerator[Array[Byte]] = {
+  private def toStream(features: Enumerator[Feature]) : Enumerator[Array[Byte]] = {
     val jsonMapper = new JsonMapper()
 
     //this is due to James Roper (see https://groups.google.com/forum/#!topic/play-framework/PrPTIrLdPmY)
@@ -107,19 +95,17 @@ object FeatureCollection extends Controller {
       }
     }
 
-    def toString(f: Feature) = try {
+    def stringify(f: Feature) = try {
       jsonMapper.toJson(f)
     } catch {
       case ex: Throwable =>
         Logger.error("Failure: " + ex.getMessage)
-        "null"
+        ConfigurationValues.jsonSeparator
     }
 
     val commaSeparate = new CommaSeparate
-    val jsons = features.map( toString(_) ) &> commaSeparate
-
+    val jsons = features.map( f => stringify(f) ) &> commaSeparate
     val toBytes = Enumeratee.map[String]( _.getBytes("UTF-8") )
-    //TODO Can we find a way to count the number of elements?
     jsons &> toBytes
   }
 

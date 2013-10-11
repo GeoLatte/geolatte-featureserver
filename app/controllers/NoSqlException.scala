@@ -25,4 +25,6 @@ package object Exceptions {
 
   case class DatabaseDeleteException(msg: String= "") extends NoSqlException(msg)
 
+  case class InvalidQueryException(msg: String = "") extends NoSqlException(msg)
+
 }

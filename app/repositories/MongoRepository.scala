@@ -130,7 +130,7 @@ object MongoRepository {
   def metadata(database: String, collection: String): Future[Metadata] = {
     import MetadataIdentifiers._
 
-    def getSpatialMetadata() = {
+    def spatialMetadata() = {
       val metaCollection: BSONCollection = connection(database).collection(MetadataCollection)
       val metadataCursor = metaCollection.find(BSONDocument(CollectionField -> collection)).cursor[BSONDocument]
       metadataCursor.headOption().map {
@@ -140,16 +140,17 @@ object MongoRepository {
     }
 
     def mkMetadata() = for {
-        smd <- getSpatialMetadata()
+        smd <- spatialMetadata()
         cnt <- count(database, collection)
       } yield Metadata(collection, cnt, smd)
 
-    existsDb(database).flatMap(v =>
-      if (v) existsCollection(database, collection)
-      else throw DatabaseNotFoundException()).flatMap{
-      case true => mkMetadata()
-      case _ => throw CollectionNotFoundException()
-    }
+    existsDb(database).flatMap(existsDb =>
+      if (existsDb) existsCollection(database, collection)
+      else throw DatabaseNotFoundException()
+    ).flatMap( existsCollection =>
+      if(existsCollection) mkMetadata()
+      else throw CollectionNotFoundException()
+    )
   }
 
   //we check also the "hidden" names (e.g. metadata collection) so that puts will fail
@@ -192,13 +193,13 @@ object MongoRepository {
   def deleteCollection(dbName: String, colName: String) = {
 
     def doDeleteCollection() = connection(dbName).collection(colName, FailoverStrategy()).drop().andThen {
-      case Success(b) => Logger.info(s"Deleting ${dbName}/${colName}: ${b}")
-      case Failure(t) => Logger.warn(s"Delete of ${dbName}/${colName} failed: ${t.getMessage}")
+      case Success(b) => Logger.info(s"Deleting $dbName/$colName: $b")
+      case Failure(t) => Logger.warn(s"Delete of $dbName/$colName failed: ${t.getMessage}")
     }
 
     def removeMetadata() = connection(dbName).collection(MetadataCollection, FailoverStrategy()).remove(BSONDocument(CollectionField -> colName)).andThen {
-      case Success(le) => Logger.info(s"Removing metadata for ${dbName}/${colName}: ${le.ok}")
-      case Failure(t) => Logger.warn(s"Removing of ${dbName}/${colName} failed: ${t.getMessage}")
+      case Success(le) => Logger.info(s"Removing metadata for $dbName/$colName: ${le.ok}")
+      case Failure(t) => Logger.warn(s"Removing of $dbName/$colName failed: ${t.getMessage}")
     }
 
     existsDb(dbName).flatMap(dbExists =>
@@ -212,22 +213,23 @@ object MongoRepository {
   }
 
 
-  def getCollection(dbName: String, colName: String): Future[(Option[BSONCollection], Option[SpatialMetadata])] =
-    existsCollection(dbName, colName).flatMap {
-      case false => Future {
-        (None, None)
-      }
+  def getCollection(dbName: String, colName: String): Future[(BSONCollection, Option[SpatialMetadata])] =
+    existsDb(dbName).flatMap(dbExists =>
+      if (dbExists) existsCollection(dbName, colName)
+      else throw new DatabaseNotFoundException()
+    ).flatMap {
+      case false => throw new CollectionNotFoundException()
       case true => {
         val col: BSONCollection = connection(dbName).collection[BSONCollection](colName)
-        metadata(dbName, colName).map(md => (Some(col), md.spatialMetadata))
-
+        metadata(dbName, colName).map(md => (col, md.spatialMetadata))
       }
     }
 
   def getSpatialCollectionSource(database: String, collection: String) = {
-    val futureMd = metadata(database, collection)
     val coll = connection(database).collection(collection)
-    futureMd.map(md => MongoDbSource(coll, mkMortonContext(md.spatialMetadata.get)))
+    metadata(database, collection).map( md =>
+      MongoDbSource(coll, mkMortonContext(md.spatialMetadata.get))
+    )
   }
 
   def query(database: String, collection: String, window: Envelope): Future[Enumerator[Feature]] = {

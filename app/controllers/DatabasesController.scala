@@ -21,7 +21,7 @@ import Exceptions._
  * @author Karel Maesen, Geovise BVBA
  *         creation-date: 7/22/13
  */
-object Databases extends Controller {
+object Databases extends AbstractNoSqlController {
 
   import config.AppExecutionContexts.streamContext;
 
@@ -54,10 +54,7 @@ object Databases extends Controller {
             fc.map ( colls => {
               Logger.info("collections found: " + colls)
               toResult(DatabaseResource(db, colls))
-            } ).recover {
-              case ex : DatabaseNotFoundException => NotFound(ex.getMessage)
-              case ex : Throwable => InternalServerError(ex.getMessage)
-            }
+            } ).recover (commonExceptionHandler(db))
           }
        }
 
@@ -77,21 +74,16 @@ object Databases extends Controller {
   def deleteDb(db: String) = Action (tolerantNullableJson) {
     implicit request =>
       Async{
-        MongoRepository.deleteDb(db).map( _ => Ok(s"database $db dropped") ).recover {
-          case ex : DatabaseNotFoundException => NotFound(s"No database $db to delete")
-          case ex : Throwable => InternalServerError(s"${ex.getMessage}")
-        }
+        MongoRepository.deleteDb(db).map( _ => Ok(s"database $db dropped") )
+          .recover (commonExceptionHandler(db))
       }
   }
 
   def getCollection(db: String, collection: String) = Action {
     implicit request =>
       Async{
-        MongoRepository.metadata(db, collection).map( md => toResult(CollectionResource(md)) ).recover {
-          case ex : DatabaseNotFoundException => NotFound(s"No database $db")
-          case ex : CollectionNotFoundException => NotFound(s"No collection $collection in database $db")
-          case ex : Throwable => InternalServerError(s"${ex.getMessage}")
-        }
+        MongoRepository.metadata(db, collection).map( md => toResult(CollectionResource(md)) )
+          .recover(commonExceptionHandler(db,collection))
       }
   }
 
@@ -128,11 +120,8 @@ object Databases extends Controller {
   def deleteCollection(db: String, col: String) = Action(tolerantNullableJson) {
     implicit request =>
       Async {
-        MongoRepository.deleteCollection(db, col).map(_ => Ok(s"Collection $db/$col deleted.")).recover {
-          case ex: DatabaseNotFoundException => NotFound(s"No database $db")
-          case ex: CollectionNotFoundException => NotFound(s"No collection $db/$col")
-          case ex: Throwable => InternalServerError(s"{ex.getMessage}")
-        }
+        MongoRepository.deleteCollection(db, col).map(_ => Ok(s"Collection $db/$col deleted."))
+          .recover(commonExceptionHandler(db,col))
       }
   }
 

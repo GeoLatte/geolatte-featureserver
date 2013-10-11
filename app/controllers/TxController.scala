@@ -18,7 +18,7 @@ import play.modules.reactivemongo.json.BSONFormats.BSONDocumentFormat
  * @author Karel Maesen, Geovise BVBA
  *         creation-date: 7/25/13
  */
-object TxController extends Controller {
+object TxController extends AbstractNoSqlController {
 
   /**
    * An update operation on a MongoCollection using the sequence of MongoDBObjects as arguments
@@ -30,42 +30,42 @@ object TxController extends Controller {
   def insert(db: String, col: String) = {
     val parser = mkJsonWritingBodyParser(db, col)
     Action(parser) {
-        request => Ok(request.body.warnings.mkString("\n"))
-      }
+      request => Ok(request.body.warnings.mkString("\n"))
+    }
   }
 
   def remove(db: String, col: String) = mkUpdateAction(db, col)(
     extractor = extractKey(_, "query"),
-    updateOp = (coll, arguments) => coll.remove(arguments(0), GetLastError(awaitJournalCommit = true))
+    updateOp = (coll, arguments) => coll.remove(arguments(0), GetLastError(awaitJournalCommit = true)),
+    "remove"
   )
 
   def update(db: String, col: String) = mkUpdateAction(db, col)(
     extractor = extractKey(_, "query", "update"),
-    updateOp = (coll, arguments) => coll.update(arguments(0), arguments(1), GetLastError(awaitJournalCommit = true))
+    updateOp = (coll, arguments) => coll.update(arguments(0), arguments(1), GetLastError(awaitJournalCommit = true),
+      upsert= false, multi = true),
+    "Update"
   )
 
   private def mkUpdateAction(db: String, col: String)
                             (extractor: BSONDocument => Seq[BSONDocument],
-                             updateOp: UpdateOp) =
+                             updateOp: UpdateOp,
+                             updateOpName: String) =
     Action(BodyParsers.parse.tolerantText) {
       implicit request => Async {
         val opArgumentsEither = toDBObject(request.body)(extractor)
-        val pair = for (pairOpt <- MongoRepository.getCollection(db, col); (collectionOpt, _) = pairOpt) yield (collectionOpt, opArgumentsEither)
-        pair.flatMap {
-          p => p match {
-            case (Some(collection), Right(opArguments)) => {
-              updateOp(collection, opArguments).map(le => Ok(s"Result: ${le.ok}")).recover {
-                case t: Throwable => InternalServerError(t.getMessage)
-              }
+        MongoRepository.getCollection(db, col).flatMap( c =>
+          (c, opArgumentsEither) match {
+            case ( (collection, _), Right(opArguments)) => {
+              updateOp(collection, opArguments)
             }
-            case (None, _) => Future.successful(NotFound(s"$db/$col does not exist."))
-            case (_, Left(err)) => Future.successful(BadRequest(err))
+            case (_, Left(err)) => throw new IllegalArgumentException(s"Problem with update action arguments: $err")
           }
-        }
+        ).map(le => {
+          Ok(s"$updateOpName succeeded, with ${le.updated} documents affected.")
+        }).recover(commonExceptionHandler(db,col))
       }
     }
-
-
 
   private def toDBObject(txt: String)(implicit extractor: BSONDocument => Seq[BSONDocument]): Either[String, Seq[BSONDocument]] = {
     try {
@@ -98,9 +98,9 @@ object TxController extends Controller {
    * @param col the collection to write features to
    * @return a new BodyParser
    */
-  private def mkJsonWritingBodyParser(db: String, col: String) : BodyParser[State] = {
-      val writer = new MongoWriter(db, col)
-      ReactiveGeoJson.bodyParser(writer)
+  private def mkJsonWritingBodyParser(db: String, col: String): BodyParser[State] = {
+    val writer = new MongoWriter(db, col)
+    ReactiveGeoJson.bodyParser(writer)
   }
 
 
