@@ -1,0 +1,3 @@
+#! /bin/sh
+ sed -e's/^[][{}]$//' < $1 |  sed -e's/^"crs\(.*\)/{"crs\1 }/' | sed -e's/"type": "FeatureCollection".*//' | sed -e's/^"features".*//' | sed -e's/^,$//' | sed '/^\s*$/d' 
+

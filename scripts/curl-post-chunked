@@ -1,0 +1,4 @@
+#! /bin/sh
+
+curl -X POST  -i --header "Transfer-Encoding: chunked" --data-binary @- $1
+
