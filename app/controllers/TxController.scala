@@ -67,6 +67,7 @@ object TxController extends AbstractNoSqlController {
       }
     }
 
+  //TODO refactor to Try object
   private def toDBObject(txt: String)(implicit extractor: BSONDocument => Seq[BSONDocument]): Either[String, Seq[BSONDocument]] = {
     try {
       val jsValue = Json.parse(txt)

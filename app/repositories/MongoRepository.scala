@@ -167,8 +167,8 @@ object MongoRepository {
       case Failure(t) => Logger.error(s"Attempt to create collection $colName threw exception: ${t.getMessage}")
     }
 
-    def saveMetadata(specOpt: Option[SpatialSpec]) = specOpt match {
-      case Some(spec) => connection(dbName).collection(MetadataCollection).insert(BSONDocument(
+    def saveMetadata(specOpt: Option[SpatialSpec]) = specOpt map {
+      spec => connection(dbName).collection(MetadataCollection).insert(BSONDocument(
         ExtentField -> spec.envelope,
         IndexLevelField -> spec.level,
         CollectionField -> colName),
@@ -177,8 +177,7 @@ object MongoRepository {
         case Success(le) => Logger.info(s"Writing metadata for $colName has result: ${le.ok}")
         case Failure(t) => Logger.error(s"Writing metadata for $colName threw exception: ${t.getMessage}")
       }.map(_ => true)
-     case None => Future.successful(true)
-    }
+    } getOrElse { Future.successful(true) }
 
     existsDb(dbName).flatMap( dbExists =>
       if ( dbExists ) existsCollection(dbName, colName)

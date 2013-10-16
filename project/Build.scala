@@ -54,9 +54,15 @@ object GeolatteNoSqlBuild extends Build {
   		Seq(
     		libraryDependencies ++= dependencies,
     		releaseProcess := releaseSteps,
-    		fork in test := true,  //Fork a new JVM for running tests
     		javaOptions in (Test,run) += "-XX:MaxPermSize=128m"
   		)
+
+  //Options for running tests
+  val testSettings = Seq (
+    fork in test := true,  //Fork a new JVM for running tests
+    parallelExecution in test := false,
+    testOptions in Test += Tests.Argument("sequential")
+  )
   
   //Release steps for sbt-release plugin
   lazy val releaseSteps = Seq[ReleaseStep](
@@ -75,7 +81,7 @@ object GeolatteNoSqlBuild extends Build {
     lazy val main = play.Project(
     	appName,
     	dependencies = dependencies,
-    	settings = defaultSettings ++ buildInfoSettings
+    	settings = defaultSettings ++ buildInfoSettings ++ testSettings
   	)
 
 }
