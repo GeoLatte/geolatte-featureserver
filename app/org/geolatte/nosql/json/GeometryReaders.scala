@@ -19,16 +19,83 @@ import scala.collection.mutable.ListBuffer
 
 object GeometryReaders {
 
-  trait Positions
+  trait Extent {
+    def union(other: Extent) : Extent
+    def toEnvelope(crs: CrsId) : Envelope
+    def toList: List[Double]
+  }
 
-  object EmptyPosition extends Positions
+  object EmptyExtent extends Extent {
+    def union(other: Extent) = other
+    def toEnvelope(crs: CrsId) = Envelope.EMPTY
+    def toList = List[Double]()
+  }
+  case class NonEmptyExtent(xmin: Double, ymin: Double, xmax: Double, ymax: Double) extends Extent {
 
-  case class InvalidPosition(msg: String) extends Positions
+    def union(other: Extent) = other match {
+      case EmptyExtent => this
+      case NonEmptyExtent(x2min, y2min, x2max, y2max) => NonEmptyExtent(
+        Math.min(xmin, x2min),
+        Math.min(ymin, y2min),
+        Math.max(xmax, x2max),
+        Math.max(ymax, y2max)
+      )
+    }
 
-  case class Position(x: Double, y: Double) extends Positions
+    def toEnvelope(crs: CrsId) = new Envelope(xmin, ymin, xmax, ymax, crs)
 
-  case class PositionList(list: ListBuffer[Positions]) extends Positions
+    def toList = List(xmin, ymin, xmax, ymax)
 
+  }
+
+  implicit def Envelope2Extent(env : Envelope) : Extent =
+        if (env.isEmpty) EmptyExtent
+        else NonEmptyExtent(env.getMinX, env.getMinY, env.getMaxX, env.getMaxY)
+
+  trait Positions {
+    def envelope(id: CrsId) = boundingBox.toEnvelope(id)
+
+    def boundingBox : Extent
+    def expand(ex: Extent) = boundingBox union ex
+  }
+
+  object EmptyPosition extends Positions {
+    val boundingBox = EmptyExtent
+  }
+
+  case class InvalidPosition(msg: String) extends Positions {
+    val boundingBox = EmptyExtent
+  }
+
+  case class Position(x: Double, y: Double) extends Positions {
+    lazy val boundingBox = NonEmptyExtent(x,y,x,y)
+  }
+
+  case class PositionList(list: List[Positions]) extends Positions {
+    lazy val boundingBox = list.foldLeft[Extent]( EmptyExtent ) { (ex, pos) => pos.expand(ex) }
+  }
+
+  implicit val extentFormats = new Format[Extent] {
+
+    def toJsResult(array : JsArray) : JsResult[Extent] =
+      if (array.value.isEmpty) JsSuccess(EmptyExtent)
+      else
+        Try{
+          val xmin = array.value(0).as[Double]
+          val ymin = array.value(1).as[Double]
+          val xmax = array.value(2).as[Double]
+          val ymax = array.value(3).as[Double]
+          JsSuccess(NonEmptyExtent(xmin, ymin, xmax, ymax))
+        }.getOrElse( JsError(ValidationError(s"Array $array can't be turned into a valid boundingbox")))
+
+    def reads(json: JsValue): JsResult[Extent] = json match {
+      case a : JsArray => toJsResult(a)
+      case _ => JsError(ValidationError("extent must be an array of 4 numbers"))
+    }
+
+    def writes(ex: Extent): JsValue = JsArray(ex.toList.map( d => JsNumber(d)))
+
+  }
 
   def positionList2PointSequence(seq: Seq[Positions])(implicit crs: CrsId): Option[PointSequence] = {
     val seqPnts = seq.map {
@@ -59,7 +126,7 @@ object GeometryReaders {
         case Nil => EmptyPosition
         case Seq((x: JsNumber), (y: JsNumber)) => Position(x.value.doubleValue(), y.value.doubleValue())
         case psv: Seq[_] => {
-          val pl = psv.foldLeft(ListBuffer[Positions]())( (result, el) => result :+ toPos(el) )
+          val pl = psv.foldLeft(ListBuffer[Positions]())( (result, el) => result :+ toPos(el) ).toList
           PositionList(pl)
         }
       }
@@ -104,6 +171,48 @@ object GeometryReaders {
     } catch {
       case ex: Throwable => JsError(ex.getMessage)
     }
+  }
+
+  implicit val geometryTypeWrites = new Writes[GeometryType] {
+    def writes(t: GeometryType): JsValue = JsString(
+      t match {
+        case GeometryType.POINT => "Point"
+        case GeometryType.MULTI_POINT => "MultiPoint"
+        case GeometryType.LINE_STRING => "LineString"
+        case GeometryType.MULTI_LINE_STRING => "MultiLineString"
+        case GeometryType.POLYGON => "Polygon"
+        case GeometryType.MULTI_POLYGON => "MultiPolygon"
+        case GeometryType.GEOMETRY_COLLECTION => "GeometryCollection"
+      }
+    )
+  }
+
+  implicit val PointCollectionWrites = new Writes[PointCollection] {
+
+    import scala.collection.JavaConversions._
+
+    def write(ps: PointSequence): JsArray =
+      if (ps.isEmpty) Json.arr()
+      else if (ps.size() == 1) Json.arr( ps.getX(0), ps.getY(0))
+      else {
+        val buf = ps.foldLeft( ListBuffer[JsArray]())( (buf, p) => {buf.append(Json.arr( p.getX, p.getY )); buf})
+        JsArray(buf)
+      }
+
+    def writes(col: PointCollection): JsArray = col match {
+      case ps : PointSequence => write(ps)
+      case cc : ComplexPointCollection => {
+        val buf = cc.getPointSets.foldLeft( ListBuffer[JsArray]() ) ( (buf, c) => {buf.append(writes(c)); buf} )
+        JsArray(buf)
+      }
+    }
+  }
+
+  implicit val GeometryWithoutCrsWrites = new Writes[Geometry] {
+    def writes(geometry: Geometry): JsValue = Json.obj(
+    "type" -> geometry.getGeometryType,
+    "coordinates" -> geometry.getPoints
+    )
   }
 
   //don't make this implicit because it might match inadvertently

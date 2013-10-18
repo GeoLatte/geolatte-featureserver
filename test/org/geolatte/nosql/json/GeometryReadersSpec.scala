@@ -52,14 +52,14 @@ class GeometryReadersSpec extends Specification {
     "read a valid array of point positions" in {
       val json = Json.parse("[[80.0, 20.3], [90.0, 30.0]]")
       val result = json.validate[Positions].asOpt.get
-      result must_== PositionList(ListBuffer(new Position(80.0, 20.3), new Position(90.0, 30.0)))
+      result must_== PositionList(List(new Position(80.0, 20.3), new Position(90.0, 30.0)))
     }
 
     "read a valid array of array of point positions" in {
       val json = Json.parse("[[[80.0, 20.3], [90.0, 30.0]], [[80.0, 20.3], [90.0, 30.0]]]")
       val result = json.validate[Positions].asOpt.get
-      val pl = PositionList(ListBuffer(new Position(80.0, 20.3), new Position(90.0, 30.0)))
-      result must_== PositionList(ListBuffer(pl, pl))
+      val pl = PositionList(List(new Position(80.0, 20.3), new Position(90.0, 30.0)))
+      result must_== PositionList(List(pl, pl))
     }
 
   }
