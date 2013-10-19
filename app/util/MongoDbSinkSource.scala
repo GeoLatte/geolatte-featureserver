@@ -10,20 +10,21 @@ import scala.Some
 import reactivemongo.api.collections.default.BSONCollection
 import org.geolatte.nosql.json.MongoWriter
 import scala.concurrent.ExecutionContext.Implicits.global
+import play.api.libs.json.JsObject
 
 /**
  * A Sink that
  * @author Karel Maesen, Geovise BVBA
  *         creation-date: 10/4/13
  */
-case class MongoDbSink(database: String, collection: String, BUFSIZE: Int = 5000) extends Sink[Feature] {
+case class MongoDbSink(database: String, collection: String, BUFSIZE: Int = 5000) extends Sink[JsObject] {
 
   lazy val writer = MongoWriter(database, collection)
 
-  def in(features: Enumerator[Feature]) = {
-    val takeBufsize = Enumeratee.take[Feature](BUFSIZE) &>> Iteratee.getChunks
+  def in(objs: Enumerator[JsObject]) = {
+    val takeBufsize = Enumeratee.take[JsObject](BUFSIZE) &>> Iteratee.getChunks
     val group = Enumeratee.grouped(takeBufsize)
-    features |>>> (group &>> Iteratee.foreach(fseq => writer.add(fseq)))
+    objs |>>> (group &>> Iteratee.foreach(fseq => writer.add(fseq)))
   }
 
 }

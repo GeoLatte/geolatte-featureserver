@@ -1,8 +1,10 @@
 package org.geolatte.nosql.mongodb
 
+import _root_.util.EnvelopeSerializer
 import org.geolatte.geom.Envelope
-import reactivemongo.bson.BSONDocument
-import util.EnvelopeSerializer
+
+import play.api.libs.json._
+import play.api.libs.functional.syntax._
 
 /**
  * @author Karel Maesen, Geovise BVBA
@@ -17,13 +19,9 @@ object SpatialMetadata {
 
   import MetadataIdentifiers._
 
-  def from(dbObj: BSONDocument): Option[SpatialMetadata] = {
-      for {
-        h <- dbObj.getAs[String](ExtentField)
-        env <- EnvelopeSerializer.unapply(h)
-        name <- dbObj.getAs[String](CollectionField)
-        level <- dbObj.getAs[Int](IndexLevelField)
-      } yield SpatialMetadata(env, level)
-    }
+  implicit val SpatialMetadataReads = (
+    (__ \ ExtentField).read(EnvelopeSerializer.EnvelopeFormat) and
+    (__ \ IndexLevelField).read[Int]
+    )(SpatialMetadata.apply _)
 
 }

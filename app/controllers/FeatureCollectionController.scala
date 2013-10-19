@@ -3,11 +3,10 @@ package controllers
 import org.geolatte.geom.Envelope
 import org.geolatte.geom.crs.CrsId
 import org.geolatte.common.dataformats.json.jackson.JsonMapper
-import play.api.mvc.{Result, SimpleResult, Action, Controller}
+import play.api.mvc._
 import play.api.Logger
 import util.MediaTypeSpec
 import play.api.libs.iteratee._
-import org.geolatte.common.Feature
 import repositories.MongoRepository
 import org.geolatte.nosql.mongodb.SpatialMetadata
 import config.ConfigurationValues.{Version, Format}
@@ -15,6 +14,7 @@ import config.{ConfigurationValues, AppExecutionContexts}
 import scala.Some
 import util.QueryParam
 import controllers.Exceptions._
+import play.api.libs.json.{Json, JsObject}
 
 
 object FeatureCollection extends AbstractNoSqlController {
@@ -59,7 +59,7 @@ object FeatureCollection extends AbstractNoSqlController {
     }
   }
 
-  private def mkChunked(features : Enumerator[Feature]) = {
+  private def mkChunked(features : Enumerator[JsObject]) = {
       Ok.stream( toStream(features) andThen Enumerator.eof ).as(MediaTypeSpec(Format.JSON, Version.default))
   }
 
@@ -83,9 +83,7 @@ object FeatureCollection extends AbstractNoSqlController {
     }
   }
 
-  private def toStream(features: Enumerator[Feature]) : Enumerator[Array[Byte]] = {
-    val jsonMapper = new JsonMapper()
-
+  private def toStream(features: Enumerator[JsObject]) : Enumerator[Array[Byte]] = {
     //this is due to James Roper (see https://groups.google.com/forum/#!topic/play-framework/PrPTIrLdPmY)
     class CommaSeparate extends Enumeratee.CheckDone[String, String] {
       def continue[A](k: K[String, A]) = Cont {
@@ -94,17 +92,8 @@ object FeatureCollection extends AbstractNoSqlController {
         case Input.EOF => Done(Cont(k), Input.EOF)
       }
     }
-
-    def stringify(f: Feature) = try {
-      jsonMapper.toJson(f)
-    } catch {
-      case ex: Throwable =>
-        Logger.error("Failure: " + ex.getMessage)
-        ConfigurationValues.jsonSeparator
-    }
-
-    val commaSeparate = new CommaSeparate
-    val jsons = features.map( f => stringify(f) ) &> commaSeparate
+val commaSeparate = new CommaSeparate
+    val jsons = features.map( f => Json.stringify(f) ) &> commaSeparate
     val toBytes = Enumeratee.map[String]( _.getBytes("UTF-8") )
     jsons &> toBytes
   }

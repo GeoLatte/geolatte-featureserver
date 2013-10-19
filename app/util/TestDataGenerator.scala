@@ -72,9 +72,11 @@ case class TestDataGenerator(ll: Point, ur: Point, minLength: Double, maxLength:
       }
     }
 
-    import ExecutionContext.Implicits.global
-    val sink = new MongoDbSink(dbName, colName)
-    sink.in(Enumerator.enumerate(it))
+    //TODO -- fix this data generator (requires completing FeatureFormat)
+
+//    import ExecutionContext.Implicits.global
+//    val sink = new MongoDbSink(dbName, colName)
+//    sink.in(Enumerator.enumerate(it))
 
   }
 

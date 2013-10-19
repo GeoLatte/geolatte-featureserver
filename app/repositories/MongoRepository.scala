@@ -1,39 +1,34 @@
 package repositories
 
 
-import _root_.util.SpatialSpec
 import util.SpatialSpec
 import org.geolatte.geom.curve.MortonContext
 import org.geolatte.geom.Envelope
 import org.geolatte.common.Feature
 import org.geolatte.nosql.mongodb._
 import play.api.Logger
-import org.geolatte.nosql.mongodb.Metadata
-import scala.Some
 import reactivemongo.core.commands._
 import scala.concurrent._
-import reactivemongo.bson.{BSONString, BSONDocument}
-import reactivemongo.api.collections.default.BSONCollection
 import play.api.libs.iteratee.Enumerator
-import reactivemongo.api.{MongoDriver, FailoverStrategy}
-
-import scala.util.{Failure, Success}
 import controllers.Exceptions._
-import org.geolatte.nosql.mongodb.Metadata
 import controllers.Exceptions.DatabaseAlreadyExists
 import reactivemongo.core.commands.GetLastError
 import scala.util.Failure
-import reactivemongo.api.FailoverStrategy
-import reactivemongo.bson.BSONString
 import scala.Some
 import scala.util.Success
 import reactivemongo.api.collections.default.BSONCollection
 import controllers.Exceptions.DatabaseNotFoundException
+import reactivemongo.api._
+import reactivemongo.bson._
+import reactivemongo.bson.DefaultBSONHandlers._
+
+import play.modules.reactivemongo._
+import play.modules.reactivemongo.json.collection.JSONCollection
+import play.modules.reactivemongo.json.ImplicitBSONHandlers._
+import play.api.libs.json._
 
 //TODO -- configure the proper execution context
-
 import config.AppExecutionContexts.streamContext
-import reactivemongo.api.collections.default.BSONCollectionProducer
 
 
 /**
@@ -58,24 +53,24 @@ object MongoRepository {
   private val systemDatabase = current.configuration.getString("fs.system.db").orElse(Some(DEFAULT_SYS_DB)).get
 
   private val createdDBColl = {
-    connection.db(systemDatabase).collection(CREATED_DBS_COLLECTION)
+    connection.db(systemDatabase).collection[JSONCollection](CREATED_DBS_COLLECTION)
   }
 
   def listDatabases: Future[List[String]] = {
-    val futureBsons = createdDBColl.find(BSONDocument()).cursor.collect[List]()
-    futureBsons.map(_.map(
-      bson => bson.getAs[String](CREATED_DB_PROP)).flatten
-    )
+    val futureJsons = createdDBColl.find(Json.obj()).cursor[JsObject].collect[List]()
+    futureJsons.map( _.map(
+      json => (json \ CREATED_DB_PROP).as[String]))
+
   }
 
-  def getMetadata(dbName: String) = connection.db(dbName).collection(MetadataCollection)
+  def getMetadata(dbName: String) = connection.db(dbName).collection[JSONCollection](MetadataCollection)
 
   def isMetadata(name: String): Boolean = (name startsWith MetadataCollectionPrefix) || (name startsWith "system.")
 
   def createDb(dbname: String) = {
 
     //Logs the database creation in the "created databases" collection in the systemDatabase
-    def registerDbCreation(dbname: String) = createdDBColl.save(BSONDocument(CREATED_DB_PROP -> BSONString(dbname))).andThen {
+    def registerDbCreation(dbname: String) = createdDBColl.save(Json.obj(CREATED_DB_PROP -> dbname)).andThen {
       case Success(le) => Logger.debug(s"Registering $dbname in created databases collections succeeded.")
       case Failure(le) => Logger.warn(s"Registering $dbname in created databases collections succeeded.")
     }
@@ -96,7 +91,7 @@ object MongoRepository {
 
   def deleteDb(dbname: String) = {
 
-    def removeLog(dbname: String) = createdDBColl.remove(BSONDocument(CREATED_DB_PROP -> BSONString(dbname))).andThen {
+    def removeLog(dbname: String) = createdDBColl.remove(Json.obj(CREATED_DB_PROP -> dbname)).andThen {
       case Success(le) => Logger.info(s"Database $dbname dropped")
       case Failure(t) => Logger.warn(s"Database $dbname dropped, but could not register drop in $systemDatabase/$CREATED_DBS_COLLECTION. \nReason: ${t.getMessage}")
     }
@@ -131,10 +126,11 @@ object MongoRepository {
     import MetadataIdentifiers._
 
     def spatialMetadata() = {
-      val metaCollection: BSONCollection = connection(database).collection(MetadataCollection)
-      val metadataCursor = metaCollection.find(BSONDocument(CollectionField -> collection)).cursor[BSONDocument]
+      import SpatialMetadata.SpatialMetadataReads
+      val metaCollection = connection(database).collection[JSONCollection](MetadataCollection)
+      val metadataCursor = metaCollection.find( Json.obj(CollectionField -> collection)).cursor[JsObject]
       metadataCursor.headOption().map {
-        case Some(doc) => SpatialMetadata.from(doc)
+        case Some(doc) => doc.asOpt[SpatialMetadata]
         case _ => None
       }
     }
@@ -162,13 +158,13 @@ object MongoRepository {
 
   def createCollection(dbName: String, colName: String, spatialSpec: Option[SpatialSpec]) = {
 
-    def doCreateCollection() = connection(dbName).collection(colName).create().andThen {
+    def doCreateCollection() = connection(dbName).collection[JSONCollection](colName).create().andThen {
       case Success(b) => Logger.info(s"collection $colName created: $b")
       case Failure(t) => Logger.error(s"Attempt to create collection $colName threw exception: ${t.getMessage}")
     }
 
     def saveMetadata(specOpt: Option[SpatialSpec]) = specOpt map {
-      spec => connection(dbName).collection(MetadataCollection).insert(BSONDocument(
+      spec => connection(dbName).collection[JSONCollection](MetadataCollection).insert(Json.obj(
         ExtentField -> spec.envelope,
         IndexLevelField -> spec.level,
         CollectionField -> colName),
@@ -191,12 +187,12 @@ object MongoRepository {
 
   def deleteCollection(dbName: String, colName: String) = {
 
-    def doDeleteCollection() = connection(dbName).collection(colName, FailoverStrategy()).drop().andThen {
+    def doDeleteCollection() = connection(dbName).collection[JSONCollection](colName, FailoverStrategy()).drop().andThen {
       case Success(b) => Logger.info(s"Deleting $dbName/$colName: $b")
       case Failure(t) => Logger.warn(s"Delete of $dbName/$colName failed: ${t.getMessage}")
     }
 
-    def removeMetadata() = connection(dbName).collection(MetadataCollection, FailoverStrategy()).remove(BSONDocument(CollectionField -> colName)).andThen {
+    def removeMetadata() = connection(dbName).collection[JSONCollection](MetadataCollection, FailoverStrategy()).remove(Json.obj(CollectionField -> colName)).andThen {
       case Success(le) => Logger.info(s"Removing metadata for $dbName/$colName: ${le.ok}")
       case Failure(t) => Logger.warn(s"Removing of $dbName/$colName failed: ${t.getMessage}")
     }
@@ -212,30 +208,30 @@ object MongoRepository {
   }
 
 
-  def getCollection(dbName: String, colName: String): Future[(BSONCollection, Option[SpatialMetadata])] =
+  def getCollection(dbName: String, colName: String): Future[(JSONCollection, Option[SpatialMetadata])] =
     existsDb(dbName).flatMap(dbExists =>
       if (dbExists) existsCollection(dbName, colName)
       else throw new DatabaseNotFoundException()
     ).flatMap {
       case false => throw new CollectionNotFoundException()
       case true => {
-        val col: BSONCollection = connection(dbName).collection[BSONCollection](colName)
+        val col = connection(dbName).collection[JSONCollection](colName)
         metadata(dbName, colName).map(md => (col, md.spatialMetadata))
       }
     }
 
   def getSpatialCollectionSource(database: String, collection: String) = {
-    val coll = connection(database).collection(collection)
+    val coll = connection(database).collection[JSONCollection](collection)
     metadata(database, collection).map( md =>
       MongoDbSource(coll, mkMortonContext(md.spatialMetadata.get))
     )
   }
 
-  def query(database: String, collection: String, window: Envelope): Future[Enumerator[Feature]] = {
+  def query(database: String, collection: String, window: Envelope): Future[Enumerator[JsObject]] = {
     getSpatialCollectionSource(database, collection).map(_.query(window))
   }
 
-  def getData(database: String, collection: String): Future[Enumerator[Feature]] = {
+  def getData(database: String, collection: String): Future[Enumerator[JsObject]] = {
     getSpatialCollectionSource(database, collection).map(_.out())
   }
 

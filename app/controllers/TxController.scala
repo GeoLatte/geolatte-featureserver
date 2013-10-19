@@ -2,17 +2,18 @@ package controllers
 
 import play.api.mvc._
 import scala.Some
-import reactivemongo.api.collections.default.BSONCollection
-import reactivemongo.bson.BSONDocument
 import reactivemongo.core.commands.{LastError, GetLastError}
 import config.AppExecutionContexts
 import org.geolatte.nosql.json.{MongoWriter, ReactiveGeoJson}
 import scala.concurrent.Future
 import repositories.MongoRepository
-import play.api.libs.json.{Json, JsObject}
+import reactivemongo.api._
+import play.api.libs.json._
 import org.codehaus.jackson.JsonParseException
 import org.geolatte.nosql.json.ReactiveGeoJson.State
-import play.modules.reactivemongo.json.BSONFormats.BSONDocumentFormat
+import play.modules.reactivemongo.json._
+import play.modules.reactivemongo.json.collection.JSONCollection
+import scala.util.Try
 
 /**
  * @author Karel Maesen, Geovise BVBA
@@ -23,7 +24,7 @@ object TxController extends AbstractNoSqlController {
   /**
    * An update operation on a MongoCollection using the sequence of MongoDBObjects as arguments
    */
-  type UpdateOp = (BSONCollection, Seq[BSONDocument]) => Future[LastError]
+  type UpdateOp = (JSONCollection, Seq[JsValue]) => Future[LastError]
 
   import AppExecutionContexts.streamContext
 
@@ -48,7 +49,7 @@ object TxController extends AbstractNoSqlController {
   )
 
   private def mkUpdateAction(db: String, col: String)
-                            (extractor: BSONDocument => Seq[BSONDocument],
+                            (extractor: JsValue => Seq[JsValue],
                              updateOp: UpdateOp,
                              updateOpName: String) =
     Action(BodyParsers.parse.tolerantText) {
@@ -67,29 +68,25 @@ object TxController extends AbstractNoSqlController {
       }
     }
 
-  //TODO refactor to Try object
-  private def toDBObject(txt: String)(implicit extractor: BSONDocument => Seq[BSONDocument]): Either[String, Seq[BSONDocument]] = {
-    try {
+  private def toDBObject(txt: String)(implicit extractor: JsValue => Seq[JsValue]): Either[String, Seq[JsValue]] = {
+    Try {
       val jsValue = Json.parse(txt)
       jsValue match {
-        case r: JsObject => {
-          val doc = BSONDocumentFormat.partialReads(r).getOrElse(BSONDocument())
-          Right(extractor(doc))
-        }
+        case r: JsObject => Right(extractor(r))
         case _ => Left(s"'$txt' does not represent an object")
       }
-    } catch {
+    }.recover {
       case e: JsonParseException => Left(s"'$txt' is not valid JSON")
       case e: RuntimeException => Left(e.getMessage)
-    }
+    }.get
   }
 
-  private def extractKey(mobj: BSONDocument, keys: String*): Seq[BSONDocument] =
-    for (key <- keys) yield mobj.get(key) match {
-      case Some(value: BSONDocument) => value
-      case Some(_) => throw new RuntimeException(s"$key property is not an object")
-      case None => throw new RuntimeException(s"No $key property in object")
-    }
+  private def extractKey(mobj: JsValue, keys: String*): Seq[JsValue] =
+    for {
+      key <- keys
+      kVal =  mobj \ key
+      if !kVal.isInstanceOf[JsUndefined]
+    } yield kVal
 
   /**
    * Creates a new BodyParser that deserializes GeoJson features in the input and

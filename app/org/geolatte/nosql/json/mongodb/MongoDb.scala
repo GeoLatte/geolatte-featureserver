@@ -1,7 +1,15 @@
 package org.geolatte.nosql.mongodb
 
+import _root_.util.Source
+import reactivemongo.api._
 import reactivemongo.bson._
-import org.geolatte.common.Feature
+import reactivemongo.bson.DefaultBSONHandlers._
+
+import play.api.libs.json._
+import play.api.libs.functional.syntax._
+import play.modules.reactivemongo._
+import play.modules.reactivemongo.json.ImplicitBSONHandlers._
+
 import collection.JavaConversions._
 import org.geolatte.geom.codec.Wkb
 import org.geolatte.geom.{Geometry, Envelope, ByteBuffer, ByteOrder}
@@ -19,8 +27,9 @@ import reactivemongo.api.collections.default.BSONCollection
 import reactivemongo.core.commands.GetLastError
 import scala.util.{Failure, Success}
 import java.util.Date
-import util.{EnvelopeSerializer, Source}
-
+import play.modules.reactivemongo.json.collection.JSONCollection
+import org.geolatte.nosql.json.GeometryReaders.Extent
+import org.geolatte.nosql.json.GeometryReaders
 
 //TODO == replace with Apache commons-codec (sun.misc.* classes shouldnot be called directly)
 
@@ -51,17 +60,9 @@ object SpecialMongoProperties {
 
 }
 
-trait FeatureWithEnvelope extends Feature {
-  def envelope: Envelope
-}
-
-
-
-
-
 trait MortonCodeQueryOptimizer {
   //the return type of the optimizer
-  type QueryDocuments = List[BSONDocument]
+  type QueryDocuments = List[JsObject]
 
   /**
    * Optimizes the window query, given the specified MortonCode
@@ -94,7 +95,7 @@ trait SubdividingMCQueryOptimizer extends MortonCodeQueryOptimizer {
 
     //maps the set of mortoncode strings to a list of querydocuments
     def toQueryDocuments(mcSet: Set[String]): QueryDocuments = {
-      mcSet.map(mc => BSONDocument(SpecialMongoProperties.MC -> mc)).toList
+      mcSet.map(mc => Json.obj(SpecialMongoProperties.MC -> mc)).toList
     }
 
     val mc = mortoncode ofEnvelope window
@@ -106,16 +107,16 @@ trait SubdividingMCQueryOptimizer extends MortonCodeQueryOptimizer {
 }
 
 
-class MongoDbSource(val collection: BSONCollection, val mortoncontext: MortonContext)
-  extends Source[Feature] {
+class MongoDbSource(val collection: JSONCollection, val mortoncontext: MortonContext)
+  extends Source[JsObject] {
 
   //we require a MortonCodeQueryOptimizer to be mixed in on instantiation
   this: MortonCodeQueryOptimizer =>
 
   val mortoncode = new MortonCode(mortoncontext)
 
-  //is there no way to get around the ugly typecast? Enumeratee methods aren't covariant (so that is now the problem)
-  def out(): Enumerator[Feature] = toFeatureEnumerator(collection.find(BSONDocument()).cursor) &> Enumeratee.map(f => f.asInstanceOf[Feature])
+
+  def out(): Enumerator[JsObject] = collection.find(JsNull).cursor[JsObject].enumerate
 
   /**
    *
@@ -123,153 +124,32 @@ class MongoDbSource(val collection: BSONCollection, val mortoncontext: MortonCon
    * @return
    * @throws IllegalArgumentException if Envelope does not fall within context of the mortoncode
    */
-  def query(window: Envelope): Enumerator[Feature] = {
+  def query(window: Envelope): Enumerator[JsObject] = {
     val mcQueryWindow = mortoncode ofEnvelope window
-    val qds : Traversable[BSONValue] = optimize(window, mortoncode)
-    val docArr = BSONArray(qds)
-    val query = BSONDocument("$or" -> docArr)
-    toFeatureEnumerator(collection.find(query).cursor) &> Enumeratee.collect{ case f if window.intersects(f.envelope) => f }
+    val qds : Seq[JsValue] = optimize(window, mortoncode)
+    val docArr = JsArray(qds)
+    val query = Json.obj("$or" -> docArr)
+    filteringEnumerator(collection.find(query).cursor, window)
   }
 
-  private def toFeatureEnumerator(cursor: Cursor[BSONDocument]): Enumerator[FeatureWithEnvelope] = {
-    val toFeature: Enumeratee[BSONDocument, Option[FeatureWithEnvelope]] = Enumeratee.map[BSONDocument]{ doc => MongoDbFeature.toFeature(doc) }
-    val optFilter: Enumeratee[Option[FeatureWithEnvelope], FeatureWithEnvelope] = Enumeratee.collect{ case Some(f) => f}
-    cursor.enumerate through toFeature through optFilter
+  // TODO this could probably be done more efficiently using a custom window-sensitive Json Validator
+  private def filteringEnumerator(cursor: Cursor[JsObject], window : Envelope): Enumerator[JsObject] = {
+    import GeometryReaders.extentFormats
+    val toExtent  = Enumeratee.map[JsObject]( obj => (obj, (obj \  "_box").asOpt[Extent]))
+    val filter = Enumeratee.filter[(JsObject, Option[Extent])]( p => p match {
+        case (obj , None) => false
+        case ( _ , Some(ex)) => window.contains(ex.toEnvelope(window.getCrsId))
+        } )
+    val toObj = Enumeratee.map[(JsObject, Option[Extent])]( p => p._1)
+    cursor.enumerate through (toExtent compose filter compose toObj)
   }
 
 }
 
 object MongoDbSource {
 
-  def apply(collection: BSONCollection, mortoncontext: MortonContext): MongoDbSource =
+  def apply(collection: JSONCollection, mortoncontext: MortonContext): MongoDbSource =
     new MongoDbSource(collection, mortoncontext) with SubdividingMCQueryOptimizer
-
-}
-
-/**
- * Converts between features and DBObjects
- *
- * @author Karel Maesen, Geovise BVBA
- *         creation-date: 3/2/13
- */
-object MongoDbFeature {
-
-  def propertyMap(feature: Feature): Seq[(String, Any)] = {
-    feature.getProperties.map(p => (p, feature.getProperty(p))).toSeq
-  }
-
-  def geometryProperties(feature: Feature, mortoncode: String): Seq[(String, String)] = {
-    val geom = feature.getGeometry
-    val geometryEncoder = Wkb.newEncoder()
-    val base64Encoder = new BASE64Encoder()
-    val wkbBASE64 = base64Encoder.encode(geometryEncoder.encode(geom, ByteOrder.XDR).toByteArray)
-    val bbox = EnvelopeSerializer(geom.getEnvelope)
-    import SpecialMongoProperties._
-    (WKB, wkbBASE64) ::(MC, mortoncode) ::(BBOX, bbox) :: Nil
-  }
-
-  def apply(feature: Feature, mortoncode: String) = {
-    val idProp = if (feature.getId != null) Seq( ("id" -> feature.getId) ) else Seq()
-    val elems = propertyMap(feature) ++ geometryProperties(feature, mortoncode) ++ idProp
-    val bson = BSONDocument( elems.map{ case (k,v) => k -> toBSONValue(v)})
-    bson
-  }
-
-  def toFeature(obj: BSONDocument): Option[DBObjectFeature] = {
-    if (obj.get(SpecialMongoProperties.WKB) == None || obj.get(SpecialMongoProperties.BBOX) == None) return None
-    Some(new DBObjectFeature(obj))
-  }
-
-  /**
-   * A Feature implementation that adapts a MongoDBObject
-   *
-   * @param obj the adapted MongoDBObject
-   */
-  class DBObjectFeature(val obj: BSONDocument) extends FeatureWithEnvelope {
-
-    import SpecialMongoProperties._
-
-    lazy private val geometry: Geometry = {
-      val base64Decoder = new BASE64Decoder()
-      val geometryDecoder = Wkb.newDecoder()
-      val wkbStr = obj.getAs[String](WKB).get //TODO ==> this fails if there is no WKB property
-      val bytes = base64Decoder.decodeBuffer(wkbStr)
-      geometryDecoder.decode(ByteBuffer.from(bytes))
-    }
-
-
-    lazy private val propertyMap = obj.elements.filter {
-      case (k,v) => !isSpecialMongoProperty(k)
-      case _ => false
-    }.toMap
-
-    //TODO -- dangerous get on bbox option + convoluted
-    val envelope = EnvelopeSerializer.unapply(obj.getAs[String](BBOX).get).getOrElse(geometry.getEnvelope)
-
-    def hasProperty(propertyName: String, inclSpecial: Boolean): Boolean =
-      (inclSpecial && ("id".equals(propertyName) || "geometry".equals(propertyName))) ||
-        (propertyMap.keys.contains(propertyName))
-
-    def getProperties: java.util.Collection[String] = propertyMap.keys
-
-    def getProperty(propertyName: String): AnyRef =
-      if (propertyName == null) throw new IllegalArgumentException("Null parameter passed.")
-      else propertyMap.get(propertyName) match {
-        case None => null
-        case Some(bsonVal) => fromBSONValue(bsonVal)
-      }
-
-    def getId: AnyRef = {
-      obj.get(ID) match {
-        case Some(idVal) => fromBSONValue(idVal)
-        case None => obj.getAs[BSONObjectID]("_id").get.stringify
-      }
-    }
-
-    def getGeometry: Geometry = geometry
-
-    def getGeometryName: String = "geometry"
-
-    def hasId: Boolean = true
-
-    def hasGeometry: Boolean = true
-
-  }
-
-  //TODO -- make BSON to Scala native type mapping reusable
-  private def fromBSONValue(bsonVal: BSONValue) : AnyRef= {
-    bsonVal match {
-      case BSONNull => null
-      case v : BSONInteger => int2Integer(v.value)
-      case v : BSONDouble => double2Double(v.value)
-      case v : BSONBoolean => boolean2Boolean(v.value)
-      case v : BSONLong => long2Long(v.value)
-      case v : BSONString => v.value
-      case v : BSONArray =>  v.values.map(el => fromBSONValue(el)).toArray
-      case v : BSONDateTime => new Date(v.value)
-      case _ => {
-        Logger.warn(s"Received value ${bsonVal.toString} (code: ${bsonVal.code}) but could not convert it to base type.")
-        null
-      }
-    }
-  }
-
-  private def toBSONValue(v: Any): BSONValue = {
-    v match {
-      case null => BSONNull
-      case e: Int => BSONInteger(e)
-      case e: Long => BSONLong(e)
-      case e: Double => BSONDouble(e)
-      case e: Boolean => BSONBoolean(e)
-      case e: Date => BSONDateTime(e.getTime)
-      case e: String => BSONString(e)
-      case t: Traversable[_] => BSONArray(t.map(el => toBSONValue(el)))
-      case _ => {
-        Logger.warn(s"Received value $v of type ${v.getClass} but could not convert to BSONValue")
-        BSONNull
-      }
-    }
-  }
 
 }
 

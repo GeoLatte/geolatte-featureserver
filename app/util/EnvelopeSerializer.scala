@@ -2,13 +2,15 @@ package util
 
 import org.geolatte.geom.Envelope
 import org.geolatte.geom.crs.CrsId
+import play.api.libs.json._
+import play.api.data.validation.ValidationError
 
 /**
  * @author Karel Maesen, Geovise BVBA
  *
  */
 
-//TODO -- must be moved to utility module - shared by Mongodb, application and other modules.
+//TODO apply/unapply methods should be simplified
 
 object EnvelopeSerializer {
 
@@ -39,5 +41,14 @@ object EnvelopeSerializer {
     }
 
   def cleaned(str: String): String = str.trim
+
+  implicit val EnvelopeFormat = new Format[Envelope] {
+    def reads(json: JsValue): JsResult[Envelope] = json match {
+      case js : JsString => unapply(js.value).map( env => JsSuccess(env)).getOrElse(JsError("Invalid envelope string"))
+      case _ => JsError(ValidationError("envelope must be a String"))
+    }
+
+    def writes(env: Envelope): JsValue = JsString(apply(env))
+  }
 
 }

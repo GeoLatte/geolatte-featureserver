@@ -4,17 +4,21 @@ import play.api.mvc.BodyParser
 import org.geolatte.nosql.json.GeometryReaders._
 import org.geolatte.geom.crs.CrsId
 import play.api.libs.json._
-import play.api.data.validation.ValidationError
-import org.geolatte.common.Feature
 import play.api.libs.iteratee.Iteratee
 import play.Logger
+import reactivemongo.api._
+import reactivemongo.bson._
+import reactivemongo.bson.DefaultBSONHandlers._
+
+import play.modules.reactivemongo._
+import play.modules.reactivemongo.json.ImplicitBSONHandlers._
 import config.ConfigurationValues
 import scala.concurrent.ExecutionContext
 import play.api.libs.json.JsSuccess
 import play.api.data.validation.ValidationError
-import reactivemongo.bson.BSONDocument
 import org.codehaus.jackson.JsonParseException
 import java.io.IOException
+import scala.util.Try
 
 /**
  * @author Karel Maesen, Geovise BVBA
@@ -27,27 +31,23 @@ object ReactiveGeoJson {
    * @param msg the state message
    * @param warnings the list with Warning messages
    * @param dataRemaining the remaing data (unparseable final part of the previous chunk)
-   * @param featureReads the current Reads[Feature] to use
    */
-  case class State(msg: String = "",
-                   warnings: List[String] =  List(),
-                   dataRemaining: String = "",
-                   featureReads : Reads[Feature] = FeatureReads(CrsId.valueOf(4326)))
+  case class State(msg: String = "", warnings: List[String] =  List(), dataRemaining: String = "")
 
   /**
    * Converts a Json validation error sequence for a Feature into a single error message String.
-   * @param errors
+   * @param errors JsonValidation errors
    * @return
    */
   def processErrors(errors: Seq[(JsPath, Seq[ValidationError])]): String = {
     errors map {
       case (jspath, valerrors) => jspath + " :" + valerrors.map(ve => ve.message).mkString("; ")
-    } mkString("\n")
+    } mkString "\n"
   }
 
-  def parseAsString( json: JsValue, state: State, features: List[Feature])(implicit fr : Reads[Feature]) = json.validate[Feature] match {
+  def parseAsString( json: JsValue, state: State, features: List[JsObject]) = json.validate[JsObject] match {
     case JsSuccess(f, _) => (f :: features, state)
-    case JsError(seq) => (features, State("With Errors", processErrors(seq) :: state.warnings, "", state.featureReads  ))
+    case JsError(seq) => (features, State("With Errors", processErrors(seq) :: state.warnings, ""))
   }
 
   def processChunk(writer: FeatureWriter, state: State, chunk: Array[Byte]) : State = {
@@ -61,23 +61,15 @@ object ReactiveGeoJson {
 
     val crsDeclarationReads = (__ \ "crs").read[CrsId]
 
-    val (fs, newState) = jsonStrings.foldLeft( (List[Feature](), state.copy(dataRemaining="")) )( (res : (List[Feature], State), fStr : String )  => {
+    val (fs, newState) = jsonStrings.foldLeft(
+        (List[JsObject](), state.copy(dataRemaining=""))
+    ) ( (res : (List[JsObject], State), fStr : String )  => {
       val (features, curState) = res
       if (!curState.dataRemaining.isEmpty) Logger.warn(s"Invalid JSON: could not parse ${curState.dataRemaining}")
-      try {
+      Try{
         val json = Json.parse(fStr)
-        val optCrsDeclaration = json.asOpt[CrsId](crsDeclarationReads)
-        optCrsDeclaration match {
-          case Some(newCrs) => {
-            Logger.info("Setting CRS to " + newCrs)
-            ( features , State( curState.msg, curState.warnings, "", FeatureReads(newCrs) ) )
-          }
-          case None => parseAsString(json, curState.copy(dataRemaining = ""), features)(curState.featureReads)
-        }
-      } catch {
-        case ex : JsonParseException => (features, curState.copy(dataRemaining = fStr))
-        case ex : IOException => Logger.debug(s"IOException: ${ex.getMessage} on string: '$fStr'"); (features, curState.copy(dataRemaining = fStr))
-      }
+        parseAsString(json, curState.copy(dataRemaining = ""), features)
+      }.getOrElse( (features, curState.copy(dataRemaining = fStr)) )
     })
 
     writer.add(fs)
