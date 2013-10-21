@@ -56,7 +56,7 @@ object FeatureCollectionController extends AbstractNoSqlController {
   }
 
   private def mkChunked(features : Enumerator[JsObject]) = {
-      Ok.stream( toStream(features) andThen Enumerator.eof ).as(SupportedMediaTypes(Format.JSON, Version.default))
+      Ok.stream( toStream(features) andThen finalSeparatorEnumerator andThen Enumerator.eof ).as(SupportedMediaTypes(Format.JSON, Version.default))
   }
 
   object Bbox {
@@ -78,6 +78,8 @@ object FeatureCollectionController extends AbstractNoSqlController {
       }
     }
   }
+
+  private def finalSeparatorEnumerator = Enumerator.enumerate(List(ConfigurationValues.jsonSeparator.getBytes("UTF-8")))
 
   private def toStream(features: Enumerator[JsObject]) : Enumerator[Array[Byte]] = {
     //this is due to James Roper (see https://groups.google.com/forum/#!topic/play-framework/PrPTIrLdPmY)
