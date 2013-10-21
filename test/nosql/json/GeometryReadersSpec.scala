@@ -1,4 +1,4 @@
-package org.geolatte.nosql.json
+package nosql.json
 
 import org.specs2.mutable.Specification
 import play.api.libs.json._

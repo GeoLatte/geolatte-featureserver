@@ -1,4 +1,4 @@
-package org.mongodb
+package nosql.mongodb
 
 import org.specs2.mutable._
 import org.geolatte.geom.curve._
