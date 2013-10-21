@@ -6,6 +6,8 @@ import utilities.SupportedMediaTypes
 import config.ConfigurationValues.Format
 
 import scala.language.implicitConversions
+import play.api.Play
+import play.Logger
 
 /**
  * @author Karel Maesen, Geovise BVBA
@@ -26,7 +28,10 @@ trait AbstractNoSqlController extends Controller {
   def commonExceptionHandler(db : String, col : String = "") : PartialFunction[Throwable, Result] = {
     case ex: DatabaseNotFoundException => NotFound(s"Database $db does not exist.")
     case ex: CollectionNotFoundException => NotFound(s"Collection $db/$col does not exist.")
-    case ex: Throwable => InternalServerError(s"${ex.getMessage}")
+    case ex: Throwable => {
+      Logger.error(s"Internal server error with message : ${ex.getMessage}", ex)
+      InternalServerError(s"Internal server error ${ex.getClass.getCanonicalName} with message : ${ex.getMessage}")
+    }
   }
 
 }

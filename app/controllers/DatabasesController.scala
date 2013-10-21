@@ -6,7 +6,7 @@ import scala.concurrent.Future
 import play.Logger
 import scala.Some
 import nosql.Exceptions._
-import nosql.mongodb.MongoRepository
+import nosql.mongodb.{Metadata, MongoRepository}
 
 
 /**
@@ -65,7 +65,7 @@ object DatabasesController extends AbstractNoSqlController {
   def getCollection(db: String, collection: String) = Action {
     implicit request =>
       Async{
-        MongoRepository.metadata(db, collection).map( md => toResult(CollectionResource(md)) )
+        MongoRepository.metadata(db, collection).map(md => {Logger.info(s"medata: $md") ;toResult(CollectionResource(md))} )
           .recover(commonExceptionHandler(db,collection))
       }
   }
@@ -73,16 +73,14 @@ object DatabasesController extends AbstractNoSqlController {
   def createCollection(db: String, col: String) = Action(BodyParsers.parse.tolerantJson) {
     implicit request => {
 
-      import CollectionResourceReads._
-
       def parse(body: JsValue) = body match {
         case JsNull => Right(None)
-        case js: JsValue => js.validate[SpatialSpec].fold(
+        case js: JsValue => js.validate(CollectionResource.Reads).fold(
           invalid = errs => Left(JsError.toFlatJson(errs)),
           valid = v => Right(Some(v)))
       }
 
-      def doCreate(spatialSpecOpt: Option[SpatialSpec]) = {
+      def doCreate(spatialSpecOpt: Option[Metadata]) = {
         MongoRepository.createCollection(db, col, spatialSpecOpt).map(_ => Ok(s"$db/$col ")).recover {
           case ex: DatabaseNotFoundException => NotFound(s"No database $db")
           case ex: CollectionAlreadyExists => Conflict(s"Collection $db/$col already exists.")

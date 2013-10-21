@@ -23,7 +23,7 @@ import reactivemongo.api.indexes.Index
 import scala.Some
 import reactivemongo.api.collections.default.BSONCollection
 import reactivemongo.core.commands.GetLastError
-import scala.util.{Failure, Success}
+import scala.util.{Try, Failure, Success}
 import java.util.Date
 import play.modules.reactivemongo.json.collection.JSONCollection
 import nosql.json.GeometryReaders.Extent
@@ -31,7 +31,9 @@ import nosql.json.GeometryReaders
 
 import scala.language.reflectiveCalls
 
-import config.AppExecutionContexts.streamContext;
+import config.AppExecutionContexts.streamContext
+import nosql.Exceptions
+;
 
 object MetadataIdentifiers {
   val MetadataCollectionPrefix = "geolatte_nosql."
@@ -69,7 +71,7 @@ trait MortonCodeQueryOptimizer {
 
 trait SubdividingMCQueryOptimizer extends MortonCodeQueryOptimizer {
 
-  def optimize(window: Envelope, mortoncode: MortonCode): QueryDocuments = {
+  def optimize(window: Envelope, mortoncode: MortonCode): QueryDocuments = Try{
 
     /*
     recursively divide the subquery to lowest level
@@ -97,6 +99,9 @@ trait SubdividingMCQueryOptimizer extends MortonCodeQueryOptimizer {
     val result = (divide _ andThen expand _ andThen toQueryDocuments _)(mc)
     Logger.debug(s"num. of queries for window ${window.toString}= ${result.size}")
     result
+  } match {
+    case Success(v) => v
+    case Failure(e) => throw new Exceptions.InvalidQueryException(e.getMessage)
   }
 
 }
@@ -120,7 +125,6 @@ class MongoDbSource(val collection: JSONCollection, val mortoncontext: MortonCon
    * @throws IllegalArgumentException if Envelope does not fall within context of the mortoncode
    */
   def query(window: Envelope): Enumerator[JsObject] = {
-    val mcQueryWindow = mortoncode ofEnvelope window
     val qds : Seq[JsValue] = optimize(window, mortoncode)
     val docArr = JsArray(qds)
     val query = Json.obj("$or" -> docArr)

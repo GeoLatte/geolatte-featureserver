@@ -21,11 +21,11 @@ import scala.util.Success
 import nosql.Exceptions.DatabaseNotFoundException
 import nosql.Exceptions.CollectionAlreadyExists
 import play.modules.reactivemongo.json.collection.JSONCollection
-import controllers.SpatialSpec
 import nosql.Exceptions.DatabaseAlreadyExists
 import reactivemongo.core.commands.GetLastError
 import reactivemongo.api.FailoverStrategy
 import nosql.Exceptions.CollectionNotFoundException
+import org.geolatte.geom.crs.CrsId
 
 
 //TODO -- configure the proper execution context
@@ -173,14 +173,14 @@ object MongoRepository {
   } yield found
 
 
-  def createCollection(dbName: String, colName: String, spatialSpec: Option[SpatialSpec]) = {
+  def createCollection(dbName: String, colName: String, spatialSpec: Option[Metadata]) = {
 
     def doCreateCollection() = connection(dbName).collection[JSONCollection](colName).create().andThen {
       case Success(b) => Logger.info(s"collection $colName created: $b")
       case Failure(t) => Logger.error(s"Attempt to create collection $colName threw exception: ${t.getMessage}")
     }
 
-    def saveMetadata(specOpt: Option[SpatialSpec]) = specOpt map {
+    def saveMetadata(specOpt: Option[Metadata]) = specOpt map {
       spec => connection(dbName).collection[JSONCollection](MetadataCollection).insert(Json.obj(
         ExtentField -> spec.envelope,
         IndexLevelField -> spec.level,

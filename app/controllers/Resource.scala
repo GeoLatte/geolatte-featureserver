@@ -6,7 +6,9 @@ import play.api.libs.json.Reads._
 import play.api.data.validation.ValidationError
 import nosql.json.GeometryReaders._
 import nosql.mongodb.Metadata
+import org.geolatte.geom.Envelope
 import Metadata._
+
 
 trait RenderableResource
 
@@ -17,10 +19,6 @@ trait Jsonable extends RenderableResource {
 
 trait Csvable extends RenderableResource {
   def toCsv: String
-}
-
-case class SpatialSpec(crs: Int, extent: Vector[Double], level: Int) {
-  def envelope: String = s"$crs:${extent(0)},${extent(1)},${extent(2)},${extent(3)}"
 }
 
 case class DatabasesResource(dbNames: Traversable[String]) extends Jsonable {
@@ -51,15 +49,15 @@ case class CollectionResource(md: Metadata) extends Jsonable {
   def toJson: JsValue = Json.toJson(md)
 }
 
-object CollectionResourceReads {
+object CollectionResource {
 
-def size(s: Int) = Reads.filter[Vector[Double]](ValidationError("validate.error: size not 4"))( _.size == s)
+  def mkMetadata(extent: Envelope, level: Int) = Metadata.apply("", extent, level)
 
-implicit val SpatialSpecReads: Reads[SpatialSpec] = (
-    (__ \ "crs").read[Int] and
-    (__ \ "extent").read[Vector[Double]](size(4)) and
-    (__ \ "index-level").read[Int](min(0))
-  ) (SpatialSpec)
+  val Reads: Reads[Metadata] = (
+      (__ \ "extent").read(EnvelopeFormats) and
+      (__ \ "index-level").read[Int](min(0))
+    ) ( mkMetadata _ )
 
 }
+
 

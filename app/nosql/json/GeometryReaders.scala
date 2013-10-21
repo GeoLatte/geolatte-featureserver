@@ -227,7 +227,7 @@ object GeometryReaders {
 
     def writes(e: Envelope): JsValue = Json.obj(
       "crs" -> e.getCrsId.getCode,
-      "envelope" -> Json.arr( e.getMinX, e.getMinY, e.getMaxX, e.getMaxY )
+      "envelope" -> (if(e.isEmpty) JsArray() else Json.arr( e.getMinX, e.getMinY, e.getMaxX, e.getMaxY ))
     )
   }
 
