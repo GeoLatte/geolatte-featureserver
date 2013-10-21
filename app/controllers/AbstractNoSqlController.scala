@@ -15,7 +15,6 @@ import play.Logger
  */
 trait AbstractNoSqlController extends Controller {
 
-    //TODO -- also set the Vary response header
   def toResult[A <: RenderableResource](result: A)(implicit request: RequestHeader): Result = {
     (result, request) match {
       case (r : Jsonable, SupportedMediaTypes(Format.JSON, version)) => Ok(r.toJson).as(SupportedMediaTypes(Format.JSON, version))
@@ -23,7 +22,6 @@ trait AbstractNoSqlController extends Controller {
       case _ => UnsupportedMediaType("No supported media type: " + request.acceptedTypes.mkString(";"))
     }
   }
-
 
   def commonExceptionHandler(db : String, col : String = "") : PartialFunction[Throwable, Result] = {
     case ex: DatabaseNotFoundException => NotFound(s"Database $db does not exist.")

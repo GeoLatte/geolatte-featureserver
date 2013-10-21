@@ -75,7 +75,7 @@ object DatabasesController extends AbstractNoSqlController {
 
       def parse(body: JsValue) = body match {
         case JsNull => Right(None)
-        case js: JsValue => js.validate(CollectionResource.Reads).fold(
+        case js: JsValue => js.validate(CollectionResource.CollectionFormat).fold(
           invalid = errs => Left(JsError.toFlatJson(errs)),
           valid = v => Right(Some(v)))
       }

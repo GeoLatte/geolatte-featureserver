@@ -5,7 +5,6 @@ import org.geolatte.geom.curve._
 import org.geolatte.geom.Envelope
 import org.geolatte.geom.crs.CrsId
 import play.api.libs.json._
-import nosql.mongodb.SubdividingMCQueryOptimizer
 
 /**
  * @author Karel Maesen, Geovise BVBA

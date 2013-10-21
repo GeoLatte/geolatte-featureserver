@@ -1,14 +1,10 @@
 package nosql.mongodb
 
-import org.geolatte.geom.curve.MortonContext
 import org.geolatte.geom.Envelope
 import play.api.Logger
 import reactivemongo.core.commands._
 import play.api.libs.iteratee._
 import reactivemongo.api._
-import play.modules.reactivemongo._
-import play.modules.reactivemongo.json.collection.JSONCollection
-import play.modules.reactivemongo.json.ImplicitBSONHandlers._
 import play.api.libs.json._
 import play.api.libs.functional.syntax._
 import scala.concurrent.Future
@@ -25,10 +21,7 @@ import nosql.Exceptions.DatabaseAlreadyExists
 import reactivemongo.core.commands.GetLastError
 import reactivemongo.api.FailoverStrategy
 import nosql.Exceptions.CollectionNotFoundException
-import org.geolatte.geom.crs.CrsId
 
-
-//TODO -- configure the proper execution context
 import config.AppExecutionContexts.streamContext
 
 
@@ -36,24 +29,6 @@ import config.AppExecutionContexts.streamContext
  * @author Karel Maesen, Geovise BVBA
  *
  */
-
-case class Metadata(name: String, envelope: Envelope, level : Int, count: Long = 0)
-
-object Metadata {
-
-  import MetadataIdentifiers._
-
-  //added so that MetadataReads compiles
-  def apply(name: String, envelope:Envelope, level: Int): Metadata = this(name, envelope,level, 0)
-
-  implicit val MetadataReads = (
-    (__ \ CollectionField).read[String] and
-    (__ \ ExtentField).read[Envelope](EnvelopeFormats) and
-    (__ \ IndexLevelField).read[Int]
-  )(Metadata.apply _)
-
-}
-
 object MongoRepository {
 
   val CREATED_DBS_COLLECTION = "createdDatabases"
@@ -237,22 +212,22 @@ object MongoRepository {
       }
     }
 
-  def getSpatialCollectionSource(database: String, collection: String) = {
+  def getSpatialCollection(database: String, collection: String) = {
     val coll = connection(database).collection[JSONCollection](collection)
     metadata(database, collection).map( md =>
-      MongoDbSource(coll, mkMortonContext(md))
+      MongoSpatialCollection(coll, md)
     )
   }
 
   def query(database: String, collection: String, window: Envelope): Future[Enumerator[JsObject]] = {
-    getSpatialCollectionSource(database, collection).map(_.query(window))
+    getSpatialCollection(database, collection).map(_.query(window))
   }
 
   def getData(database: String, collection: String): Future[Enumerator[JsObject]] = {
-    getSpatialCollectionSource(database, collection).map(_.out())
+    getSpatialCollection(database, collection).map(_.out())
   }
 
-  private def mkMortonContext(md: Metadata): MortonContext = new MortonContext(md.envelope, md.level)
+
 
 }
 

@@ -26,14 +26,19 @@ import reactivemongo.core.commands.GetLastError
 import scala.util.{Try, Failure, Success}
 import java.util.Date
 import play.modules.reactivemongo.json.collection.JSONCollection
-import nosql.json.GeometryReaders.Extent
+import nosql.json.GeometryReaders._
 import nosql.json.GeometryReaders
 
 import scala.language.reflectiveCalls
 
 import config.AppExecutionContexts.streamContext
 import nosql.Exceptions
-;
+import play.api.libs.json.JsArray
+import play.modules.reactivemongo.json.collection.JSONCollection
+import scala.util.Failure
+import scala.Some
+import play.api.libs.json.JsObject
+
 
 object MetadataIdentifiers {
   val MetadataCollectionPrefix = "geolatte_nosql."
@@ -99,16 +104,30 @@ trait SubdividingMCQueryOptimizer extends MortonCodeQueryOptimizer {
     val result = (divide _ andThen expand _ andThen toQueryDocuments _)(mc)
     Logger.debug(s"num. of queries for window ${window.toString}= ${result.size}")
     result
-  } match {
-    case Success(v) => v
-    case Failure(e) => throw new Exceptions.InvalidQueryException(e.getMessage)
-  }
+  }.recoverWith {
+    case e: Throwable => Failure(new Exceptions.InvalidQueryException(e.getMessage))
+  }.get
 
 }
 
+case class Metadata(name: String, envelope: Envelope, level : Int, count: Long = 0)
 
-class MongoDbSource(val collection: JSONCollection, val mortoncontext: MortonContext)
-  extends Source[JsObject] {
+object Metadata {
+
+  import MetadataIdentifiers._
+
+  //added so that MetadataReads compiles
+  def apply(name: String, envelope:Envelope, level: Int): Metadata = this(name, envelope,level, 0)
+
+  implicit val MetadataReads = (
+    (__ \ CollectionField).read[String] and
+    (__ \ ExtentField).read[Envelope](EnvelopeFormats) and
+    (__ \ IndexLevelField).read[Int]
+  )(Metadata.apply _)
+
+}
+
+class MongoSpatialCollection(val collection: JSONCollection, val mortoncontext: MortonContext) {
 
   //we require a MortonCodeQueryOptimizer to be mixed in on instantiation
   this: MortonCodeQueryOptimizer =>
@@ -145,10 +164,10 @@ class MongoDbSource(val collection: JSONCollection, val mortoncontext: MortonCon
 
 }
 
-object MongoDbSource {
+object MongoSpatialCollection {
 
-  def apply(collection: JSONCollection, mortoncontext: MortonContext): MongoDbSource =
-    new MongoDbSource(collection, mortoncontext) with SubdividingMCQueryOptimizer
+  def apply(collection: JSONCollection, metadata: Metadata): MongoSpatialCollection =
+    new MongoSpatialCollection(collection, new MortonContext(metadata.envelope, metadata.level)) with SubdividingMCQueryOptimizer
 
 }
 
