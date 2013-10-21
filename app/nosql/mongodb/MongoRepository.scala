@@ -23,6 +23,7 @@ import reactivemongo.api.FailoverStrategy
 import nosql.Exceptions.CollectionNotFoundException
 
 import config.AppExecutionContexts.streamContext
+import java.util
 
 
 trait Repository {
@@ -68,6 +69,7 @@ trait Repository {
 
 object MongoRepository extends Repository {
 
+  import scala.collection.JavaConversions._
   type ReturnVal = LastError
   type SpatialCollection = MongoSpatialCollection
 
@@ -75,14 +77,21 @@ object MongoRepository extends Repository {
   val CREATED_DB_PROP = "db"
   val DEFAULT_SYS_DB = "featureServerSys"
 
+  object CONFIGURATION {
+    val MONGO_CONNECTION_STRING = "fs.mongodb"
+    val MONGO_SYSTEM_DB = "fs.system.db"
+  }
+
   import MetadataIdentifiers._
   import play.api.Play.current
 
-  //TODO -- make the client configurable
   val driver = new MongoDriver
-  val connection = driver.connection(List("localhost"))
+  val dbconStr = current.configuration.getStringList(CONFIGURATION.MONGO_CONNECTION_STRING)
+    .getOrElse[java.util.List[String]](List("localhost"))
 
-  private val systemDatabase = current.configuration.getString("fs.system.db").orElse(Some(DEFAULT_SYS_DB)).get
+  val connection = driver.connection(dbconStr)
+
+  private val systemDatabase = current.configuration.getString(CONFIGURATION.MONGO_SYSTEM_DB).orElse(Some(DEFAULT_SYS_DB)).get
 
   private val createdDBColl = {
     connection.db(systemDatabase).collection[JSONCollection](CREATED_DBS_COLLECTION)
