@@ -5,9 +5,8 @@ import play.api.libs.iteratee._
 import scala.concurrent.Await
 import scala.concurrent.duration.Duration
 import org.geolatte.nosql.json.ReactiveGeoJson._
-import org.geolatte.common.Feature
-import org.geolatte.geom.crs.CrsId
 import config.ConfigurationValues
+import play.api.libs.json.JsObject
 
 /**
  * @author Karel Maesen, Geovise BVBA
@@ -29,25 +28,15 @@ class ReactiveGeoJsonSpecs extends Specification {
     (text, Enumerator(batched:_*))
   }
 
-
-  def isValidFeatureList[A](result : List[A])  = {
-    if ( result.filterNot(s => s match {
-      case f:Feature if f.getGeometry.getCrsId.equals(CrsId.valueOf(4326))  => true
-      case _ => false
-    }).size == 0) ok(": list of features")
-    else ko("list of features")
-  }
-
-
   "The reactive GeoJsonTransformer" should {
 
     "read valid input and transform it to a stream of GeoJson Features" in {
 
       val testSize = 500
       val (_, enumerator) = testEnumerator(testSize)
-      var sink = new scala.collection.mutable.ArrayBuffer[Feature]()
+      var sink = new scala.collection.mutable.ArrayBuffer[JsObject]()
       val fw = new FeatureWriter {
-        def add(features: Seq[Feature]) = {sink ++= features }
+        def add(objects: Seq[JsObject]) = {sink ++= objects }
 
         def updateIndex() {}
       }
@@ -58,7 +47,7 @@ class ReactiveGeoJsonSpecs extends Specification {
       (stateIteratee must beRight) and
       (result must not be empty) and
         (result must beLike {
-          case l: List[_] if l.size == testSize => isValidFeatureList(l)
+          case l: List[_]  if l.size == testSize => ok
           case _ => ko(": second result element is not of correct size")
         })
 

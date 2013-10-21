@@ -1,8 +1,9 @@
 package controllers
 
+import scala.language.reflectiveCalls
+
 import org.geolatte.geom.Envelope
 import org.geolatte.geom.crs.CrsId
-import org.geolatte.common.dataformats.json.jackson.JsonMapper
 import play.api.mvc._
 import play.api.Logger
 import util.MediaTypeSpec

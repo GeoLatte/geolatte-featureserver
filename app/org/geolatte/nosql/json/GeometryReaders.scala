@@ -5,12 +5,11 @@ package org.geolatte.nosql.json
  *         creation-date: 7/31/13
  */
 
+import scala.language.implicitConversions
+
 import play.api.libs.json._
 import play.api.libs.functional.syntax._
 import org.geolatte.geom._
-import org.geolatte.common.Feature
-import java.util
-import scala.collection.DefaultMap
 import org.geolatte.geom.crs.CrsId
 import play.api.data.validation.ValidationError
 import scala.util.{Success, Try}

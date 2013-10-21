@@ -4,24 +4,18 @@ package repositories
 import util.SpatialSpec
 import org.geolatte.geom.curve.MortonContext
 import org.geolatte.geom.Envelope
-import org.geolatte.common.Feature
 import org.geolatte.nosql.mongodb._
 import play.api.Logger
 import reactivemongo.core.commands._
 import scala.concurrent._
-import play.api.libs.iteratee.Enumerator
+import play.api.libs.iteratee._
 import controllers.Exceptions._
-import controllers.Exceptions.DatabaseAlreadyExists
-import reactivemongo.core.commands.GetLastError
 import scala.util.Failure
 import scala.Some
 import scala.util.Success
-import reactivemongo.api.collections.default.BSONCollection
-import controllers.Exceptions.DatabaseNotFoundException
 import reactivemongo.api._
 import reactivemongo.bson._
 import reactivemongo.bson.DefaultBSONHandlers._
-
 import play.modules.reactivemongo._
 import play.modules.reactivemongo.json.collection.JSONCollection
 import play.modules.reactivemongo.json.ImplicitBSONHandlers._

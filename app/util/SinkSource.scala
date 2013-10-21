@@ -1,14 +1,7 @@
 package util
 
-import org.geolatte.common._
-import dataformats.json.jackson.JsonMapper
-import java.io.{IOException, FileNotFoundException}
-import org.geolatte.geom.Envelope
-import reactivemongo.api.Cursor
 import play.api.libs.iteratee.{Enumerator, Iteratee}
 
-
-//TODO -- references to Cursors should be replaced by Enumerator !!!!
 
 /**
  * A Sink for data

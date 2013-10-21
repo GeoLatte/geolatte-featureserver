@@ -30,11 +30,7 @@ object GeolatteNoSqlBuild extends Build {
     "org.specs2" %% "specs2" % "1.14" % "test",    
     "org.geolatte" % "geolatte-geom" %  "0.12-SNAPSHOT",
     "org.reactivemongo" %% "reactivemongo" % "0.9",
-     "org.reactivemongo" %% "play2-reactivemongo" % "0.9",
-    "org.geolatte" % "geolatte-common" % "0.7-SNAPSHOT"
-      exclude("org.codehaus.jackson", "jackson-core-lgpl")     //needs to exclude these because they conflict with Play's more recent Jackson
-      exclude("org.codehaus.jackson", "jackson-mapper-lgpl")
-
+     "org.reactivemongo" %% "play2-reactivemongo" % "0.9"
   )
 
   //Build Settings applied to all projects

@@ -5,6 +5,7 @@ import org.geolatte.geom.curve._
 import org.geolatte.geom.Envelope
 import org.geolatte.geom.crs.CrsId
 import reactivemongo.bson._
+import play.api.libs.json._
 
 /**
  * @author Karel Maesen, Geovise BVBA
@@ -24,10 +25,10 @@ class SubdividingMCQueryOptimizerTest extends Specification {
 
     "return the mortoncode of the window" in {
         val result = optimizer.optimize(window, mortoncode)
-        result must contain( BSONDocument("_mc" -> BSONString("000")) )
-        result must contain(BSONDocument("_mc" -> BSONString("00")))
-        result must contain(BSONDocument("_mc" -> BSONString("0")))
-        result must contain(BSONDocument("_mc" -> BSONString("")))
+        result must contain( Json.obj("_mc" -> "000") )
+        result must contain( Json.obj("_mc" -> "00"))
+        result must contain( Json.obj("_mc" -> "0"))
+        result must contain( Json.obj("_mc" -> ""))
         result.size must_== 4
     }
   }
@@ -37,19 +38,19 @@ class SubdividingMCQueryOptimizerTest extends Specification {
 
     "4 queries at lowest level " in {
       val result = optimizer.optimize(window, mortoncode)
-      result must contain(BSONDocument("_mc" -> BSONString("")))
-      result must contain(BSONDocument("_mc" -> BSONString("0")))
-      result must contain(BSONDocument("_mc" -> BSONString("1")))
-      result must contain(BSONDocument("_mc" -> BSONString("2")))
-      result must contain(BSONDocument("_mc" -> BSONString("3")))
-      result must contain(BSONDocument("_mc" -> BSONString("03")))
-      result must contain(BSONDocument("_mc" -> BSONString("12")))
-      result must contain(BSONDocument("_mc" -> BSONString("30")))
-      result must contain(BSONDocument("_mc" -> BSONString("21")))
-      result must contain(BSONDocument("_mc" -> BSONString("033")))
-      result must contain(BSONDocument("_mc" -> BSONString("122")))
-      result must contain(BSONDocument("_mc" -> BSONString("300")))
-      result must contain(BSONDocument("_mc" -> BSONString("211")))
+      result must contain(Json.obj("_mc" -> ""))
+      result must contain(Json.obj("_mc" -> "0"))
+      result must contain(Json.obj("_mc" -> "1"))
+      result must contain(Json.obj("_mc" -> "2"))
+      result must contain(Json.obj("_mc" -> "3"))
+      result must contain(Json.obj("_mc" -> "03"))
+      result must contain(Json.obj("_mc" -> "12"))
+      result must contain(Json.obj("_mc" -> "30"))
+      result must contain(Json.obj("_mc" -> "21"))
+      result must contain(Json.obj("_mc" -> "033"))
+      result must contain(Json.obj("_mc" -> "122"))
+      result must contain(Json.obj("_mc" -> "300"))
+      result must contain(Json.obj("_mc" -> "211"))
       result.size must_== 13
 
     }

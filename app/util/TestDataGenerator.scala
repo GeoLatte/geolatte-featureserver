@@ -3,10 +3,8 @@ package util
 import scala.util.Random
 import org.geolatte.geom._
 import org.geolatte.geom.crs.CrsId
-import org.geolatte.common.Feature
-import org.geolatte.common.dataformats.json.jackson.DefaultFeature
-import play.api.libs.iteratee.{Iteratee, Enumerator}
-import scala.concurrent.{ExecutionContext, Future}
+import org.geolatte.nosql.json.GeometryReaders._
+import play.api.libs.json._
 
 /**
  * Test generator for (linestring) features into a collection
@@ -50,22 +48,22 @@ case class TestDataGenerator(ll: Point, ur: Point, minLength: Double, maxLength:
     new LineString(psBuilder.toPointSequence)
   }
 
-  def feature(id: Int): Feature = {
-    val df = new DefaultFeature()
-    df.setGeometry("geom", line)
-    df.setId("id", id)
-    df.addProperty("property", id.toString)
-    df
+  def feature(id: Int): JsObject = {
+    Json.obj(
+      "geometry" -> Json.toJson(line),
+      "id" -> id,
+      "properties" -> Json.obj("foo" -> "bar")
+    )
   }
 
   def generateToCollection(num: Int, dbName: String, colName: String, level: Int = 8) {
 
-    val it = new Iterator[Feature] {
+    val it = new Iterator[JsObject] {
       var cnt = 0
 
       def hasNext: Boolean = cnt < num
 
-      def next(): Feature = {
+      def next(): JsObject = {
         val f = feature(cnt)
         cnt += 1
         f

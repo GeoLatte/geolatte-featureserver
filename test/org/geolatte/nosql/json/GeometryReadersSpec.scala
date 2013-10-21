@@ -112,48 +112,6 @@ class GeometryReadersSpec extends Specification {
     }
   }
 
-  "The Feature reader" should {
-
-    implicit val defaultFeatureReads = FeatureReads(CrsId.UNDEFINED)
-
-    def validateFeature(result: JsResult[Feature], withId: Boolean = true): Result = {
-      val featureOpt = result.asOpt
-      val classMatch = featureOpt must haveClass[Some[Feature]]
-      val feature = featureOpt.get.asInstanceOf[Feature]
-      val idMatch = if (withId) feature.getId must_== 1 else ok
-      classMatch and idMatch and
-        (feature.getGeometry must beEqualTo(linestring(-1, c(-87.067872, 33.093221), c(90.2, 40.0)))) and
-        (feature.getProperty("foo") must_== "bar") and
-        (feature.getProperty("bar").asInstanceOf[Map[String, AnyRef]] must havePair("inl2" -> 3))
-    }
-
-    "read a valid GeoJSON object having an id " in {
-      val result = jsFeature.validate[Feature]
-      validateFeature(result)
-    }
-
-    "read a valid GeoJSON object not having an id " in {
-      val result = jsNoIdFeature.validate[Feature]
-      validateFeature(result, withId = false)
-    }
-
-    "fail on reading an invalid GeoJson feature (no geometry)" in {
-      val result = noGeometry.validate[Feature]
-      result must beLike {
-        case JsError(error) => ok
-      }
-    }
-
-    "fail on reading an invalid GeoJson feature (no properties)" in {
-      val result = noProperties.validate[Feature]
-      result must beLike {
-        case JsError(error) => ok
-      }
-    }
-
-
-  }
-
   // TEST DATA
 
   val crsJson = Json.parse( """{"type":"name","properties":{"name":"EPSG:31370"}}""")
