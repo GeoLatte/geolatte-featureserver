@@ -26,7 +26,7 @@ trait FeatureWriter {
 case class MongoWriter(db: String, collection: String) extends FeatureWriter {
 
 
-  type CollectionInfo = (JSONCollection, SpatialMetadata, Reads[JsObject])
+  type CollectionInfo = (JSONCollection, Metadata, Reads[JsObject])
 
   val fCollectionInfo: Future[CollectionInfo] = MongoRepository.getCollection(db, collection) map {
     case (dbcoll, smd) =>

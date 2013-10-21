@@ -7,7 +7,6 @@ import scala.concurrent.duration.Duration
 import config.ConfigurationValues
 import play.api.libs.json.JsObject
 import nosql.mongodb.ReactiveGeoJson._
-import nosql.mongodb.FeatureWriter
 
 /**
  * @author Karel Maesen, Geovise BVBA

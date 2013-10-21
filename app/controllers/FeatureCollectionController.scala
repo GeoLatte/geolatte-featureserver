@@ -8,14 +8,13 @@ import play.api.mvc._
 import play.api.Logger
 import utilities.SupportedMediaTypes
 import play.api.libs.iteratee._
-import nosql.mongodb.SpatialMetadata
+import nosql.mongodb.{Metadata, MongoRepository}
 import config.ConfigurationValues.{Version, Format}
 import config.{ConfigurationValues, AppExecutionContexts}
 import scala.Some
 import utilities.QueryParam
 import nosql.Exceptions._
 import play.api.libs.json.{Json, JsObject}
-import nosql.mongodb.MongoRepository
 
 
 object FeatureCollectionController extends AbstractNoSqlController {
@@ -34,7 +33,7 @@ object FeatureCollectionController extends AbstractNoSqlController {
       Async {
         Logger.info(s"Query string $queryStr on $db, collection $collection")
         MongoRepository.metadata(db, collection).flatMap(md =>
-          qetQueryResult(db, collection, md.spatialMetadata)
+          qetQueryResult(db, collection, md)
         ).recover {
           case ex: InvalidQueryException => BadRequest(s"${ex.getMessage}")
         }.recover (commonExceptionHandler(db, collection))
@@ -51,7 +50,7 @@ object FeatureCollectionController extends AbstractNoSqlController {
       }
   }
 
-  private def qetQueryResult(db: String, collection: String, smd: SpatialMetadata)(implicit queryStr: Map[String, Seq[String]]) = {
+  private def qetQueryResult(db: String, collection: String, smd: Metadata)(implicit queryStr: Map[String, Seq[String]]) = {
     Bbox(QueryParams.BBOX.extractOrElse(""), smd.envelope.getCrsId) match {
       case Some(window) =>
         MongoRepository.query(db, collection, window) map (q => mkChunked(q))

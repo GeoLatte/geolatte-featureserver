@@ -5,19 +5,28 @@ import org.geolatte.geom.Envelope
 import play.api.Logger
 import reactivemongo.core.commands._
 import play.api.libs.iteratee._
-import nosql.Exceptions._
-import scala.util.Failure
-import scala.Some
-import scala.util.Success
 import reactivemongo.api._
-import reactivemongo.bson._
-import reactivemongo.bson.DefaultBSONHandlers._
 import play.modules.reactivemongo._
 import play.modules.reactivemongo.json.collection.JSONCollection
 import play.modules.reactivemongo.json.ImplicitBSONHandlers._
 import play.api.libs.json._
-import controllers.SpatialSpec
+import play.api.libs.functional.syntax._
 import scala.concurrent.Future
+import nosql.json.GeometryReaders._
+import scala.util.Failure
+import nosql.Exceptions.DatabaseDeleteException
+import scala.Some
+import nosql.Exceptions.DatabaseCreationException
+import scala.util.Success
+import nosql.Exceptions.DatabaseNotFoundException
+import nosql.Exceptions.CollectionAlreadyExists
+import play.modules.reactivemongo.json.collection.JSONCollection
+import controllers.SpatialSpec
+import nosql.Exceptions.DatabaseAlreadyExists
+import reactivemongo.core.commands.GetLastError
+import reactivemongo.api.FailoverStrategy
+import nosql.Exceptions.CollectionNotFoundException
+
 
 //TODO -- configure the proper execution context
 import config.AppExecutionContexts.streamContext
@@ -28,7 +37,23 @@ import config.AppExecutionContexts.streamContext
  *
  */
 
-//TODO this needs to move to a service layer
+case class Metadata(name: String, envelope: Envelope, level : Int, count: Long = 0)
+
+object Metadata {
+
+  import MetadataIdentifiers._
+
+  //added so that MetadataReads compiles
+  def apply(name: String, envelope:Envelope, level: Int): Metadata = this(name, envelope,level, 0)
+
+  implicit val MetadataReads = (
+    (__ \ CollectionField).read[String] and
+    (__ \ ExtentField).read[Envelope](EnvelopeFormats) and
+    (__ \ IndexLevelField).read[Int]
+  )(Metadata.apply _)
+
+}
+
 object MongoRepository {
 
   val CREATED_DBS_COLLECTION = "createdDatabases"
@@ -116,21 +141,21 @@ object MongoRepository {
 
   def metadata(database: String, collection: String): Future[Metadata] = {
     import MetadataIdentifiers._
+    import Metadata._
 
-    def spatialMetadata() = {
-      import SpatialMetadata.SpatialMetadataReads
+    def readMetadata() = {
       val metaCollection = connection(database).collection[JSONCollection](MetadataCollection)
       val metadataCursor = metaCollection.find( Json.obj(CollectionField -> collection)).cursor[JsObject]
       metadataCursor.headOption().map {
-        case Some(doc) => doc.asOpt[SpatialMetadata]
+        case Some(doc) => doc.asOpt[Metadata]
         case _ => None
       }
     }
 
     def mkMetadata() = for {
-        smd <- spatialMetadata()
+        mdOpt <- readMetadata()
         cnt <- count(database, collection)
-      } yield Metadata(collection, cnt, smd.getOrElse(SpatialMetadata(Envelope.EMPTY, 0)))
+      } yield mdOpt.map( md => md.copy(count = cnt)).getOrElse( Metadata(collection, Envelope.EMPTY, 0, cnt) )
 
     existsDb(database).flatMap(existsDb =>
       if (existsDb) existsCollection(database, collection)
@@ -200,7 +225,7 @@ object MongoRepository {
   }
 
 
-  def getCollection(dbName: String, colName: String): Future[(JSONCollection, SpatialMetadata)] =
+  def getCollection(dbName: String, colName: String): Future[(JSONCollection, Metadata)] =
     existsDb(dbName).flatMap(dbExists =>
       if (dbExists) existsCollection(dbName, colName)
       else throw new DatabaseNotFoundException()
@@ -208,14 +233,14 @@ object MongoRepository {
       case false => throw new CollectionNotFoundException()
       case true => {
         val col = connection(dbName).collection[JSONCollection](colName)
-        metadata(dbName, colName).map(md => (col, md.spatialMetadata))
+        metadata(dbName, colName).map(md => (col, md))
       }
     }
 
   def getSpatialCollectionSource(database: String, collection: String) = {
     val coll = connection(database).collection[JSONCollection](collection)
     metadata(database, collection).map( md =>
-      MongoDbSource(coll, mkMortonContext(md.spatialMetadata))
+      MongoDbSource(coll, mkMortonContext(md))
     )
   }
 
@@ -227,7 +252,7 @@ object MongoRepository {
     getSpatialCollectionSource(database, collection).map(_.out())
   }
 
-  private def mkMortonContext(md: SpatialMetadata): MortonContext = new MortonContext(md.envelope, md.level)
+  private def mkMortonContext(md: Metadata): MortonContext = new MortonContext(md.envelope, md.level)
 
 }
 

@@ -6,6 +6,7 @@ import play.api.libs.json.Reads._
 import play.api.data.validation.ValidationError
 import nosql.json.GeometryReaders._
 import nosql.mongodb.Metadata
+import Metadata._
 
 trait RenderableResource
 
@@ -42,8 +43,8 @@ case class CollectionResource(md: Metadata) extends Jsonable {
     def writes(meta: Metadata): JsValue =  Json.obj(
         "collection" -> meta.name,
         "num-objects" -> meta.count,
-        "extent" -> Json.toJson(meta.spatialMetadata.envelope),
-        "index-level" -> meta.spatialMetadata.level
+        "extent" -> Json.toJson(meta.envelope),
+        "index-level" -> meta.level
     )
   }
 
