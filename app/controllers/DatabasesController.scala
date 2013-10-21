@@ -1,39 +1,22 @@
 package controllers
 
-import util._
-import util.CustomBodyParsers._
 import play.api.mvc._
-import repositories.MongoRepository
-import config.ConfigurationValues.Format
-import models._
 import play.api.libs.json.{JsValue, JsError, JsNull}
 import scala.concurrent.Future
 import play.Logger
-import models.DatabaseResource
-import util.SpatialSpec
-import models.CollectionResource
-import models.DatabasesResource
 import scala.Some
-import Exceptions._
+import nosql.Exceptions._
+import nosql.mongodb.MongoRepository
 
 
 /**
  * @author Karel Maesen, Geovise BVBA
  *         creation-date: 7/22/13
  */
-object Databases extends AbstractNoSqlController {
+object DatabasesController extends AbstractNoSqlController {
 
   import config.AppExecutionContexts.streamContext;
 
-  //TODO -- also set the Vary response header
-  // TODO move into a separate trait
-  def toResult[A <: RenderableResource](result: A)(implicit request: RequestHeader): Result = {
-    (result, request) match {
-      case (r : Jsonable, MediaTypeSpec(Format.JSON, version)) => Ok(r.toJson).as(MediaTypeSpec(Format.JSON, version))
-      case (r : Csvable, MediaTypeSpec(Format.CSV, version)) => Ok(r.toCsv).as(MediaTypeSpec(Format.CSV, version))
-      case _ => UnsupportedMediaType("No supported media type: " + request.acceptedTypes.mkString(";"))
-    }
-  }
 
   def list() = {
     Action {
@@ -59,7 +42,7 @@ object Databases extends AbstractNoSqlController {
        }
 
 
-  def createDb(db: String) = Action(tolerantNullableJson) {
+  def createDb(db: String) = Action {
     implicit request =>
 
       Async {
@@ -71,7 +54,7 @@ object Databases extends AbstractNoSqlController {
       }
   }
 
-  def deleteDb(db: String) = Action (tolerantNullableJson) {
+  def deleteDb(db: String) = Action {
     implicit request =>
       Async{
         MongoRepository.deleteDb(db).map( _ => Ok(s"database $db dropped") )
@@ -87,10 +70,10 @@ object Databases extends AbstractNoSqlController {
       }
   }
 
-  def createCollection(db: String, col: String) = Action(tolerantNullableJson) {
+  def createCollection(db: String, col: String) = Action(BodyParsers.parse.tolerantJson) {
     implicit request => {
 
-      import models.CollectionResourceReads._
+      import CollectionResourceReads._
 
       def parse(body: JsValue) = body match {
         case JsNull => Right(None)
@@ -117,7 +100,7 @@ object Databases extends AbstractNoSqlController {
     }
   }
 
-  def deleteCollection(db: String, col: String) = Action(tolerantNullableJson) {
+  def deleteCollection(db: String, col: String) = Action {
     implicit request =>
       Async {
         MongoRepository.deleteCollection(db, col).map(_ => Ok(s"Collection $db/$col deleted."))

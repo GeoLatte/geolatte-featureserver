@@ -6,19 +6,19 @@ import org.geolatte.geom.Envelope
 import org.geolatte.geom.crs.CrsId
 import play.api.mvc._
 import play.api.Logger
-import util.MediaTypeSpec
+import utilities.SupportedMediaTypes
 import play.api.libs.iteratee._
-import repositories.MongoRepository
-import org.geolatte.nosql.mongodb.SpatialMetadata
+import nosql.mongodb.SpatialMetadata
 import config.ConfigurationValues.{Version, Format}
 import config.{ConfigurationValues, AppExecutionContexts}
 import scala.Some
-import util.QueryParam
-import controllers.Exceptions._
+import utilities.QueryParam
+import nosql.Exceptions._
 import play.api.libs.json.{Json, JsObject}
+import nosql.mongodb.MongoRepository
 
 
-object FeatureCollection extends AbstractNoSqlController {
+object FeatureCollectionController extends AbstractNoSqlController {
 
   import AppExecutionContexts.streamContext
 
@@ -61,7 +61,7 @@ object FeatureCollection extends AbstractNoSqlController {
   }
 
   private def mkChunked(features : Enumerator[JsObject]) = {
-      Ok.stream( toStream(features) andThen Enumerator.eof ).as(MediaTypeSpec(Format.JSON, Version.default))
+      Ok.stream( toStream(features) andThen Enumerator.eof ).as(SupportedMediaTypes(Format.JSON, Version.default))
   }
 
   object Bbox {

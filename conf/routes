@@ -7,23 +7,23 @@ GET     /                              controllers.Application.index
 
 # FeatureServer REST API
 
-GET /api/databases                     controllers.Databases.list()
+GET /api/databases                     controllers.DatabasesController.list()
 
-GET /api/databases/:db                 controllers.Databases.getDb(db : String)
-PUT /api/databases/:db                 controllers.Databases.createDb(db : String)
-DELETE /api/databases/:db              controllers.Databases.deleteDb(db : String)
+GET /api/databases/:db                 controllers.DatabasesController.getDb(db : String)
+PUT /api/databases/:db                 controllers.DatabasesController.createDb(db : String)
+DELETE /api/databases/:db              controllers.DatabasesController.deleteDb(db : String)
 
 
-GET /api/databases/:db/:collection     controllers.Databases.getCollection(db: String, collection: String)
-PUT /api/databases/:db/:collection     controllers.Databases.createCollection(db: String, collection: String)
-DELETE /api/databases/:db/:collection  controllers.Databases.deleteCollection(db: String, collection: String)
+GET /api/databases/:db/:collection     controllers.DatabasesController.getCollection(db: String, collection: String)
+PUT /api/databases/:db/:collection     controllers.DatabasesController.createCollection(db: String, collection: String)
+DELETE /api/databases/:db/:collection  controllers.DatabasesController.deleteCollection(db: String, collection: String)
 
 POST /api/databases/:db/:collection/tx/insert controllers.TxController.insert(db: String, collection: String)
 POST /api/databases/:db/:collection/tx/remove controllers.TxController.remove(db: String, collection: String)
 POST /api/databases/:db/:collection/tx/update controllers.TxController.update(db: String, collection: String)
 
-GET /api/databases/:db/:collection/query         controllers.FeatureCollection.query(db: String, collection: String)
-GET /api/databases/:db/:collection/download      controllers.FeatureCollection.download(db: String, collection: String)
+GET /api/databases/:db/:collection/query         controllers.FeatureCollectionController.query(db: String, collection: String)
+GET /api/databases/:db/:collection/download      controllers.FeatureCollectionController.download(db: String, collection: String)
 
 #GET /rest/:db/:collection/metadata     controllers.MetadataResource.metadata(db: String, collection: String)
 

@@ -1,19 +1,15 @@
 package controllers
 
 import play.api.mvc._
-import scala.Some
 import reactivemongo.core.commands.{LastError, GetLastError}
 import config.AppExecutionContexts
-import org.geolatte.nosql.json.{MongoWriter, ReactiveGeoJson}
 import scala.concurrent.Future
-import repositories.MongoRepository
-import reactivemongo.api._
 import play.api.libs.json._
 import org.codehaus.jackson.JsonParseException
-import org.geolatte.nosql.json.ReactiveGeoJson.State
-import play.modules.reactivemongo.json._
 import play.modules.reactivemongo.json.collection.JSONCollection
 import scala.util.Try
+import nosql.mongodb._
+import nosql.mongodb.ReactiveGeoJson._
 
 /**
  * @author Karel Maesen, Geovise BVBA
