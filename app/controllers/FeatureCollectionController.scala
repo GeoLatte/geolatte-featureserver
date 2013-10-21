@@ -27,24 +27,21 @@ object FeatureCollectionController extends AbstractNoSqlController {
   }
 
 
-  def query(db: String, collection: String) = Action {
-    request =>
-      implicit val queryStr = request.queryString
-      Async {
+  def query(db: String, collection: String) = repositoryAction ( repo =>
+    request => {
+        implicit val queryStr = request.queryString
         Logger.info(s"Query string $queryStr on $db, collection $collection")
-        MongoRepository.metadata(db, collection).flatMap(md =>
+        repo.metadata(db, collection).flatMap(md =>
           qetQueryResult(db, collection, md)
         ).recover {
           case ex: InvalidQueryException => BadRequest(s"${ex.getMessage}")
         }.recover (commonExceptionHandler(db, collection))
-      }
-  }
+    })
 
-  def download(db: String, collection: String) = Action {
-    request =>
-      Async {
+  def download(db: String, collection: String) = repositoryAction { repo =>
+    request => {
         Logger.info(s"Downloading $db/$collection.")
-        MongoRepository.getData(db, collection).map( fs => mkChunked(fs) ).recover {
+        repo.getData(db, collection).map( fs => mkChunked(fs) ).recover {
           commonExceptionHandler(db, collection)
         }
       }

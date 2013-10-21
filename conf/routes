@@ -10,7 +10,7 @@ GET     /                              controllers.Application.index
 GET /api/databases                     controllers.DatabasesController.list()
 
 GET /api/databases/:db                 controllers.DatabasesController.getDb(db : String)
-PUT /api/databases/:db                 controllers.DatabasesController.createDb(db : String)
+PUT /api/databases/:db                 controllers.DatabasesController.putDb(db : String)
 DELETE /api/databases/:db              controllers.DatabasesController.deleteDb(db : String)
 
 

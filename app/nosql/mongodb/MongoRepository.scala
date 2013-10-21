@@ -25,11 +25,51 @@ import nosql.Exceptions.CollectionNotFoundException
 import config.AppExecutionContexts.streamContext
 
 
-/**
- * @author Karel Maesen, Geovise BVBA
- *
- */
-object MongoRepository {
+trait Repository {
+
+  /**
+   *The type returned by the database driver when reporting success or failure
+   */
+  type ReturnVal
+
+  type SpatialCollection
+
+  def listDatabases: Future[List[String]]
+
+  def getMetadata(dbName: String) : JSONCollection
+
+  def createDb(dbname: String) : Future[ReturnVal]
+
+  def dropDb(dbname: String) : Future[ReturnVal]
+
+  def existsDb(dbname: String): Future[Boolean]
+
+  def listCollections(dbname: String): Future[List[String]]
+
+  def count(database: String, collection: String) : Future[Int]
+
+  def metadata(database: String, collection: String): Future[Metadata]
+
+  def existsCollection(dbName: String, colName: String): Future[Boolean]
+
+  def createCollection(dbName: String, colName: String, spatialSpec: Option[Metadata]) : Future[Boolean]
+
+  def deleteCollection(dbName: String, colName: String) : Future[ReturnVal]
+
+  def getCollection(dbName: String, colName: String): Future[(JSONCollection, Metadata)]
+
+  def getSpatialCollection(database: String, collection: String) : Future[SpatialCollection]
+
+  def query(database: String, collection: String, window: Envelope): Future[Enumerator[JsObject]]
+
+  def getData(database: String, collection: String): Future[Enumerator[JsObject]]
+
+}
+
+object MongoRepository extends Repository {
+
+  type ReturnVal = LastError
+  type SpatialCollection = MongoSpatialCollection
 
   val CREATED_DBS_COLLECTION = "createdDatabases"
   val CREATED_DB_PROP = "db"
@@ -57,7 +97,7 @@ object MongoRepository {
 
   def getMetadata(dbName: String) = connection.db(dbName).collection[JSONCollection](MetadataCollection)
 
-  def isMetadata(name: String): Boolean = (name startsWith MetadataCollectionPrefix) || (name startsWith "system.")
+  private def isMetadata(name: String): Boolean = (name startsWith MetadataCollectionPrefix) || (name startsWith "system.")
 
   def createDb(dbname: String) = {
 
@@ -81,7 +121,7 @@ object MongoRepository {
 
   }
 
-  def deleteDb(dbname: String) = {
+  def dropDb(dbname: String) = {
 
     def removeLog(dbname: String) = createdDBColl.remove(Json.obj(CREATED_DB_PROP -> dbname)).andThen {
       case Success(le) => Logger.info(s"Database $dbname dropped")

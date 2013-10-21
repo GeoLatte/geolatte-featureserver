@@ -1,13 +1,15 @@
 package controllers
 
-import play.api.mvc.{RequestHeader, Controller, Result}
+import play.api.mvc._
 import nosql.Exceptions._
 import utilities.SupportedMediaTypes
 import config.ConfigurationValues.Format
 
-import scala.language.implicitConversions
-import play.api.Play
 import play.Logger
+import nosql.mongodb._
+
+import scala.language.implicitConversions
+import scala.concurrent.Future
 
 /**
  * @author Karel Maesen, Geovise BVBA
@@ -15,7 +17,25 @@ import play.Logger
  */
 trait AbstractNoSqlController extends Controller {
 
-  def toResult[A <: RenderableResource](result: A)(implicit request: RequestHeader): Result = {
+  implicit val repository : Repository = MongoRepository
+
+  type RepositoryAction = Repository => Request[AnyContent] => Future[Result]
+
+  def repositoryAction(action: => RepositoryAction)(implicit repo : Repository) = Action {
+        request =>
+          Async {
+            action(repo)(request)
+          }
+      }
+
+  def repositoryAction(bp : BodyParser[AnyContent])(action: => RepositoryAction)(implicit repo : Repository) = Action(bp) {
+         request =>
+            Async {
+              action(repo)(request)
+            }
+        }
+
+  implicit def toResult[A <: RenderableResource](result: A)(implicit request: RequestHeader): Result = {
     (result, request) match {
       case (r : Jsonable, SupportedMediaTypes(Format.JSON, version)) => Ok(r.toJson).as(SupportedMediaTypes(Format.JSON, version))
       case (r : Csvable, SupportedMediaTypes(Format.CSV, version)) => Ok(r.toCsv).as(SupportedMediaTypes(Format.CSV, version))

@@ -20,13 +20,11 @@ trait Csvable extends RenderableResource {
 
 case class DatabasesResource(dbNames: Traversable[String]) extends Jsonable {
   lazy val intermediate = dbNames map (name => Map("name" -> name, "url" -> routes.DatabasesController.getDb(name).url))
-
   def toJson = Json.toJson(intermediate)
 }
 
 case class DatabaseResource(db: String, collections: Traversable[String]) extends Jsonable {
   lazy val intermediate = collections map (name => Map("name" -> name, "url" -> routes.DatabasesController.getCollection(db, name).url))
-
   def toJson = Json.toJson(intermediate)
 }
 
@@ -34,8 +32,6 @@ case class CollectionResource(md: Metadata) extends Jsonable {
   import CollectionResource.CollectionFormat
   def toJson: JsValue = Json.toJson(md)(CollectionFormat)
 }
-
-
 
 object CollectionResource {
 

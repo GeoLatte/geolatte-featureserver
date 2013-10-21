@@ -25,6 +25,7 @@ trait FeatureWriter {
 
 case class MongoWriter(db: String, collection: String) extends FeatureWriter {
 
+  import config.AppExecutionContexts.streamContext
 
   type CollectionInfo = (JSONCollection, Metadata, Reads[JsObject])
 
@@ -36,11 +37,11 @@ case class MongoWriter(db: String, collection: String) extends FeatureWriter {
 
   def add(features: Seq[JsObject]) = {
     for ((collection, smd, transfo) <- fCollectionInfo) yield {
-      import ExecutionContext.Implicits.global
+
       val docs = features.map(f => f.transform(transfo)).collect {
         case JsSuccess(transformed, _) => transformed
       }
-      Logger.info(Thread.currentThread + " Flushing data to mongodb (" + docs.size + " features)")
+      Logger.debug(" Flushing data to mongodb (" + docs.size + " features)")
       collection.bulkInsert(Enumerator.enumerate(docs)).onComplete {
         case Success(num) => Logger.info(s"Successfully inserted $num features")
         case Failure(f) => Logger.warn(s"Insert failed with error: ${f.getMessage}")
@@ -49,7 +50,7 @@ case class MongoWriter(db: String, collection: String) extends FeatureWriter {
   }
 
   def updateIndex(): Unit = {
-    import ExecutionContext.Implicits.global
+
     for ((collection, _, _) <- fCollectionInfo) {
       val idxManager = collection.indexesManager
       idxManager.ensure(new Index(Seq((SpecialMongoProperties.MC, Ascending)))) onFailure {

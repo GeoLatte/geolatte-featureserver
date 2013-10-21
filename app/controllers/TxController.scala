@@ -51,7 +51,7 @@ object TxController extends AbstractNoSqlController {
     Action(BodyParsers.parse.tolerantText) {
       implicit request => Async {
         val opArgumentsEither = toDBObject(request.body)(extractor)
-        MongoRepository.getCollection(db, col).flatMap( c =>
+        repository.getCollection(db, col).flatMap( c =>
           (c, opArgumentsEither) match {
             case ( (collection, _), Right(opArguments)) => {
               updateOp(collection, opArguments)

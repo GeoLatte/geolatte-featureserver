@@ -135,7 +135,7 @@ class MongoSpatialCollection(val collection: JSONCollection, val mortoncontext: 
   val mortoncode = new MortonCode(mortoncontext)
 
 
-  def out(): Enumerator[JsObject] = collection.find(JsNull).cursor[JsObject].enumerate
+  def out(): Enumerator[JsObject] = collection.find(Json.obj()).cursor[JsObject].enumerate
 
   /**
    *
