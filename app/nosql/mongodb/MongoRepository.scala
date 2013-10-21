@@ -130,7 +130,7 @@ object MongoRepository {
     def mkMetadata() = for {
         smd <- spatialMetadata()
         cnt <- count(database, collection)
-      } yield Metadata(collection, cnt, smd)
+      } yield Metadata(collection, cnt, smd.getOrElse(SpatialMetadata(Envelope.EMPTY, 0)))
 
     existsDb(database).flatMap(existsDb =>
       if (existsDb) existsCollection(database, collection)
@@ -200,7 +200,7 @@ object MongoRepository {
   }
 
 
-  def getCollection(dbName: String, colName: String): Future[(JSONCollection, Option[SpatialMetadata])] =
+  def getCollection(dbName: String, colName: String): Future[(JSONCollection, SpatialMetadata)] =
     existsDb(dbName).flatMap(dbExists =>
       if (dbExists) existsCollection(dbName, colName)
       else throw new DatabaseNotFoundException()
@@ -215,7 +215,7 @@ object MongoRepository {
   def getSpatialCollectionSource(database: String, collection: String) = {
     val coll = connection(database).collection[JSONCollection](collection)
     metadata(database, collection).map( md =>
-      MongoDbSource(coll, mkMortonContext(md.spatialMetadata.get))
+      MongoDbSource(coll, mkMortonContext(md.spatialMetadata))
     )
   }
 

@@ -3,10 +3,9 @@ package controllers
 import play.api.libs.json._
 import play.api.libs.functional.syntax._
 import play.api.libs.json.Reads._
-import scala.Some
 import play.api.data.validation.ValidationError
+import nosql.json.GeometryReaders._
 import nosql.mongodb.Metadata
-import nosql.json.EnvelopeSerializer
 
 trait RenderableResource
 
@@ -37,20 +36,18 @@ case class DatabaseResource(db: String, collections: Traversable[String]) extend
 
 case class CollectionResource(md: Metadata) extends Jsonable {
 
+
   implicit object MetadataWrites extends Writes[Metadata] {
 
-    def writes(meta: Metadata): JsValue = meta.spatialMetadata match {
-      case Some(smd) => Json.obj(
+    def writes(meta: Metadata): JsValue =  Json.obj(
         "collection" -> meta.name,
         "num-objects" -> meta.count,
-        "extent" -> EnvelopeSerializer(smd.envelope),
-        "index-level" -> smd.level)
-      case None => Json.obj("collection" -> meta.name, "num-objects" -> meta.count)
-    }
+        "extent" -> Json.toJson(meta.spatialMetadata.envelope),
+        "index-level" -> meta.spatialMetadata.level
+    )
   }
 
   def toJson: JsValue = Json.toJson(md)
-
 }
 
 object CollectionResourceReads {

@@ -17,18 +17,19 @@ import scala.collection.mutable.ListBuffer
 
 
 object GeometryReaders {
-
   trait Extent {
     def union(other: Extent) : Extent
     def toEnvelope(crs: CrsId) : Envelope
     def toList: List[Double]
   }
 
+
   object EmptyExtent extends Extent {
     def union(other: Extent) = other
     def toEnvelope(crs: CrsId) = Envelope.EMPTY
     def toList = List[Double]()
   }
+
   case class NonEmptyExtent(xmin: Double, ymin: Double, xmax: Double, ymax: Double) extends Extent {
 
     def union(other: Extent) = other match {
@@ -46,7 +47,6 @@ object GeometryReaders {
     def toList = List(xmin, ymin, xmax, ymax)
 
   }
-
   implicit def Envelope2Extent(env : Envelope) : Extent =
         if (env.isEmpty) EmptyExtent
         else NonEmptyExtent(env.getMinX, env.getMinY, env.getMaxX, env.getMaxY)
@@ -211,6 +211,23 @@ object GeometryReaders {
     def writes(geometry: Geometry): JsValue = Json.obj(
     "type" -> geometry.getGeometryType,
     "coordinates" -> geometry.getPoints
+    )
+  }
+
+  implicit val EnvelopeFormats = new Format[Envelope] {
+
+    def reads(json: JsValue): JsResult[Envelope] =
+      scala.util.Try {
+        val extent = (json \ "envelope").as[Extent]
+        val crs = (json \ "crs").as[Int]
+        JsSuccess(extent.toEnvelope(CrsId.valueOf(crs)))
+      }.recover{
+        case t : Throwable => JsError(ValidationError(t.getMessage))
+      }.get
+
+    def writes(e: Envelope): JsValue = Json.obj(
+      "crs" -> e.getCrsId.getCode,
+      "envelope" -> Json.arr( e.getMinX, e.getMinY, e.getMaxX, e.getMaxY )
     )
   }
 

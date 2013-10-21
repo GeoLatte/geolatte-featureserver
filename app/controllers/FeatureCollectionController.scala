@@ -33,10 +33,9 @@ object FeatureCollectionController extends AbstractNoSqlController {
       implicit val queryStr = request.queryString
       Async {
         Logger.info(s"Query string $queryStr on $db, collection $collection")
-        MongoRepository.metadata(db, collection).flatMap(f => f.spatialMetadata match {
-          case Some(smd: SpatialMetadata) => qetQueryResult(db, collection, smd)
-          case None => throw new NoSpatialMetadataException()
-        }).recover {
+        MongoRepository.metadata(db, collection).flatMap(md =>
+          qetQueryResult(db, collection, md.spatialMetadata)
+        ).recover {
           case ex: InvalidQueryException => BadRequest(s"${ex.getMessage}")
         }.recover (commonExceptionHandler(db, collection))
       }

@@ -29,7 +29,7 @@ case class MongoWriter(db: String, collection: String) extends FeatureWriter {
   type CollectionInfo = (JSONCollection, SpatialMetadata, Reads[JsObject])
 
   val fCollectionInfo: Future[CollectionInfo] = MongoRepository.getCollection(db, collection) map {
-    case (dbcoll, Some(smd)) =>
+    case (dbcoll, smd) =>
       (dbcoll, smd, FeatureTransformers.mkFeatureIndexingTranformer(smd.envelope, smd.level))
     case _ => throw new DatabaseNotFoundException(s"$db/$collection not found, or collection is not spatially enabled")
   }
