@@ -10,21 +10,27 @@ import play.api.libs.functional.syntax._
 import scala.concurrent.Future
 import nosql.json.GeometryReaders._
 import scala.util.Failure
-import nosql.Exceptions.DatabaseDeleteException
 import scala.Some
-import nosql.Exceptions.DatabaseCreationException
 import scala.util.Success
-import nosql.Exceptions.DatabaseNotFoundException
-import nosql.Exceptions.CollectionAlreadyExists
 import play.modules.reactivemongo.json.collection.JSONCollection
-import nosql.Exceptions.DatabaseAlreadyExists
 import reactivemongo.core.commands.GetLastError
 import reactivemongo.api.FailoverStrategy
-import nosql.Exceptions.CollectionNotFoundException
+import nosql.Exceptions._
+import reactivemongo.api.gridfs._
+import reactivemongo.bson._
 
 import config.AppExecutionContexts.streamContext
-import java.util
+import scala.language.implicitConversions
 
+
+case class Media(id: String, md5: Option[String])
+
+case class MediaReader(id: String,
+                       md5: Option[String],
+                       name: String,
+                       len: Int,
+                       contentType: Option[String],
+                       data: Array[Byte])
 
 trait Repository {
 
@@ -34,6 +40,8 @@ trait Repository {
   type ReturnVal
 
   type SpatialCollection
+
+  type MediaStore
 
   def listDatabases: Future[List[String]]
 
@@ -65,6 +73,12 @@ trait Repository {
 
   def getData(database: String, collection: String): Future[Enumerator[JsObject]]
 
+  def getMediaStore(database: String, collection: String): Future[MediaStore]
+
+  def saveMedia(database: String, collection: String, producer: Enumerator[Array[Byte]], fileName: String, contentType: Option[String]) : Future[Media]
+
+  def getMedia(database: String, collection: String, id: String) : Future[MediaReader]
+
 }
 
 object MongoRepository extends Repository {
@@ -72,6 +86,7 @@ object MongoRepository extends Repository {
   import scala.collection.JavaConversions._
   type ReturnVal = LastError
   type SpatialCollection = MongoSpatialCollection
+  type MediaStore = GridFS[BSONDocument, BSONDocumentReader, BSONDocumentWriter]
 
   val CREATED_DBS_COLLECTION = "createdDatabases"
   val CREATED_DB_PROP = "db"
@@ -276,7 +291,51 @@ object MongoRepository extends Repository {
     getSpatialCollection(database, collection).map(_.out())
   }
 
+  def getMediaStore(database: String, collection: String) : Future[MediaStore] = {
+    import reactivemongo.api.collections.default._
+    existsCollection(database, collection).map( exists =>
+        if (exists) new GridFS(connection(database), "fs." + collection)(BSONCollectionProducer)
+        else throw CollectionNotFoundException()
+    )
+  }
 
+  private def bson2String(bson: BSONValue): String = bson match {
+    case bi: BSONObjectID => bi.stringify
+    case bi: BSONString => bi.value
+    case _ => bson.toString
+  }
+
+  def saveMedia(database: String, collection: String, producer: Enumerator[Array[Byte]], fileName: String,
+                contentType: Option[String]): Future[Media] = {
+    import reactivemongo.api.gridfs.Implicits._
+    import reactivemongo.bson._
+
+    getMediaStore(database, collection).flatMap { gridFs =>
+        gridFs.save(producer, DefaultFileToSave(filename = fileName, contentType = contentType, id = BSONObjectID.generate))
+          .map( fr => Media(bson2String(fr.id), fr.md5))
+    }
+  }
+
+  def getMedia(database: String, collection: String, id: String): Future[MediaReader] = {
+    import reactivemongo.api.gridfs.Implicits._
+    getMediaStore(database, collection).flatMap {
+      gridFs => {
+        Logger.info(s"Media object with id is searched: $id")
+        gridFs.find(BSONDocument("_id" -> new BSONObjectID(id)))
+          .headOption
+          .filter(_.isDefined)
+          .flatMap(file =>
+            (gridFs.enumerate(file.get) |>>> Iteratee.fold[Array[Byte], Array[Byte]](Array[Byte]())((accu, part) =>  accu ++ part ))
+            .map(binarydata => MediaReader(bson2String(file.get.id), file.get.md5, file.get.filename, file.get.length, file.get.contentType, binarydata))
+        ).recover {
+          case ex : Throwable => {
+            Logger.warn(s"Media retrieval failed with exception ${ex.getMessage} of type: ${ex.getClass.getCanonicalName}")
+            throw new MediaObjectNotFoundException()
+          }
+        }
+      }
+    }
+  }
 
 }
 

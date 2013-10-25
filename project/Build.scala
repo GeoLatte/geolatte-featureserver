@@ -30,7 +30,8 @@ object GeolatteNoSqlBuild extends Build {
     "org.specs2" %% "specs2" % "1.14" % "test",    
     "org.geolatte" % "geolatte-geom" %  "0.12-SNAPSHOT",
     "org.reactivemongo" %% "reactivemongo" % "0.9",
-     "org.reactivemongo" %% "play2-reactivemongo" % "0.9"
+    "org.reactivemongo" %% "play2-reactivemongo" % "0.9",
+    "commons-codec" % "commons-codec" % "1.8"
   )
 
   //Build Settings applied to all projects

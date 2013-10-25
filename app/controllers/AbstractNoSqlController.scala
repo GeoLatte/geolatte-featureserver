@@ -10,6 +10,8 @@ import nosql.mongodb._
 
 import scala.language.implicitConversions
 import scala.concurrent.Future
+import nosql.Exceptions.CollectionNotFoundException
+import nosql.Exceptions.DatabaseNotFoundException
 
 /**
  * @author Karel Maesen, Geovise BVBA
@@ -19,21 +21,16 @@ trait AbstractNoSqlController extends Controller {
 
   implicit val repository : Repository = MongoRepository
 
-  type RepositoryAction = Repository => Request[AnyContent] => Future[Result]
-
-  def repositoryAction(action: => RepositoryAction)(implicit repo : Repository) = Action {
-        request =>
-          Async {
-            action(repo)(request)
-          }
-      }
-
-  def repositoryAction(bp : BodyParser[AnyContent])(action: => RepositoryAction)(implicit repo : Repository) = Action(bp) {
+  def repositoryAction[T](bp : BodyParser[T])(action: Repository => Request[T] => Future[Result])
+                         (implicit repo : Repository) = Action(bp) {
          request =>
             Async {
               action(repo)(request)
             }
         }
+
+  def repositoryAction(action: Repository => Request[AnyContent] => Future[Result]) (implicit repo : Repository) : Action[AnyContent] =
+    repositoryAction(BodyParsers.parse.anyContent)(action)(repo)
 
   implicit def toResult[A <: RenderableResource](result: A)(implicit request: RequestHeader): Result = {
     (result, request) match {
@@ -46,6 +43,7 @@ trait AbstractNoSqlController extends Controller {
   def commonExceptionHandler(db : String, col : String = "") : PartialFunction[Throwable, Result] = {
     case ex: DatabaseNotFoundException => NotFound(s"Database $db does not exist.")
     case ex: CollectionNotFoundException => NotFound(s"Collection $db/$col does not exist.")
+    case ex: MediaObjectNotFoundException => NotFound(s"Media object does not exist.")
     case ex: Throwable => {
       Logger.error(s"Internal server error with message : ${ex.getMessage}", ex)
       InternalServerError(s"Internal server error ${ex.getClass.getCanonicalName} with message : ${ex.getMessage}")

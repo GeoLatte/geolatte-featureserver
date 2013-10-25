@@ -25,6 +25,11 @@ POST /api/databases/:db/:collection/tx/update controllers.TxController.update(db
 GET /api/databases/:db/:collection/query         controllers.FeatureCollectionController.query(db: String, collection: String)
 GET /api/databases/:db/:collection/download      controllers.FeatureCollectionController.download(db: String, collection: String)
 
+POST /api/databases/:db/:collection/media        controllers.MediaController.save(db: String, collection: String)
+GET /api/databases/:db/:collection/media/:id     controllers.MediaController.get(db: String, collection: String, id: String)
+DELETE /api/databases/:db/:collection/media/:id     controllers.MediaController.delete(db: String, collection: String, id: String)
+
+
 #GET /rest/:db/:collection/metadata     controllers.MetadataResource.metadata(db: String, collection: String)
 
 # Map static resources from the /public folder to the /assets URL path
