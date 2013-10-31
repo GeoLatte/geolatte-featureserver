@@ -40,26 +40,21 @@ trait AbstractNoSqlController extends Controller {
 
   implicit def toResult[A <: RenderableResource](result: A)(implicit request: RequestHeader): Result = {
 
+
     implicit def toStr(js : JsObject) : String = Json.stringify(js)
 
     (result, request) match {
       case (r : Jsonable, SupportedMediaTypes(Format.JSON, version)) => Ok(r.toJson).as(SupportedMediaTypes(Format.JSON, version))
       case (r : Csvable, SupportedMediaTypes(Format.CSV, version)) => Ok(r.toCsv).as(SupportedMediaTypes(Format.CSV, version))
-      case (r : JsonStreamable, SupportedMediaTypes(Format.JSON, version)) => Ok.stream(r.toJsonStream).as(SupportedMediaTypes(Format.JSON, version))
-      case (r: CsvStreamable, SupportedMediaTypes(Format.CSV, version)) => Ok.stream(r.toCsvStream).as(SupportedMediaTypes(Format.CSV, version))
+      case (r : JsonStreamable, SupportedMediaTypes(Format.JSON, version)) => Ok.stream(toStream(r.toJsonStream)).as(SupportedMediaTypes(Format.JSON, version))
+      case (r : CsvStreamable, SupportedMediaTypes(Format.CSV, version)) => Ok.stream(toStream(r.toCsvStream)).as(SupportedMediaTypes(Format.CSV, version))
       case _ => UnsupportedMediaType("No supported media type: " + request.acceptedTypes.mkString(";"))
     }
   }
 
-  implicit def EnumJsontoResult (enum : Enumerator[JsObject])(implicit req : RequestHeader) : Result =
-    toResult(new JsonStreamable { def toJsonStream = enum })
-
-
-  implicit def EnumStringtoResult (enum : Enumerator[String])(implicit req: RequestHeader) : Result =
-    toResult(new CsvStreamable { def toCsvStream = enum })
-
-
-  implicit def toStream[A](features: Enumerator[A])(implicit toStr: A => String) : Enumerator[Array[Byte]] = {
+  //Note: this can't be made implicit, because in the case of A == JsValue, Ok.stream accepts features enum, and
+  // this code won't be called
+  def toStream[A](features: Enumerator[A])(implicit toStr: A => String) : Enumerator[Array[Byte]] = {
 
       val finalSeparatorEnumerator = Enumerator.enumerate(List(ConfigurationValues.jsonSeparator.getBytes("UTF-8")))
 
