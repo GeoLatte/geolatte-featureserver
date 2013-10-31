@@ -8,10 +8,16 @@ import config.ConfigurationValues.Format
 import play.Logger
 import nosql.mongodb._
 
-import scala.language.implicitConversions
 import scala.concurrent.Future
-import nosql.Exceptions.CollectionNotFoundException
-import nosql.Exceptions.DatabaseNotFoundException
+import play.api.libs.iteratee._
+import play.api.libs.json._
+import config.ConfigurationValues
+
+import scala.language.implicitConversions
+import scala.language.reflectiveCalls
+
+import config.AppExecutionContexts.streamContext
+
 
 /**
  * @author Karel Maesen, Geovise BVBA
@@ -33,12 +39,44 @@ trait AbstractNoSqlController extends Controller {
     repositoryAction(BodyParsers.parse.anyContent)(action)(repo)
 
   implicit def toResult[A <: RenderableResource](result: A)(implicit request: RequestHeader): Result = {
+
+    implicit def toStr(js : JsObject) : String = Json.stringify(js)
+
     (result, request) match {
       case (r : Jsonable, SupportedMediaTypes(Format.JSON, version)) => Ok(r.toJson).as(SupportedMediaTypes(Format.JSON, version))
       case (r : Csvable, SupportedMediaTypes(Format.CSV, version)) => Ok(r.toCsv).as(SupportedMediaTypes(Format.CSV, version))
+      case (r : JsonStreamable, SupportedMediaTypes(Format.JSON, version)) => Ok.stream(r.toJsonStream).as(SupportedMediaTypes(Format.JSON, version))
+      case (r: CsvStreamable, SupportedMediaTypes(Format.CSV, version)) => Ok.stream(r.toCsvStream).as(SupportedMediaTypes(Format.CSV, version))
       case _ => UnsupportedMediaType("No supported media type: " + request.acceptedTypes.mkString(";"))
     }
   }
+
+  implicit def EnumJsontoResult (enum : Enumerator[JsObject])(implicit req : RequestHeader) : Result =
+    toResult(new JsonStreamable { def toJsonStream = enum })
+
+
+  implicit def EnumStringtoResult (enum : Enumerator[String])(implicit req: RequestHeader) : Result =
+    toResult(new CsvStreamable { def toCsvStream = enum })
+
+
+  implicit def toStream[A](features: Enumerator[A])(implicit toStr: A => String) : Enumerator[Array[Byte]] = {
+
+      val finalSeparatorEnumerator = Enumerator.enumerate(List(ConfigurationValues.jsonSeparator.getBytes("UTF-8")))
+
+     //this is due to James Roper (see https://groups.google.com/forum/#!topic/play-framework/PrPTIrLdPmY)
+     class CommaSeparate extends Enumeratee.CheckDone[String, String] {
+       def continue[A](k: K[String, A]) = Cont {
+         case in @ (Input.Empty) => this &> k(in)
+         case in: Input.El[String] => Enumeratee.map[String](ConfigurationValues.jsonSeparator + _) &> k(in)
+         case Input.EOF => Done(Cont(k), Input.EOF)
+       }
+     }
+
+     val commaSeparate = new CommaSeparate
+     val jsons = features.map( f => toStr(f)) &> commaSeparate
+     val toBytes = Enumeratee.map[String]( _.getBytes("UTF-8") )
+     (jsons &> toBytes) andThen finalSeparatorEnumerator andThen Enumerator.eof
+   }
 
   def commonExceptionHandler(db : String, col : String = "") : PartialFunction[Throwable, Result] = {
     case ex: DatabaseNotFoundException => NotFound(s"Database $db does not exist.")

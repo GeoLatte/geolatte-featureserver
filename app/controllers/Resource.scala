@@ -1,5 +1,7 @@
 package controllers
 
+import scala.language.implicitConversions
+
 import play.api.libs.json._
 import play.api.libs.functional.syntax._
 import play.api.libs.json.Reads._
@@ -8,17 +10,29 @@ import nosql.mongodb.{MediaReader, Media, Metadata}
 import org.geolatte.geom.Envelope
 import org.apache.commons.codec.binary.Base64
 import play.api.libs.functional.ContravariantFunctor
+import play.api.libs.iteratee.Enumerator
 
 trait RenderableResource
+trait RenderableNonStreamingResource extends RenderableResource
+trait RenderableStreamingResource extends RenderableResource
 
 
-trait Jsonable extends RenderableResource {
+trait Jsonable extends RenderableNonStreamingResource {
   def toJson: JsValue
 }
 
-trait Csvable extends RenderableResource {
+trait Csvable extends RenderableNonStreamingResource {
   def toCsv: String
 }
+
+trait JsonStreamable extends RenderableStreamingResource {
+  def toJsonStream : Enumerator[JsObject]
+}
+
+trait CsvStreamable extends RenderableStreamingResource {
+  def toCsvStream: Enumerator[String]
+}
+
 
 case class DatabasesResource(dbNames: Traversable[String]) extends Jsonable {
   lazy val intermediate = dbNames map (name => Map("name" -> name, "url" -> routes.DatabasesController.getDb(name).url))
