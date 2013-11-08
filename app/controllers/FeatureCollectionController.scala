@@ -15,6 +15,8 @@ import nosql.Exceptions._
 import config.AppExecutionContexts
 import play.api.libs.json._
 import nosql.json.GeometryReaders._
+import org.supercsv.encoder.{DefaultCsvEncoder, CsvEncoder}
+import org.supercsv.prefs.CsvPreference
 
 
 object FeatureCollectionController extends AbstractNoSqlController {
@@ -57,10 +59,14 @@ object FeatureCollectionController extends AbstractNoSqlController {
   implicit def enumJsontoResult (enum : Enumerator[JsObject])(implicit req : RequestHeader) : Result =
     toResult(new JsonStreamable with CsvStreamable {
 
+        val encoder = new DefaultCsvEncoder()
+
+        def encode(v: JsString) = "\"" + encoder.encode(v.value, null, CsvPreference.STANDARD_PREFERENCE) + "\""
+
         def project(js: JsObject)(pf: PartialFunction[Option[(String, String)], String], pf2: Geometry => String) = {
           val jsObj = (js \ "properties").asOpt[JsObject].getOrElse(JsObject(List()))
           val attributes = jsObj.fields.map{
-              case (k,v: JsString) => Some((k, v.value))
+              case (k,v: JsString) => Some((k, encode(v)))
               case (k,v: JsNumber) => Some((k,v.value.toString))
               case (k,v: JsBoolean) => Some((k,v.value.toString))
               case (k,JsNull) => Some((k, ""))
@@ -69,7 +75,6 @@ object FeatureCollectionController extends AbstractNoSqlController {
             }.collect(pf)
           val geom = pf2((js \ "geometry").asOpt(GeometryReads(CrsId.UNDEFINED)).getOrElse(Point.createEmpty()))
           geom +: attributes
-
         }
 
         val toCsvRecord = (js: JsObject) => project(js)({case Some((k,v)) => v }, g => g.asText).mkString(",")
@@ -82,7 +87,6 @@ object FeatureCollectionController extends AbstractNoSqlController {
           this.toCsv = toCsvRecord
           toCsvHeader(js) + "\n" + toCsvRecord(js)
         }
-
 
         def toJsonStream = enum
         def toCsvStream = enum.map(js => toCsv(js))
