@@ -49,6 +49,7 @@ object FeatureCollectionController extends AbstractNoSqlController {
   /**
    * converts a JsObject Enumerator to an RenderableStreamingResource supporting both Json and Csv output
    *
+   * Limitations: when the passed Json is not a valid GeoJson object, this will pass a stream of empty points
    * @param enum
    * @param req
    * @return
@@ -68,18 +69,24 @@ object FeatureCollectionController extends AbstractNoSqlController {
             }.collect(pf)
           val geom = pf2((js \ "geometry").asOpt(GeometryReads(CrsId.UNDEFINED)).getOrElse(Point.createEmpty()))
           geom +: attributes
+
         }
 
-        //TODO replace with robust super-csv implementation
-        def toCsvRecord(js: JsObject) : String = project(js)({case Some((k,v)) => v }, g => g.asText).mkString(",")
-        def toCsvHeader(js:JsObject) : String = project(js)({case Some((k,v)) => k },  _ => "WKT").mkString(",")
+        val toCsvRecord = (js: JsObject) => project(js)({case Some((k,v)) => v }, g => g.asText).mkString(",")
+        val toCsvHeader = (js:JsObject) => project(js)({case Some((k,v)) => k },  _ => "geometry-wkt").mkString(",")
+
+        //TODO -- Is there another way to do this, besides having a state variable?
+        // toCsv works as a state machine, on first invocation it print header, and record,
+        // on subsequent invocations, only the record
+        var toCsv : (JsObject) => String = js => {
+          this.toCsv = toCsvRecord
+          toCsvHeader(js) + "\n" + toCsvRecord(js)
+        }
+
 
         def toJsonStream = enum
-        def toCsvStream = {
-          val headerEnumerator = (enum &> Enumeratee.take(1)).map( js => toCsvHeader(js))
-          val addHeading = Enumeratee.heading[String](headerEnumerator)
-          enum.map(js => toCsvRecord(js)) &> addHeading
-        }
+        def toCsvStream = enum.map(js => toCsv(js))
+
       }
   )
 
