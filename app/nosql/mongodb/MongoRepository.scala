@@ -71,6 +71,8 @@ trait Repository {
 
   def query(database: String, collection: String, window: Envelope): Future[Enumerator[JsObject]]
 
+  def queryWithCount(database: String, collection: String, window: Envelope): Future[(Int, Enumerator[JsObject])]
+
   def getData(database: String, collection: String): Future[Enumerator[JsObject]]
 
   def getMediaStore(database: String, collection: String): Future[MediaStore]
@@ -285,6 +287,10 @@ object MongoRepository extends Repository {
 
   def query(database: String, collection: String, window: Envelope): Future[Enumerator[JsObject]] = {
     getSpatialCollection(database, collection).map(_.query(window))
+  }
+
+  def queryWithCount(database: String, collection: String, window: Envelope): Future[(Int, Enumerator[JsObject])] = {
+    getSpatialCollection(database, collection).flatMap(_.queryWithCnt(window))
   }
 
   def getData(database: String, collection: String): Future[Enumerator[JsObject]] = {

@@ -22,7 +22,7 @@ import play.api.libs.iteratee._
 import reactivemongo.api.indexes.Index
 import scala.Some
 import reactivemongo.api.collections.default.BSONCollection
-import reactivemongo.core.commands.GetLastError
+import reactivemongo.core.commands.{Count, GetLastError}
 import scala.util.{Try, Failure, Success}
 import java.util.Date
 import play.modules.reactivemongo.json.collection.JSONCollection
@@ -33,11 +33,17 @@ import scala.language.reflectiveCalls
 
 import config.AppExecutionContexts.streamContext
 import nosql.Exceptions
+import play.modules.reactivemongo.json.collection.JSONCollection
+import scala.util.Failure
+import scala.Some
+import play.modules.reactivemongo.json.BSONFormats
+import play.modules.reactivemongo.json.collection.JSONCollection
+import scala.util.Failure
+import scala.Some
 import play.api.libs.json.JsArray
 import play.modules.reactivemongo.json.collection.JSONCollection
 import scala.util.Failure
 import scala.Some
-import play.api.libs.json.JsObject
 
 
 object MetadataIdentifiers {
@@ -137,6 +143,11 @@ class MongoSpatialCollection(val collection: JSONCollection, val mortoncontext: 
 
   def out(): Enumerator[JsObject] = collection.find(Json.obj()).cursor[JsObject].enumerate
 
+  private def window2query(window: Envelope)= {
+    val qds : Seq[JsValue] = optimize(window, mortoncode)
+    val docArr = JsArray(qds)
+    Json.obj("$or" -> docArr)
+  }
   /**
    *
    * @param window the query window
@@ -144,11 +155,22 @@ class MongoSpatialCollection(val collection: JSONCollection, val mortoncontext: 
    * @throws IllegalArgumentException if Envelope does not fall within context of the mortoncode
    */
   def query(window: Envelope): Enumerator[JsObject] = {
-    val qds : Seq[JsValue] = optimize(window, mortoncode)
-    val docArr = JsArray(qds)
-    val query = Json.obj("$or" -> docArr)
+    val query = window2query(window)
     filteringEnumerator(collection.find(query).cursor, window)
   }
+
+  def queryWithCnt(window: Envelope): Future[(Int, Enumerator[JsObject])] = {
+      val query = window2query(window)
+      import BSONFormats.BSONDocumentFormat._
+      val queryBson = partialReads(query) match {
+        case JsSuccess(qb, _) => qb
+        case _ => throw new RuntimeException("Failure to convert JSON Query doc to BSONDocument")
+      }
+      val cntCmd = Count(collection.name, Some(queryBson))
+      collection.db.command(cntCmd).map( cnt => (cnt, filteringEnumerator(collection.find(query).cursor, window)))
+    }
+
+
 
   // TODO this could probably be done more efficiently using a custom window-sensitive Json Validator
   private def filteringEnumerator(cursor: Cursor[JsObject], window : Envelope): Enumerator[JsObject] = {

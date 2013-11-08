@@ -65,12 +65,15 @@ object FeatureCollectionController extends AbstractNoSqlController {
       def enumerator2list(enum: Enumerator[JsObject]) : Future[List[JsObject]] = {
         val limit = Math.min( QueryParams.LIMIT.extract.getOrElse(COLLECTION_LIMIT),COLLECTION_LIMIT)
         val start = QueryParams.START.extract.getOrElse(0)
-
         enum &> (Enumeratee.drop(start) compose Enumeratee.take(limit)) |>>> Iteratee.getChunks[JsObject]
       }
       Logger.info(s"Query string $queryStr on $db, collection $collection")
       repo.metadata(db, collection).flatMap(md =>
-        qetQueryResult(db, collection, md).flatMap (enum => enumerator2list(enum)).map[Result](x => toResult(FeaturesResource(x)))
+        qetQueryResultWithCount(db, collection, md).flatMap {
+          case (cnt, enum) => enumerator2list(enum).map( featureList => (cnt, featureList))
+        }.map[Result]{
+          case (cnt, features) => toResult(FeaturesResource(cnt, features))
+        }
       ).recover {
         case ex: InvalidQueryException => BadRequest(s"${ex.getMessage}")
       }.recover (commonExceptionHandler(db, collection))
@@ -128,6 +131,14 @@ object FeatureCollectionController extends AbstractNoSqlController {
     Bbox(QueryParams.BBOX.extractOrElse(""), smd.envelope.getCrsId) match {
       case Some(window) =>
         MongoRepository.query(db, collection, window)
+      case None => throw new InvalidQueryException(s"BadRequest: No or invalid bbox parameter in query string.")
+    }
+  }
+
+  private def qetQueryResultWithCount(db: String, collection: String, smd: Metadata)(implicit queryStr: Map[String, Seq[String]]) = {
+    Bbox(QueryParams.BBOX.extractOrElse(""), smd.envelope.getCrsId) match {
+      case Some(window) =>
+        MongoRepository.queryWithCount(db, collection, window)
       case None => throw new InvalidQueryException(s"BadRequest: No or invalid bbox parameter in query string.")
     }
   }

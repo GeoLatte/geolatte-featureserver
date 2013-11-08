@@ -61,8 +61,11 @@ case class MediaReaderResource(mediaReader: MediaReader) extends Jsonable {
   def toJson = Json.toJson(mediaReader)
 }
 
-case class FeaturesResource(features: List[JsObject]) extends Jsonable {
-  def toJson: JsValue = Json.obj ("count" -> features.length , "features" -> Json.arr(features))
+case class FeaturesResource(cnt: Int, features: List[JsObject]) extends Jsonable {
+  def toJson: JsValue = Json.obj (
+    "total" -> cnt,
+    "count" -> features.length ,
+    "features" -> Json.arr(features))
 }
 
 object Formats {
