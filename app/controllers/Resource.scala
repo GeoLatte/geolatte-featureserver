@@ -65,7 +65,7 @@ case class FeaturesResource(cnt: Int, features: List[JsObject]) extends Jsonable
   def toJson: JsValue = Json.obj (
     "total" -> cnt,
     "count" -> features.length ,
-    "features" -> Json.arr(features))
+    "features" -> features)
 }
 
 object Formats {
