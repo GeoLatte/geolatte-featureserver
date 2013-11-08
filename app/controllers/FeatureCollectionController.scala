@@ -17,6 +17,17 @@ import play.api.libs.json._
 import nosql.json.GeometryReaders._
 import org.supercsv.encoder.{DefaultCsvEncoder, CsvEncoder}
 import org.supercsv.prefs.CsvPreference
+import scala.concurrent.Future
+import play.api.Play._
+import play.api.libs.json.JsUndefined
+import play.api.libs.json.JsString
+import play.api.libs.json.JsBoolean
+import scala.Some
+import play.api.libs.json.JsNumber
+import controllers.FeaturesResource
+import utilities.QueryParam
+import nosql.Exceptions.InvalidQueryException
+import play.api.libs.json.JsObject
 
 
 object FeatureCollectionController extends AbstractNoSqlController {
@@ -47,6 +58,26 @@ object FeatureCollectionController extends AbstractNoSqlController {
         }
       }
   }
+
+  def list(db: String, collection: String) = repositoryAction( repo =>
+    implicit request => {
+
+      def enumerator2list(enum: Enumerator[JsObject]) : Future[List[JsObject]] = {
+        val limit = current.configuration.getInt("max-collection-size").getOrElse[Int](10000)
+        enum &> Enumeratee.take(limit) |>>> Iteratee.getChunks[JsObject]
+      }
+
+
+      implicit val queryStr = request.queryString
+      Logger.info(s"Query string $queryStr on $db, collection $collection")
+      repo.metadata(db, collection).flatMap(md =>
+        qetQueryResult(db, collection, md).flatMap (enum => enumerator2list(enum)).map[Result](x => toResult(FeaturesResource(x)))
+      ).recover {
+        case ex: InvalidQueryException => BadRequest(s"${ex.getMessage}")
+      }.recover (commonExceptionHandler(db, collection))
+
+    }
+  )
 
   /**
    * converts a JsObject Enumerator to an RenderableStreamingResource supporting both Json and Csv output

@@ -61,6 +61,10 @@ case class MediaReaderResource(mediaReader: MediaReader) extends Jsonable {
   def toJson = Json.toJson(mediaReader)
 }
 
+case class FeaturesResource(features: List[JsObject]) extends Jsonable {
+  def toJson: JsValue = Json.obj ("count" -> features.length , "features" -> Json.arr(features))
+}
+
 object Formats {
 
   def toByteArray(implicit r: Reads[String]) : Reads[Array[Byte]] = r.map(str => Base64.decodeBase64(str))
