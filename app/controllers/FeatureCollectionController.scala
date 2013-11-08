@@ -9,13 +9,10 @@ import play.api.mvc._
 import play.api.Logger
 import nosql.mongodb._
 import play.api.libs.iteratee._
-import scala.Some
-import utilities.QueryParam
-import nosql.Exceptions._
 import config.AppExecutionContexts
 import play.api.libs.json._
 import nosql.json.GeometryReaders._
-import org.supercsv.encoder.{DefaultCsvEncoder, CsvEncoder}
+import org.supercsv.encoder.DefaultCsvEncoder
 import org.supercsv.prefs.CsvPreference
 import scala.concurrent.Future
 import play.api.Play._
@@ -24,7 +21,6 @@ import play.api.libs.json.JsString
 import play.api.libs.json.JsBoolean
 import scala.Some
 import play.api.libs.json.JsNumber
-import controllers.FeaturesResource
 import utilities.QueryParam
 import nosql.Exceptions.InvalidQueryException
 import play.api.libs.json.JsObject
@@ -37,7 +33,11 @@ object FeatureCollectionController extends AbstractNoSqlController {
   object QueryParams {
     //we leave bbox as a String parameter because an Envelope needs a CrsId
     val BBOX = QueryParam("bbox", (s: String) => Some(s))
+    val LIMIT = QueryParam("limit", (s:String) => Some(s.toInt))
+    val START = QueryParam("start", (s:String) => Some(s.toInt))
   }
+
+  val COLLECTION_LIMIT = current.configuration.getInt("max-collection-size").getOrElse[Int](10000)
 
   def query(db: String, collection: String) = repositoryAction ( repo =>
     implicit request => {
@@ -61,14 +61,13 @@ object FeatureCollectionController extends AbstractNoSqlController {
 
   def list(db: String, collection: String) = repositoryAction( repo =>
     implicit request => {
-
-      def enumerator2list(enum: Enumerator[JsObject]) : Future[List[JsObject]] = {
-        val limit = current.configuration.getInt("max-collection-size").getOrElse[Int](10000)
-        enum &> Enumeratee.take(limit) |>>> Iteratee.getChunks[JsObject]
-      }
-
-
       implicit val queryStr = request.queryString
+      def enumerator2list(enum: Enumerator[JsObject]) : Future[List[JsObject]] = {
+        val limit = Math.min( QueryParams.LIMIT.extract.getOrElse(COLLECTION_LIMIT),COLLECTION_LIMIT)
+        val start = QueryParams.START.extract.getOrElse(0)
+
+        enum &> (Enumeratee.drop(start) compose Enumeratee.take(limit)) |>>> Iteratee.getChunks[JsObject]
+      }
       Logger.info(s"Query string $queryStr on $db, collection $collection")
       repo.metadata(db, collection).flatMap(md =>
         qetQueryResult(db, collection, md).flatMap (enum => enumerator2list(enum)).map[Result](x => toResult(FeaturesResource(x)))
