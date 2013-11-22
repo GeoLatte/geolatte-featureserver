@@ -125,6 +125,11 @@ object MongoRepository extends Repository {
 
   private def isMetadata(name: String): Boolean = (name startsWith MetadataCollectionPrefix) || (name startsWith "system.")
 
+  private def isSpecialCollection(name: String) : Boolean = isMetadata(name) ||
+    name.endsWith(".files") ||
+    name.endsWith(".chunks") ||
+    name.endsWith(".views")
+
   def createDb(dbname: String) = {
 
     //Logs the database creation in the "created databases" collection in the systemDatabase
@@ -170,7 +175,7 @@ object MongoRepository extends Repository {
 
   def listCollections(dbname: String): Future[List[String]] =
     existsDb(dbname).flatMap {
-      case true => connection.db(dbname).collectionNames.map(_.filterNot(isMetadata(_)))
+      case true => connection.db(dbname).collectionNames.map(_.filterNot(isSpecialCollection))
       case _ => throw new DatabaseNotFoundException(s"database $dbname doesn't exist")
     }
 
@@ -255,7 +260,7 @@ object MongoRepository extends Repository {
       case Failure(t) => Logger.warn(s"Removing of $dbName/$colName failed: ${t.getMessage}")
     }
 
-    //TODO -- remove also fs.<colName> gridFs
+    //TODO -- remove also fs.<colName> gridFs and views collections
 
     existsDb(dbName).flatMap(dbExists =>
       if (dbExists) existsCollection(dbName, colName)
