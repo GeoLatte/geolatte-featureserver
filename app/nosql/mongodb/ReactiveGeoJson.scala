@@ -11,7 +11,7 @@ import reactivemongo.bson.DefaultBSONHandlers._
 import play.modules.reactivemongo._
 import play.modules.reactivemongo.json.ImplicitBSONHandlers._
 import config.ConfigurationValues
-import scala.concurrent.ExecutionContext
+import scala.concurrent.{Future, ExecutionContext}
 import play.api.libs.json.JsSuccess
 import play.api.data.validation.ValidationError
 import scala.util.Try
@@ -21,6 +21,8 @@ import scala.util.Try
  *         creation-date: 8/2/13
  */
 object ReactiveGeoJson {
+
+  import config.AppExecutionContexts.streamContext
 
   /**
    * Result for the GeoJson parsing
@@ -46,7 +48,7 @@ object ReactiveGeoJson {
     case JsError(seq) => (features, State("With Errors", processErrors(seq) :: state.warnings, ""))
   }
 
-  def processChunk(writer: FeatureWriter, state: State, chunk: Array[Byte]) : State = {
+  def processChunk(writer: FeatureWriter, state: State, chunk: Array[Byte]) : Future[State] = {
     val chunkAsString = new String(chunk, "UTF8")
     val toProcess = state.dataRemaining + chunkAsString
     val jsonStrings = toProcess.split(ConfigurationValues.jsonSeparator)
@@ -61,14 +63,17 @@ object ReactiveGeoJson {
         parseAsString(json, curState.copy(dataRemaining = ""), features)
       }.getOrElse( (features, curState.copy(dataRemaining = fStr)) )
     })
-
-    writer.add(fs)
-    newState
-
+    writer.add(fs).map( int => newState)
   }
 
   def mkStreamingIteratee(writer: FeatureWriter) =
-    Iteratee.fold( State() ) { (state: State, chunk: Array[Byte]) => processChunk(writer, state, chunk) } mapDone( state => { writer.updateIndex(); Right(state) } )
+    Iteratee.fold( Future{State()} ) { (fState: Future[State], chunk: Array[Byte]) => fState.flatMap( state => processChunk(writer, state, chunk)) }
+      .mapDone( fstate => {
+        val fState = for ( finalState <- fstate; b <- writer.updateIndex()) yield finalState
+        Right(fState)
+    })
+
+      //fstate.flatMap( state => writer.updateIndex.map( _ => Right(fstate) )))
 
   def bodyParser(writer: FeatureWriter)(implicit ec: ExecutionContext) = BodyParser("GeoJSON feature BodyParser") { request =>
     mkStreamingIteratee(writer)

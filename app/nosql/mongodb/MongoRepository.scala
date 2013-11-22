@@ -255,6 +255,8 @@ object MongoRepository extends Repository {
       case Failure(t) => Logger.warn(s"Removing of $dbName/$colName failed: ${t.getMessage}")
     }
 
+    //TODO -- remove also fs.<colName> gridFs
+
     existsDb(dbName).flatMap(dbExists =>
       if (dbExists) existsCollection(dbName, colName)
       else throw new DatabaseNotFoundException()

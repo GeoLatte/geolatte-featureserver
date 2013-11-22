@@ -17,9 +17,9 @@ import nosql.Exceptions.DatabaseNotFoundException
  */
 trait FeatureWriter {
 
-  def add(features: Seq[JsObject]): Unit
+  def add(features: Seq[JsObject]): Future[Int]
 
-  def updateIndex(): Unit
+  def updateIndex(): Future[Boolean]
 
 }
 
@@ -35,28 +35,31 @@ case class MongoWriter(db: String, collection: String) extends FeatureWriter {
     case _ => throw new DatabaseNotFoundException(s"$db/$collection not found, or collection is not spatially enabled")
   }
 
-  def add(features: Seq[JsObject]) = {
-    for ((collection, smd, transfo) <- fCollectionInfo) yield {
-
+  def add(features: Seq[JsObject]) =
+    fCollectionInfo.flatMap{ case (coll, smd, transfo) => {
       val docs = features.map(f => f.transform(transfo)).collect {
         case JsSuccess(transformed, _) => transformed
       }
       Logger.debug(" Flushing data to mongodb (" + docs.size + " features)")
-      collection.bulkInsert(Enumerator.enumerate(docs)).onComplete {
+      val fInt = coll.bulkInsert(Enumerator.enumerate(docs))
+      fInt.onComplete {
         case Success(num) => Logger.info(s"Successfully inserted $num features")
         case Failure(f) => Logger.warn(s"Insert failed with error: ${f.getMessage}")
       }
+      fInt
     }
   }
 
-  def updateIndex(): Unit = {
-
-    for ((collection, _, _) <- fCollectionInfo) {
-      val idxManager = collection.indexesManager
-      idxManager.ensure(new Index(Seq((SpecialMongoProperties.MC, Ascending)))) onFailure {
-        case ex => Logger.warn("Failure on creating mortoncode index on collection %s" format collection.name)
+  def updateIndex(): Future[Boolean] =
+    fCollectionInfo.flatMap {
+      case (coll, _ , _) => {
+        val idxManager = coll.indexesManager
+        val fResult = idxManager.ensure(new Index(Seq((SpecialMongoProperties.MC, Ascending))))
+        fResult onFailure {
+          case ex => Logger.warn("Failure on creating mortoncode index on collection %s" format coll.name)
+        }
+        fResult
       }
     }
-  }
 
 }

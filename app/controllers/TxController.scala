@@ -27,7 +27,9 @@ object TxController extends AbstractNoSqlController {
   def insert(db: String, col: String) = {
     val parser = mkJsonWritingBodyParser(db, col)
     Action(parser) {
-      request => Ok(request.body.warnings.mkString("\n"))
+      request => Async {
+        request.body.map( state =>  Ok(state.warnings.mkString("\n")))
+      }
     }
   }
 
@@ -92,7 +94,7 @@ object TxController extends AbstractNoSqlController {
    * @param col the collection to write features to
    * @return a new BodyParser
    */
-  private def mkJsonWritingBodyParser(db: String, col: String): BodyParser[State] = {
+  private def mkJsonWritingBodyParser(db: String, col: String): BodyParser[Future[State]] = {
     val writer = new MongoWriter(db, col)
     ReactiveGeoJson.bodyParser(writer)
   }
