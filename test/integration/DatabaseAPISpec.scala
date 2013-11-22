@@ -1,10 +1,9 @@
 package integration
 
 import org.specs2.mutable.Specification
-import play.api.test.{FakeRequest, FakeApplication, WithServer}
+import play.api.test.FakeApplication
 import play.api.test.Helpers._
 import scala.Some
-import play.api.libs.ws.WS
 import play.api.libs.json.JsArray
 
 /**
