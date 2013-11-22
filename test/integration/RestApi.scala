@@ -236,7 +236,7 @@ object UtilityMethods {
 
   def contentAsJsonStream(result: Result): JsArray = {
     import scala.concurrent.ExecutionContext.Implicits.global
-    var buf = ListBuffer[JsValue]()
+    val buf = ListBuffer[JsValue]()
     val consumer: Iteratee[Array[Byte], Unit] =
       Iteratee.fold[Array[Byte], ListBuffer[JsValue]]( buf) ( (buf, bytes) => {
         val s = new String(bytes,"UTF-8")
@@ -252,17 +252,6 @@ object UtilityMethods {
       case _ => Json.arr(contentAsJson(result))
     }
   }
-
-  def chunkedContentLength(chunkedResult: ChunkedResult[Array[Byte]]): Int =  {
-    import scala.concurrent.ExecutionContext.Implicits.global
-      var numBytes = 0
-      val countIteratee = Iteratee.fold[Array[Byte], Unit](0) { (_, bytes) => numBytes += bytes.size }
-      val newIt = chunkedResult.chunks(countIteratee).asInstanceOf[ Future[Iteratee[Array[Byte], Unit]]]
-      val maped = newIt.map(_ => println("NUMBYTES::: " + numBytes))
-      Await.result(maped, 10 second)
-      numBytes
-    }
-
 
 }
 
