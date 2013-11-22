@@ -2,7 +2,7 @@ package nosql.mongodb
 
 import org.specs2.mutable.Specification
 import play.api.libs.iteratee._
-import scala.concurrent.Await
+import scala.concurrent.{Future, Await}
 import scala.concurrent.duration.Duration
 import config.ConfigurationValues
 import play.api.libs.json.JsObject
@@ -16,6 +16,7 @@ class ReactiveGeoJsonSpecs extends Specification {
 
 
   import scala.language.reflectiveCalls
+  import config.AppExecutionContexts.streamContext
 
   def generateFeature = """{"type" : "Feature", "properties":{"foo":3}, "geometry": {"type": "LineString", "coordinates": [[1,2], [3,4]]}}"""
 
@@ -36,9 +37,9 @@ class ReactiveGeoJsonSpecs extends Specification {
       val (_, enumerator) = testEnumerator(testSize)
       var sink = new scala.collection.mutable.ArrayBuffer[JsObject]()
       val fw = new FeatureWriter {
-        def add(objects: Seq[JsObject]) = {sink ++= objects }
+        def add(objects: Seq[JsObject]) = {sink ++= objects ; Future {objects.size} }
 
-        def updateIndex() {}
+        def updateIndex() = Future.successful(true)
       }
       val future = (enumerator  andThen Enumerator.eof) |>>> mkStreamingIteratee(fw)
       val stateIteratee = Await.result(future, Duration(5000, "millis"))

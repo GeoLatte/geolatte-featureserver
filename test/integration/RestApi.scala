@@ -3,14 +3,17 @@ package integration
 import play.api.libs.json._
 import play.api.test.Helpers._
 import play.api.test.{FakeApplication, FakeRequest}
-import play.api.mvc.{AsyncResult, Result}
+import play.api.mvc.{ChunkedResult, PlainResult, AsyncResult, Result}
 
 import language.implicitConversions
 import play.api.Logger
 import org.geolatte.geom._
-import org.geolatte.geom.crs._
-import play.api.http.Writeable
-
+import org.geolatte.geom.crs.CrsId
+import play.api.libs.iteratee.Iteratee
+import play.api.libs.json.Json.JsValueWrapper
+import scala.concurrent.{Future, Promise, Await}
+import scala.concurrent.duration._
+import scala.collection.mutable.ListBuffer
 
 /**
  * @author Karel Maesen, Geovise BVBA
@@ -95,6 +98,14 @@ object RestApiDriver {
     val resp = route(get).get
     assert(resp.isInstanceOf[AsyncResult])
     GETResult(url, status(resp), contentAsJson(resp), wrappedResult = resp)
+  }
+
+  def getDownload(dbName: String, colName: String): GETResult = {
+      Logger.info("Start download Collection")
+      val url = DATABASES/dbName/colName/DOWNLOAD
+      val get = makeGetRequest(url)
+      val resp : Result = route(get).get
+      GETResult(url, status(resp), contentAsJsonStream(resp), wrappedResult = resp)
   }
 
   def postMediaObject(dbName: String, colName: String, mediaObject: JsObject) : POSTResult = {
@@ -183,6 +194,8 @@ object RestApiDriver {
 
 object UtilityMethods {
 
+  import play.api.libs.concurrent._
+
   implicit val defaultExtent = new Envelope(0,0,90,90, CrsId.valueOf(4326))
   val defaultIndexLevel = 4
 
@@ -220,6 +233,37 @@ object UtilityMethods {
       }
     }
   }
+
+  def contentAsJsonStream(result: Result): JsArray = {
+    import scala.concurrent.ExecutionContext.Implicits.global
+    var buf = ListBuffer[JsValue]()
+    val consumer: Iteratee[Array[Byte], Unit] =
+      Iteratee.fold[Array[Byte], ListBuffer[JsValue]]( buf) ( (buf, bytes) => {
+        val s = new String(bytes,"UTF-8")
+        try {  buf += Json.parse(s) } catch { case _ : Throwable => buf }
+      }).map( _ => Unit)
+    result match {
+      case chunkedRes  : ChunkedResult[Array[Byte]]=> {
+          val fUnit = chunkedRes.chunks(consumer).asInstanceOf[ Future[Iteratee[Any, Unit]]]
+          Await.result(fUnit, 10 second)
+          JsArray(buf.toSeq)
+      }
+      case AsyncResult(p) => contentAsJsonStream(p.await.get)
+      case _ => Json.arr(contentAsJson(result))
+    }
+  }
+
+  def chunkedContentLength(chunkedResult: ChunkedResult[Array[Byte]]): Int =  {
+    import scala.concurrent.ExecutionContext.Implicits.global
+      var numBytes = 0
+      val countIteratee = Iteratee.fold[Array[Byte], Unit](0) { (_, bytes) => numBytes += bytes.size }
+      val newIt = chunkedResult.chunks(countIteratee).asInstanceOf[ Future[Iteratee[Array[Byte], Unit]]]
+      val maped = newIt.map(_ => println("NUMBYTES::: " + numBytes))
+      Await.result(maped, 10 second)
+      numBytes
+    }
+
+
 }
 
 
