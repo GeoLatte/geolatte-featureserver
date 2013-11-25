@@ -111,5 +111,27 @@ object Formats {
       (__ \ "data").write[String].contramap[Array[Byte]]( ar => Base64.encodeBase64String(ar))
     )(unlift(MediaReader.unapply))
 
+  // View Defs
+  def escape(key: String) = key.replace(".", "/" )
+  def unescape(key: String) = key.replace("/", ".")
+
+  def viewDefkeysReads(f: String => String) : Reads[JsObject]  =  __.read[JsObject].map( js => js.value.map{
+     case (k, v : JsObject) => (f(k), v.as(viewDefkeysReads(f)))
+     case (k,v : JsValue) => (f(k),v)
+   }).map(m => JsObject(m.toSeq))     
+
+  val ViewDefIn  = (
+      ( __ \ 'name).json.pickBranch(of[JsString]) and
+      ( __ \ 'query).json.pickBranch(viewDefkeysReads(escape)) and
+      ( __ \ 'projection).json.pickBranch(of[JsArray])
+    ).reduce
+
+  def ViewDefOut(db: String, col: String)  = (
+      ( __ \ 'name).json.pickBranch(of[JsString]) and
+      ( __ \ 'query).json.pickBranch(viewDefkeysReads(unescape)) and
+      ( __ \ 'projection).json.pickBranch(of[JsArray]) and
+      ( __ \ 'url).json.copyFrom( ( __ \ '_id).json.pick.map( id => JsString(controllers.routes.ViewController.get(db, col, id.as[String]).url) ) )
+    ).reduce
+
 }
 

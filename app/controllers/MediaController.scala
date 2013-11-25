@@ -5,7 +5,7 @@ import play.api.libs.iteratee._
 import play.api.libs.json._
 import scala.concurrent.Future
 import config.AppExecutionContexts
-import play.api.Logger
+import play.api.{http, Logger}
 
 /**
  * @author Karel Maesen, Geovise BVBA
@@ -46,9 +46,8 @@ object MediaController extends AbstractNoSqlController {
     }
   }
 
-  def delete(db: String, collection: String, id: String) = Action { req => Ok }
-
-
+  //TODO -- complete implementation
+  def delete(db: String, collection: String, id: String) = Action { req => InternalServerError }
 
 
 }

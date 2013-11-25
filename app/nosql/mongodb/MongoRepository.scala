@@ -81,6 +81,13 @@ trait Repository {
 
   def getMedia(database: String, collection: String, id: String) : Future[MediaReader]
 
+  def saveView(database: String, collection: String, viewDef: JsObject) : Future[String]
+
+  def getViews(database: String, collection: String) : Future[List[JsObject]]
+
+  def getView(database: String, collection: String, id: String) : Future[JsObject]
+
+  def getViewByName(database: String, collection: String, name: String) : Future[JsObject]
 }
 
 object MongoRepository extends Repository {
@@ -349,6 +356,38 @@ object MongoRepository extends Repository {
       }
     }
   }
+
+  private def generateViewsCollName(collection: String) = s"fs.$collection.views"
+
+  def getViewDefs(database: String, collection: String): Future[JSONCollection] =
+    existsCollection(database, collection).map(exists =>
+      if (exists) connection(database).collection[JSONCollection](generateViewsCollName(collection))
+      else throw new CollectionNotFoundException()
+    )
+
+  def saveView(database: String, collection: String, viewDef: JsObject): Future[String] = {
+    getViewDefs(database, collection).map( c => {
+      val id = BSONObjectID.generate.stringify
+      c.insert(viewDef+("_id" -> JsString(id)), GetLastError(awaitJournalCommit = true))
+      id
+    }).andThen {
+      case Success(le) => Logger.info(s"Writing view $viewDef for $collection succeeded")
+      case Failure(t) => Logger.error(s"Writing metadata for $collection threw exception: ${t.getMessage}")
+    }
+  }
+
+  def getViews(database: String, collection: String): Future[List[JsObject]] =
+    getViewDefs(database, collection) flatMap (_.find(Json.obj()).cursor[JsObject].toList)
+
+  private def getViewDef(database: String, collection: String, selector: JsObject) : Future[JsObject] =
+    getViewDefs(database, collection) flatMap (_.find(selector).cursor[JsObject].headOption.collect {
+          case Some(js) => js
+    })
+
+  def getView(database: String, collection: String, id: String): Future[JsObject] = getViewDef(database, collection, Json.obj("_id" -> id))
+
+
+  def getViewByName(database: String, collection: String, name: String) : Future[JsObject] = getViewDef(database, collection, Json.obj("name" -> name))
 
 }
 

@@ -136,7 +136,6 @@ object RestApiDriver {
      DELETEResult(url, status(deleted), wrappedResult = deleted)
   }
 
-  //TODO simplify this code by introducing GETResult.apply(url)
   def getViews(dbName: String, colName: String): GETResult = {
     val url = DATABASES/dbName/colName/VIEWS
     val get = makeGetRequest(url)

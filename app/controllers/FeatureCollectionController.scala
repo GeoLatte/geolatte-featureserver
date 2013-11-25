@@ -113,7 +113,6 @@ object FeatureCollectionController extends AbstractNoSqlController {
         val toCsvRecord = (js: JsObject) => project(js)({case Some((k,v)) => v }, g => g.asText).mkString(",")
         val toCsvHeader = (js:JsObject) => project(js)({case Some((k,v)) => k },  _ => "geometry-wkt").mkString(",")
 
-        //TODO -- Is there another way to do this, besides having a state variable?
         // toCsv works as a state machine, on first invocation it print header, and record,
         // on subsequent invocations, only the record
         var toCsv : (JsObject) => String = js => {

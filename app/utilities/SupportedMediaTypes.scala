@@ -10,7 +10,7 @@ object SupportedMediaTypes {
   private val GeolatteSubTypeRegex ="vnd.geolatte-featureserver\\+([a-zA-Z]+)".r
   private val VersionParamRegex = ".*version=\"?([0-9.]+)\"?.*".r
 
-  def apply(format : Format.Value, version : Version.Value) = (format, version) match {
+  def apply(format : Format.Value, version : Version.Value = Version.default) = (format, version) match {
     case (f : Format.Value, v : Version.Value) => "vnd.geolatte-featureserver+" + Format.stringify(format) + ";version=\"" + Version.stringify(v) + "\""
     case (f : Format.Value,_) => "vnd.geolatte-featureserver+" + Format.stringify(format)
     case (_, _) => throw new MatchError()

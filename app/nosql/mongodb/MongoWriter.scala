@@ -3,7 +3,6 @@ package nosql.mongodb
 import play.api.Logger
 import scala.concurrent._
 import play.modules.reactivemongo.json.collection.JSONCollection
-import config.AppExecutionContexts.streamContext
 import play.api.libs.iteratee.Enumerator
 import scala.util.{Failure, Success}
 import reactivemongo.api.indexes.Index
