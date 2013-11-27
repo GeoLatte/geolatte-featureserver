@@ -69,9 +69,7 @@ trait Repository {
 
   def getSpatialCollection(database: String, collection: String) : Future[SpatialCollection]
 
-  def query(database: String, collection: String, window: Envelope): Future[Enumerator[JsObject]]
-
-  def queryWithCount(database: String, collection: String, window: Envelope): Future[(Int, Enumerator[JsObject])]
+  def query[T](database: String, collection: String, sc: SpatialQuery[T]): Future[T]
 
   def getData(database: String, collection: String): Future[Enumerator[JsObject]]
 
@@ -294,22 +292,15 @@ object MongoRepository extends Repository {
 
   def getSpatialCollection(database: String, collection: String) = {
     val coll = connection(database).collection[JSONCollection](collection)
-    metadata(database, collection).map( md =>
-      MongoSpatialCollection(coll, md)
-    )
+    metadata(database, collection).map( md => MongoSpatialCollection(coll, md) )
   }
 
-  def query(database: String, collection: String, window: Envelope): Future[Enumerator[JsObject]] =
-    getSpatialCollection(database, collection).map(sc => SpatialQuery(window)(sc).run)
+  def query[T](database: String, collection: String, spatialQuery : SpatialQuery[T]): Future[T] =
+    getSpatialCollection(database, collection).flatMap(sc => spatialQuery.run(sc))
 
 
-  def queryWithCount(database: String, collection: String, window: Envelope): Future[(Int, Enumerator[JsObject])] = {
-    getSpatialCollection(database, collection).flatMap(sc => SpatialQuery.withCount(SpatialQuery(window)(sc)).run)
-  }
-
-  def getData(database: String, collection: String): Future[Enumerator[JsObject]] = {
-    getSpatialCollection(database, collection).map( SpatialQuery()(_).run )
-  }
+  def getData(database: String, collection: String): Future[Enumerator[JsObject]] =
+    getSpatialCollection(database, collection).flatMap( SpatialQuery().run )
 
   def getMediaStore(database: String, collection: String) : Future[MediaStore] = {
     import reactivemongo.api.collections.default._

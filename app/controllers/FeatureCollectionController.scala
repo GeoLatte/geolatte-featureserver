@@ -33,6 +33,7 @@ object FeatureCollectionController extends AbstractNoSqlController {
   object QueryParams {
     //we leave bbox as a String parameter because an Envelope needs a CrsId
     val BBOX = QueryParam("bbox", (s: String) => Some(s))
+    val WITH_VIEW = QueryParam("with-view", (s: String) => Some(s))
     val LIMIT = QueryParam("limit", (s:String) => Some(s.toInt))
     val START = QueryParam("start", (s:String) => Some(s.toInt))
   }
@@ -126,21 +127,24 @@ object FeatureCollectionController extends AbstractNoSqlController {
       }
   )
 
-  private def qetQueryResult(db: String, collection: String, smd: Metadata)(implicit queryStr: Map[String, Seq[String]]) = {
-    Bbox(QueryParams.BBOX.extractOrElse(""), smd.envelope.getCrsId) match {
-      case Some(window) =>
-        MongoRepository.query(db, collection, window)
-      case None => throw new InvalidQueryException(s"BadRequest: No or invalid bbox parameter in query string.")
-    }
+  private def qetQueryResult(db: String, collection: String, smd: Metadata)
+                            (implicit queryStr: Map[String, Seq[String]]) : Future[Enumerator[JsObject]] =
+    queryString2SpatialQuery(db,collection,smd).flatMap( q =>  MongoRepository.query(db, collection, q) )
+
+  private def qetQueryResultWithCount(db: String, collection: String, smd: Metadata)
+                                     (implicit queryStr: Map[String, Seq[String]]) : Future[(Int, Enumerator[JsObject])] =
+    queryString2SpatialQuery(db,collection,smd)
+      .map( q =>  SpatialQuery.withCount(q))
+      .flatMap( qwc => MongoRepository.query(db, collection, qwc) )
+
+  implicit def queryString2SpatialQuery(db: String, collection: String, smd: Metadata)
+                                       (implicit queryStr: Map[String, Seq[String]]) = {
+    val windowOpt = Bbox(QueryParams.BBOX.extractOrElse(""), smd.envelope.getCrsId)
+    val viewDef = QueryParams.WITH_VIEW.extract.map(vd => MongoRepository.getView(db, collection, vd))
+      .getOrElse(Future {Json.obj() })
+    viewDef.map(vd => SpatialQuery(windowOpt, (vd \ "query").asOpt[JsObject], (vd \ "projection").asOpt[JsArray]))
   }
 
-  private def qetQueryResultWithCount(db: String, collection: String, smd: Metadata)(implicit queryStr: Map[String, Seq[String]]) = {
-    Bbox(QueryParams.BBOX.extractOrElse(""), smd.envelope.getCrsId) match {
-      case Some(window) =>
-        MongoRepository.queryWithCount(db, collection, window)
-      case None => throw new InvalidQueryException(s"BadRequest: No or invalid bbox parameter in query string.")
-    }
-  }
 
   object Bbox {
 

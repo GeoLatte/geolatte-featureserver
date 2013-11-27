@@ -135,31 +135,28 @@ object Metadata {
 }
 
 trait SpatialQuery[T] {
-  val collection: JSONCollection
-  def selector : JsObject
+  def selector(col: MongoSpatialCollection) : JsObject
   def projection : JsObject
-  def run : T
+  def run(col : MongoSpatialCollection) : Future[T]
 }
 
 class BaseSpatialQuery (
-      override val collection: JSONCollection,
       windowOpt: Option[Envelope],
       queryOpt: Option[JsObject],
-      projectionOpt: Option[JsArray],
-      mortoncode: MortonCode) extends SpatialQuery[Enumerator[JsObject]] {
+      projectionOpt: Option[JsArray]) extends SpatialQuery[Enumerator[JsObject]] {
 
   //we require a MortonCodeQueryOptimizer to be mixed in on instantiation
   self: MortonCodeQueryOptimizer =>
 
 
-  private def window2query(window: Envelope) = {
+  def window2query(window: Envelope, mortoncode: MortonCode) = {
     val qds: Seq[JsValue] = optimize(window, mortoncode)
     val docArr = JsArray(qds)
     Json.obj("$or" -> docArr)
   }
 
-  def selector = {
-    val windowPart = windowOpt.map(w => window2query(w)).getOrElse(Json.obj())
+  def selector(col: MongoSpatialCollection) = {
+    val windowPart = windowOpt.map(w => window2query(w,col.mortonCode)).getOrElse(Json.obj())
     val query = queryOpt.getOrElse(Json.obj())
     query ++ windowPart
   }
@@ -170,9 +167,9 @@ class BaseSpatialQuery (
     Json.obj(flds.value.collect{case f : JsString => f.value -> Json.toJsFieldJsValueWrapper(1)}:_*)
   }
 
-  def run: Enumerator[JsObject] = {
-    val cursor = collection.find(selector, projection).cursor[JsObject]
-    filteringEnumeratee.map(fe => cursor.enumerate through fe).getOrElse(cursor.enumerate)
+  def run(sc: MongoSpatialCollection) : Future[Enumerator[JsObject]] = {
+    val cursor = sc.collection.find(selector(sc), projection).cursor[JsObject]
+    Future{ filteringEnumeratee.map(fe => cursor.enumerate through fe).getOrElse(cursor.enumerate) }
   }
 
   // TODO this could probably be done more efficiently using a custom window-sensitive Json Validator
@@ -192,32 +189,30 @@ class BaseSpatialQuery (
 
 object SpatialQuery {
 
-  def apply()(implicit sc: MongoSpatialCollection) : SpatialQuery[Enumerator[JsObject]] =
+  def apply() : SpatialQuery[Enumerator[JsObject]] =
     apply(None, None, None)
 
-  def apply(window: Envelope)(implicit sc: MongoSpatialCollection) : SpatialQuery[Enumerator[JsObject]] =
+  def apply(window: Envelope) : SpatialQuery[Enumerator[JsObject]] =
     apply(Some(window), None, None)
 
-  def apply(window: Envelope, query: JsObject)(implicit sc: MongoSpatialCollection) : SpatialQuery[Enumerator[JsObject]] =
+  def apply(window: Envelope, query: JsObject) : SpatialQuery[Enumerator[JsObject]] =
     apply(Some(window), Some(query), None)
 
-  def apply(window: Option[Envelope], query: Option[JsObject], projection: Option[JsArray])
-           (implicit sc: MongoSpatialCollection) : SpatialQuery[Enumerator[JsObject]] =
-    new BaseSpatialQuery(sc.collection, window, query, None, new MortonCode(sc.mortonContext))
+  def apply(window: Option[Envelope], query: Option[JsObject], projection: Option[JsArray]) : SpatialQuery[Enumerator[JsObject]] =
+    new BaseSpatialQuery(window, query, projection)
       with SubdividingMCQueryOptimizer
 
-  def withCount[T](base: SpatialQuery[T]) = new SpatialQuery[Future[(Int, T)]] {
-        val collection = base.collection
-        def selector = base.selector
+  def withCount[T](base: SpatialQuery[T]) = new SpatialQuery[(Int, T)] {
+        def selector(sc: MongoSpatialCollection) = base.selector(sc)
         def projection = base.projection
-        def run = {
+        def run(sc: MongoSpatialCollection) = {
           import BSONFormats.BSONDocumentFormat._
-          val queryBson = partialReads(base.selector) match {
+          val queryBson = partialReads(base.selector(sc)) match {
             case JsSuccess(qb, _) => qb
             case _ => throw new RuntimeException("Failure to convert JSON Query doc to BSONDocument")
           }
-          val cntCmd = Count(collection.name, Some(queryBson))
-          collection.db.command(cntCmd).map(cnt => (cnt, base.run))
+          val cntCmd = Count(sc.collection.name, Some(queryBson))
+          sc.collection.db.command(cntCmd).flatMap( cnt => base.run(sc).map( e => (cnt, e)) )
         }
       }
 
@@ -228,6 +223,7 @@ object SpatialQuery {
 case class MongoSpatialCollection(collection: JSONCollection, metadata: Metadata) {
 
   lazy val mortonContext = new MortonContext(metadata.envelope, metadata.level)
+  def mortonCode = new MortonCode(mortonContext)
 
 }
 
