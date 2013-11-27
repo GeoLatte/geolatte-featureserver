@@ -299,16 +299,16 @@ object MongoRepository extends Repository {
     )
   }
 
-  def query(database: String, collection: String, window: Envelope): Future[Enumerator[JsObject]] = {
-    getSpatialCollection(database, collection).map(_.query(window))
-  }
+  def query(database: String, collection: String, window: Envelope): Future[Enumerator[JsObject]] =
+    getSpatialCollection(database, collection).map(sc => SpatialQuery(window)(sc).run)
+
 
   def queryWithCount(database: String, collection: String, window: Envelope): Future[(Int, Enumerator[JsObject])] = {
-    getSpatialCollection(database, collection).flatMap(_.queryWithCnt(window))
+    getSpatialCollection(database, collection).flatMap(sc => SpatialQuery.withCount(SpatialQuery(window)(sc)).run)
   }
 
   def getData(database: String, collection: String): Future[Enumerator[JsObject]] = {
-    getSpatialCollection(database, collection).map(_.out())
+    getSpatialCollection(database, collection).map( SpatialQuery()(_).run )
   }
 
   def getMediaStore(database: String, collection: String) : Future[MediaStore] = {
@@ -388,6 +388,5 @@ object MongoRepository extends Repository {
 
 
   def getViewByName(database: String, collection: String, name: String) : Future[JsObject] = getViewDef(database, collection, Json.obj("name" -> name))
-
 }
 

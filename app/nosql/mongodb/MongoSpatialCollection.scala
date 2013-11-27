@@ -30,6 +30,7 @@ import nosql.json.GeometryReaders._
 import nosql.json.GeometryReaders
 
 import scala.language.reflectiveCalls
+import scala.language.implicitConversions
 
 import config.AppExecutionContexts.streamContext
 import nosql.Exceptions
@@ -133,32 +134,15 @@ object Metadata {
 
 }
 
-trait SpatialQuery[T] extends Counting[T] {
-  def collection: JSONCollection
+trait SpatialQuery[T] {
+  val collection: JSONCollection
   def selector : JsObject
+  def projection : JsObject
   def run : T
 }
 
-trait Counting[T] {
-
-  self: SpatialQuery[T] =>
-
-  def withCount = new SpatialQuery[Future[(Int, T)]] {
-      def collection = self.collection
-      def selector = self.selector
-      def run = {
-        import BSONFormats.BSONDocumentFormat._
-        val queryBson = partialReads(self.selector) match {
-          case JsSuccess(qb, _) => qb
-          case _ => throw new RuntimeException("Failure to convert JSON Query doc to BSONDocument")
-        }
-        val cntCmd = Count(collection.name, Some(queryBson))
-        collection.db.command(cntCmd).map(cnt => (cnt, self.run))
-      }
-    }
-}
-
-abstract class BaseSpatialQuery (
+class BaseSpatialQuery (
+      override val collection: JSONCollection,
       windowOpt: Option[Envelope],
       queryOpt: Option[JsObject],
       projectionOpt: Option[JsArray],
@@ -180,7 +164,11 @@ abstract class BaseSpatialQuery (
     query ++ windowPart
   }
 
-  def projection =  projectionOpt.getOrElse( Json.obj() )
+  def projection =  {
+    val flds = projectionOpt.getOrElse( Json.arr() )
+    //TODO can this be  simplified?
+    Json.obj(flds.value.collect{case f : JsString => f.value -> Json.toJsFieldJsValueWrapper(1)}:_*)
+  }
 
   def run: Enumerator[JsObject] = {
     val cursor = collection.find(selector, projection).cursor[JsObject]
@@ -200,55 +188,49 @@ abstract class BaseSpatialQuery (
       (toExtent compose filter compose toObj)
     }
   }
-
 }
 
 object SpatialQuery {
 
-  def apply()(implicit collection: JSONCollection, mortoncontext: MortonContext) : SpatialQuery[Enumerator[JsObject]] =
+  def apply()(implicit sc: MongoSpatialCollection) : SpatialQuery[Enumerator[JsObject]] =
     apply(None, None, None)
 
-  def apply(window: Envelope)(implicit collection: JSONCollection, mortoncontext: MortonContext) : SpatialQuery[Enumerator[JsObject]] =
+  def apply(window: Envelope)(implicit sc: MongoSpatialCollection) : SpatialQuery[Enumerator[JsObject]] =
     apply(Some(window), None, None)
 
-  def apply(window: Envelope, query: JsObject)(implicit collection: JSONCollection, mortoncontext: MortonContext) : SpatialQuery[Enumerator[JsObject]] =
+  def apply(window: Envelope, query: JsObject)(implicit sc: MongoSpatialCollection) : SpatialQuery[Enumerator[JsObject]] =
     apply(Some(window), Some(query), None)
 
   def apply(window: Option[Envelope], query: Option[JsObject], projection: Option[JsArray])
-           (implicit coll: JSONCollection, mortoncontext: MortonContext) : SpatialQuery[Enumerator[JsObject]] =
-    new BaseSpatialQuery(window, query, None, new MortonCode(mortoncontext))
-      with SubdividingMCQueryOptimizer {
-      def collection: JSONCollection = coll
-    }
+           (implicit sc: MongoSpatialCollection) : SpatialQuery[Enumerator[JsObject]] =
+    new BaseSpatialQuery(sc.collection, window, query, None, new MortonCode(sc.mortonContext))
+      with SubdividingMCQueryOptimizer
+
+  def withCount[T](base: SpatialQuery[T]) = new SpatialQuery[Future[(Int, T)]] {
+        val collection = base.collection
+        def selector = base.selector
+        def projection = base.projection
+        def run = {
+          import BSONFormats.BSONDocumentFormat._
+          val queryBson = partialReads(base.selector) match {
+            case JsSuccess(qb, _) => qb
+            case _ => throw new RuntimeException("Failure to convert JSON Query doc to BSONDocument")
+          }
+          val cntCmd = Count(collection.name, Some(queryBson))
+          collection.db.command(cntCmd).map(cnt => (cnt, base.run))
+        }
+      }
+
+  implicit def metadata2mortoncontext(metadata: Metadata) = new MortonContext(metadata.envelope, metadata.level)
 
 }
 
+case class MongoSpatialCollection(collection: JSONCollection, metadata: Metadata) {
 
-class MongoSpatialCollection(c: JSONCollection, mc: MortonContext) {
-
-  implicit val collection = c
-  implicit val mortonctxt = mc
-
-  def out(): Enumerator[JsObject] = SpatialQuery().run
-
-  /**
-   *
-   * @param window the query window
-   * @return
-   * @throws IllegalArgumentException if Envelope does not fall within context of the mortoncode
-   */
-  def query(window: Envelope): Enumerator[JsObject] = SpatialQuery(window).run
-
-  def queryWithCnt(window: Envelope): Future[(Int, Enumerator[JsObject])] = SpatialQuery(window).withCount.run
+  lazy val mortonContext = new MortonContext(metadata.envelope, metadata.level)
 
 }
 
-object MongoSpatialCollection {
-
-  def apply(collection: JSONCollection, metadata: Metadata): MongoSpatialCollection =
-    new MongoSpatialCollection(collection, new MortonContext(metadata.envelope, metadata.level))
-
-}
 
 
 
