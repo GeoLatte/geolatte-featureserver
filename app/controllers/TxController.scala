@@ -75,7 +75,7 @@ object TxController extends AbstractNoSqlController {
       }
     }.recover {
       case e: JsonParseException => Left(s"'$txt' is not valid JSON")
-      case e: RuntimeException => Left(e.getMessage)
+      case t: Throwable => Left(t.getMessage)
     }.get
   }
 
