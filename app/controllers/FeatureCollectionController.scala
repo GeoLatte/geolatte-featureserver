@@ -54,7 +54,7 @@ object FeatureCollectionController extends AbstractNoSqlController {
   def download(db: String, collection: String) = repositoryAction { repo =>
     implicit request => {
         Logger.info(s"Downloading $db/$collection.")
-        repo.getData(db, collection).map[Result](x => x).recover {
+        repo.query(db, collection, SpatialQuery()).map[Result](x => x).recover {
           commonExceptionHandler(db, collection)
         }
       }

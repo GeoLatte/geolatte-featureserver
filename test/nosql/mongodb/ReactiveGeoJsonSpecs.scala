@@ -6,7 +6,8 @@ import scala.concurrent.{Future, Await}
 import scala.concurrent.duration.Duration
 import config.ConfigurationValues
 import play.api.libs.json.JsObject
-import nosql.mongodb.ReactiveGeoJson._
+import nosql.json.Gen
+import org.geolatte.geom.Envelope
 
 /**
  * @author Karel Maesen, Geovise BVBA
@@ -16,15 +17,16 @@ class ReactiveGeoJsonSpecs extends Specification {
 
 
   import scala.language.reflectiveCalls
-  import config.AppExecutionContexts.streamContext
+  import scala.concurrent.ExecutionContext.Implicits.global
 
-  def generateFeature = """{"type" : "Feature", "properties":{"foo":3}, "geometry": {"type": "LineString", "coordinates": [[1,2], [3,4]]}}"""
+  def genFeatures(size: Int) = {
+    implicit val extent = new Envelope(0,0,90,90)
+    val fGen = Gen.geoJsonFeature(Gen.id, Gen.lineString(3), Gen.properties( "foo" -> Gen.oneOf("boo", "bar")))
+    for(i <- 0 until size) yield fGen.sample
+  }
 
-  def genFeatures(n: Int) = (for (i <- 0 until n) yield generateFeature).fold("")((s, f) => s ++ f ++ ConfigurationValues.jsonSeparator).dropRight(1)
-
-
-  def testEnumerator(size: Int, batchSize: Int = 64) = {
-    val text = genFeatures(size)
+  def testEnumerator(size: Int, batchSize: Int = 1000) = {
+    val text = genFeatures(size).map( g => g.get) mkString ConfigurationValues.jsonSeparator
     val batched = text.getBytes("UTF-8").grouped(batchSize).toList
     (text, Enumerator(batched:_*))
   }
@@ -37,12 +39,15 @@ class ReactiveGeoJsonSpecs extends Specification {
       val (_, enumerator) = testEnumerator(testSize)
       var sink = new scala.collection.mutable.ArrayBuffer[JsObject]()
       val fw = new FeatureWriter {
-        def add(objects: Seq[JsObject]) = {sink ++= objects ; Future {objects.size} }
-
+        def add(objects: Seq[JsObject]) = { sink ++= objects ; Future {objects.size} }
         def updateIndex() = Future.successful(true)
       }
-      val future = (enumerator  andThen Enumerator.eof) |>>> mkStreamingIteratee(fw)
+
+      val future = (enumerator  andThen Enumerator.eof) |>>> ReactiveGeoJson.mkStreamingIteratee(fw)
+      //Wait until de iteratee is done
       val stateIteratee = Await.result(future, Duration(5000, "millis"))
+      //Wait until de Iteratee is finished writing to featurewriter
+      Await.result(stateIteratee.right.get, Duration(5000, "millis"))
       val result = sink.toList
 
       (stateIteratee must beRight) and

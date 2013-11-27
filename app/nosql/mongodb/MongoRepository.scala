@@ -71,8 +71,6 @@ trait Repository {
 
   def query[T](database: String, collection: String, sc: SpatialQuery[T]): Future[T]
 
-  def getData(database: String, collection: String): Future[Enumerator[JsObject]]
-
   def getMediaStore(database: String, collection: String): Future[MediaStore]
 
   def saveMedia(database: String, collection: String, producer: Enumerator[Array[Byte]], fileName: String, contentType: Option[String]) : Future[Media]
@@ -297,10 +295,6 @@ object MongoRepository extends Repository {
 
   def query[T](database: String, collection: String, spatialQuery : SpatialQuery[T]): Future[T] =
     getSpatialCollection(database, collection).flatMap(sc => spatialQuery.run(sc))
-
-
-  def getData(database: String, collection: String): Future[Enumerator[JsObject]] =
-    getSpatialCollection(database, collection).flatMap( SpatialQuery().run )
 
   def getMediaStore(database: String, collection: String) : Future[MediaStore] = {
     import reactivemongo.api.collections.default._
