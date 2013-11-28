@@ -103,42 +103,49 @@ object FeatureCollectionController extends AbstractNoSqlController {
    * @param req
    * @return
    */
-  implicit def enumJsontoResult (enum : Enumerator[JsObject])(implicit req : RequestHeader) : Result =
+  implicit def enumJsontoResult(enum: Enumerator[JsObject])(implicit req: RequestHeader): Result =
     toResult(new JsonStreamable with CsvStreamable {
 
-        val encoder = new DefaultCsvEncoder()
+      val encoder = new DefaultCsvEncoder()
 
-        def encode(v: JsString) = "\"" + encoder.encode(v.value, null, CsvPreference.STANDARD_PREFERENCE) + "\""
+      def encode(v: JsString) = "\"" + encoder.encode(v.value, null, CsvPreference.STANDARD_PREFERENCE) + "\""
 
-        def project(js: JsObject)(pf: PartialFunction[Option[(String, String)], String], pf2: Geometry => String) = {
-          val jsObj = (js \ "properties").asOpt[JsObject].getOrElse(JsObject(List()))
-          val attributes = jsObj.fields.map{
-              case (k,v: JsString) => Some((k, encode(v)))
-              case (k,v: JsNumber) => Some((k,v.value.toString))
-              case (k,v: JsBoolean) => Some((k,v.value.toString))
-              case (k,JsNull) => Some((k, ""))
-              case (k, _ : JsUndefined) => Some((k, ""))
-              case _ => None
-            }.collect(pf)
-          val geom = pf2((js \ "geometry").asOpt(GeometryReads(CrsId.UNDEFINED)).getOrElse(Point.createEmpty()))
-          geom +: attributes
-        }
-
-        val toCsvRecord = (js: JsObject) => project(js)({case Some((k,v)) => v }, g => g.asText).mkString(",")
-        val toCsvHeader = (js:JsObject) => project(js)({case Some((k,v)) => k },  _ => "geometry-wkt").mkString(",")
-
-        // toCsv works as a state machine, on first invocation it print header, and record,
-        // on subsequent invocations, only the record
-        var toCsv : (JsObject) => String = js => {
-          this.toCsv = toCsvRecord
-          toCsvHeader(js) + "\n" + toCsvRecord(js)
-        }
-
-        def toJsonStream = enum
-        def toCsvStream = enum.map(js => toCsv(js))
-
+      //TODO -- refactor to clarify structure
+      def project(js: JsObject)(pf: PartialFunction[Option[(String, String)], String], pf2: Geometry => String) = {
+        val jsObj = (js \ "properties").asOpt[JsObject].getOrElse(JsObject(List()))
+        val attributes = jsObj.fields.map {
+          case (k, v: JsString) => Some((k, encode(v)))
+          case (k, v: JsNumber) => Some((k, v.value.toString))
+          case (k, v: JsBoolean) => Some((k, v.value.toString))
+          case (k, JsNull) => Some((k, ""))
+          case (k, _: JsUndefined) => Some((k, ""))
+          case _ => None
+        }.collect(pf)
+        val geom = pf2((js \ "geometry").asOpt(GeometryReads(CrsId.UNDEFINED)).getOrElse(Point.createEmpty()))
+        val idOpt = (js \ "_id" \ "$oid").asOpt[String].map(v => ("_id", v))
+        pf(idOpt) +: geom +: attributes
       }
-  )
+
+      val toCsvRecord = (js: JsObject) => project(js)({
+        case Some((k, v)) => v
+      }, g => g.asText).mkString(",")
+      val toCsvHeader = (js: JsObject) => project(js)({
+        case Some((k, v)) => k
+      }, _ => "geometry-wkt").mkString(",")
+
+      // toCsv works as a state machine, on first invocation it print header, and record,
+      // on subsequent invocations, only the record
+      var toCsv: (JsObject) => String = js => {
+        this.toCsv = toCsvRecord
+        toCsvHeader(js) + "\n" + toCsvRecord(js)
+      }
+
+      def toJsonStream = enum
+
+      def toCsvStream = enum.map(js => toCsv(js))
+
+    }
+    )
 
   private def qetQueryResult(db: String, collection: String, smd: Metadata)
                             (implicit queryStr: Map[String, Seq[String]]) : Future[Enumerator[JsObject]] =
@@ -150,7 +157,8 @@ object FeatureCollectionController extends AbstractNoSqlController {
     val windowOpt = Bbox(QueryParams.BBOX.extractOrElse(""), smd.envelope.getCrsId)
     val viewDef = QueryParams.WITH_VIEW.extract.map(vd => MongoRepository.getView(db, collection, vd))
       .getOrElse(Future {Json.obj() })
-    viewDef.map(vd => SpatialQuery(windowOpt, (vd \ "query").asOpt[JsObject], (vd \ "projection").asOpt[JsArray]))
+    viewDef.map(vd => vd.as(Formats.ViewDefExtract))
+      .map{ case (queryOpt, projOpt) => SpatialQuery(windowOpt, queryOpt, projOpt) }
   }
 
 

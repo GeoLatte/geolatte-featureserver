@@ -379,10 +379,12 @@ object MongoRepository extends Repository {
   private def getViewDef(database: String, collection: String, selector: JsObject) : Future[JsObject] =
     getViewDefs(database, collection) flatMap (_.find(selector).cursor[JsObject].headOption.collect {
           case Some(js) => js
+          case None => Json.obj()
     })
 
-  def getView(database: String, collection: String, id: String): Future[JsObject] = getViewDef(database, collection, Json.obj("_id" -> id))
-
+  def getView(database: String, collection: String, id: String): Future[JsObject] =
+    getViewDef(database, collection, Json.obj("$or"  -> Json.arr( Json.obj("_id" -> id), Json.obj("name" -> id))) )
+  //getViewDef(database, collection, Json.obj("_id" -> id))
 
   def getViewByName(database: String, collection: String, name: String) : Future[JsObject] = getViewDef(database, collection, Json.obj("name" -> name))
 }

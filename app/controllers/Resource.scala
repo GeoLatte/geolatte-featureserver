@@ -11,6 +11,7 @@ import org.geolatte.geom.Envelope
 import org.apache.commons.codec.binary.Base64
 import play.api.libs.functional.ContravariantFunctor
 import play.api.libs.iteratee.Enumerator
+import scala.None
 
 trait RenderableResource
 trait RenderableNonStreamingResource extends RenderableResource
@@ -132,6 +133,11 @@ object Formats {
       ( __ \ 'projection).json.pickBranch(of[JsArray]) and
       ( __ \ 'url).json.copyFrom( ( __ \ '_id).json.pick.map( id => JsString(controllers.routes.ViewController.get(db, col, id.as[String]).url) ) )
     ).reduce
+
+  val ViewDefExtract = (
+     ( __ \ "query").readNullable(viewDefkeysReads(unescape)) and
+     ( __ \ "projection").readNullable[JsArray]
+    ).tupled
 
 }
 

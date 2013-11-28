@@ -3,6 +3,7 @@ package utilities
 import play.api.mvc.{RequestHeader}
 import play.api.http.MediaRange
 import config.ConfigurationValues.{Version, Format}
+import play.api.Logger
 
 
 object SupportedMediaTypes {
