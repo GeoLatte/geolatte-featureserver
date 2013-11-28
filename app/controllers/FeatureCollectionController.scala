@@ -46,7 +46,7 @@ object FeatureCollectionController extends AbstractNoSqlController {
         implicit val queryStr = request.queryString
         Logger.info(s"Query string $queryStr on $db, collection $collection")
         repo.metadata(db, collection).flatMap(md =>
-          qetQueryResult(db, collection, md).map[Result](x => x)
+          doQuery(db, collection, md).map[Result](x => x)
         ).recover {
           case ex: InvalidQueryException => BadRequest(s"${ex.getMessage}")
         }.recover (commonExceptionHandler(db, collection))
@@ -83,7 +83,7 @@ object FeatureCollectionController extends AbstractNoSqlController {
 
       Logger.info(s"Query string $queryStr on $db, collection $collection")
       repo.metadata(db, collection).flatMap(md =>
-        qetQueryResult(db, collection, md).flatMap {
+        doQuery(db, collection, md).flatMap {
           case enum => enumerator2list(enum)
         }.map[Result]{
           case (cnt, features) => toResult(FeaturesResource(cnt, features))
@@ -128,9 +128,11 @@ object FeatureCollectionController extends AbstractNoSqlController {
 
       val toCsvRecord = (js: JsObject) => project(js)({
         case Some((k, v)) => v
+        case _ => "None"
       }, g => g.asText).mkString(",")
       val toCsvHeader = (js: JsObject) => project(js)({
         case Some((k, v)) => k
+        case _ => "None"
       }, _ => "geometry-wkt").mkString(",")
 
       // toCsv works as a state machine, on first invocation it print header, and record,
@@ -147,7 +149,7 @@ object FeatureCollectionController extends AbstractNoSqlController {
     }
     )
 
-  private def qetQueryResult(db: String, collection: String, smd: Metadata)
+  private def doQuery(db: String, collection: String, smd: Metadata)
                             (implicit queryStr: Map[String, Seq[String]]) : Future[Enumerator[JsObject]] =
     queryString2SpatialQuery(db,collection,smd).flatMap( q =>  MongoRepository.query(db, collection, q) )
 
