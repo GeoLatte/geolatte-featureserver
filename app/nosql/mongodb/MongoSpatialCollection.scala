@@ -134,47 +134,44 @@ object Metadata {
 
 }
 
-trait SpatialQuery[T] {
-  def selector(col: MongoSpatialCollection) : JsObject
-  def projection : JsObject
-  def run(col : MongoSpatialCollection) : Future[T]
-}
 
-class BaseSpatialQuery (
-      windowOpt: Option[Envelope],
-      queryOpt: Option[JsObject],
-      projectionOpt: Option[JsArray]) extends SpatialQuery[Enumerator[JsObject]] {
+abstract class MongoSpatialCollection(collection: JSONCollection, metadata: Metadata) {
 
   //we require a MortonCodeQueryOptimizer to be mixed in on instantiation
-  self: MortonCodeQueryOptimizer =>
+  this: MortonCodeQueryOptimizer =>
+
+  lazy val mortonContext = new MortonContext(metadata.envelope, metadata.level)
+
+  def mortonCode = new MortonCode(mortonContext)
 
 
-  def window2query(window: Envelope, mortoncode: MortonCode) = {
-    val qds: Seq[JsValue] = optimize(window, mortoncode)
+  def window2query(window: Envelope) = {
+    val qds: Seq[JsValue] = optimize(window, mortonCode)
     val docArr = JsArray(qds)
     Json.obj("$or" -> docArr)
   }
 
-  def selector(col: MongoSpatialCollection) = {
-    val windowPart = windowOpt.map(w => window2query(w,col.mortonCode)).getOrElse(Json.obj())
-    val query = queryOpt.getOrElse(Json.obj())
-    query ++ windowPart
+  def selector(sq: SpatialQuery) = {
+     val windowPart = sq.windowOpt.map( window2query(_) ).getOrElse(Json.obj())
+     val query = sq.queryOpt.getOrElse(Json.obj())
+     query ++ windowPart
   }
 
-  def projection =  {
-    val flds = projectionOpt.getOrElse( Json.arr() )
-    //TODO can this be  simplified?
+  def projection(sq: SpatialQuery) =  {
+    val flds = sq.projectionOpt.getOrElse( Json.arr() )
     Json.obj(flds.value.collect{case f : JsString => f.value -> Json.toJsFieldJsValueWrapper(1)}:_*)
   }
 
-  def run(sc: MongoSpatialCollection) : Future[Enumerator[JsObject]] = {
-    val cursor = sc.collection.find(selector(sc), projection).cursor[JsObject]
-    Future{ filteringEnumeratee.map(fe => cursor.enumerate through fe).getOrElse(cursor.enumerate) }
+  def run(query: SpatialQuery) : Enumerator[JsObject] = {
+    val cursor = collection.find(selector(query), projection(query)).cursor[JsObject]
+    query.windowOpt match {
+      case Some(w) => cursor.enumerate through filteringEnumeratee(w)
+      case _ => cursor.enumerate
+    }
   }
 
   // TODO this could probably be done more efficiently using a custom window-sensitive Json Validator
-  private def filteringEnumeratee = {
-    for (window <- windowOpt) yield {
+  private def filteringEnumeratee(window: Envelope) = {
       import GeometryReaders.extentFormats
       val toExtent = Enumeratee.map[JsObject](obj => (obj, (obj \ SpecialMongoProperties.BBOX).asOpt[Extent]))
       val filter = Enumeratee.filter[(JsObject, Option[Extent])](p => p match {
@@ -184,32 +181,13 @@ class BaseSpatialQuery (
       val toObj = Enumeratee.map[(JsObject, Option[Extent])](p => p._1)
       (toExtent compose filter compose toObj)
     }
-  }
-}
-
-object SpatialQuery {
-
-  def apply() : SpatialQuery[Enumerator[JsObject]] =
-    apply(None, None, None)
-
-  def apply(window: Envelope) : SpatialQuery[Enumerator[JsObject]] =
-    apply(Some(window), None, None)
-
-  def apply(window: Envelope, query: JsObject) : SpatialQuery[Enumerator[JsObject]] =
-    apply(Some(window), Some(query), None)
-
-  def apply(window: Option[Envelope], query: Option[JsObject], projection: Option[JsArray]) : SpatialQuery[Enumerator[JsObject]] =
-    new BaseSpatialQuery(window, query, projection)
-      with SubdividingMCQueryOptimizer
-
-  implicit def metadata2mortoncontext(metadata: Metadata) = new MortonContext(metadata.envelope, metadata.level)
 
 }
 
-case class MongoSpatialCollection(collection: JSONCollection, metadata: Metadata) {
+object MongoSpatialCollection {
 
-  lazy val mortonContext = new MortonContext(metadata.envelope, metadata.level)
-  def mortonCode = new MortonCode(mortonContext)
+  def apply(collection: JSONCollection, metadata: Metadata) = new MongoSpatialCollection(collection, metadata)
+    with SubdividingMCQueryOptimizer
 
 }
 

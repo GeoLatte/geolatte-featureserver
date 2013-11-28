@@ -61,13 +61,15 @@ object FeatureCollectionController extends AbstractNoSqlController {
       }
   }
 
-  case class fState(features: List[JsObject] = Nil, collected: Int = 0, total: Int = 0)
-
   def collectFeatures(start: Int, max: Int) : Iteratee[JsObject, (Int, List[JsObject])] = {
+
+    case class fState(features: List[JsObject] = Nil, collected: Int = 0, total: Int = 0)
+
     Iteratee.fold[JsObject, fState]( fState( total = start ) ) ( (state, feature) =>
       if (state.collected >= max) state.copy( total = state.total+1)
       else fState(feature::state.features, state.collected + 1, state.total + 1)
     ).map(state => (state.total, state.features))
+
   }
 
   def list(db: String, collection: String) = repositoryAction( repo =>

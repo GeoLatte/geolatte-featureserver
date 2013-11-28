@@ -32,6 +32,18 @@ case class MediaReader(id: String,
                        contentType: Option[String],
                        data: Array[Byte])
 
+case class SpatialQuery ( windowOpt: Option[Envelope], queryOpt: Option[JsObject], projectionOpt: Option[JsArray])
+
+object SpatialQuery {
+
+  def apply() : SpatialQuery = apply(None, None, None)
+
+  def apply(window: Envelope) :SpatialQuery = apply(Some(window), None, None)
+
+  def apply(window: Envelope, query: JsObject) : SpatialQuery = apply(Some(window), Some(query), None)
+}
+
+
 trait Repository {
 
   /**
@@ -69,7 +81,7 @@ trait Repository {
 
   def getSpatialCollection(database: String, collection: String) : Future[SpatialCollection]
 
-  def query[T](database: String, collection: String, sc: SpatialQuery[T]): Future[T]
+  def query(database: String, collection: String, sc: SpatialQuery): Future[Enumerator[JsObject]]
 
   def getMediaStore(database: String, collection: String): Future[MediaStore]
 
@@ -293,8 +305,8 @@ object MongoRepository extends Repository {
     metadata(database, collection).map( md => MongoSpatialCollection(coll, md) )
   }
 
-  def query[T](database: String, collection: String, spatialQuery : SpatialQuery[T]): Future[T] =
-    getSpatialCollection(database, collection).flatMap(sc => spatialQuery.run(sc))
+  def query(database: String, collection: String, spatialQuery : SpatialQuery): Future[Enumerator[JsObject]] =
+    getSpatialCollection(database, collection).map(sc => sc.run(spatialQuery))
 
   def getMediaStore(database: String, collection: String) : Future[MediaStore] = {
     import reactivemongo.api.collections.default._
