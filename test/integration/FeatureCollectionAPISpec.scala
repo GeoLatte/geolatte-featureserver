@@ -31,7 +31,7 @@ class FeatureCollectionAPISpec extends Specification {
       val rawBody = dataStr.getBytes("UTF-8")
       withData(testDbName, testColName, rawBody, fakeApplication) {
         val result = RestApiDriver.getCollection(testDbName, testColName)
-        val js = result.responseBody
+        val js = result.responseBody.getOrElse(Json.obj())
 
         (result.status must equalTo(OK)) and
           ((js \ "count").as[Int] must equalTo(100)) and
@@ -49,7 +49,7 @@ class FeatureCollectionAPISpec extends Specification {
 
         //if result isn't an array then turn it into an empty JsArray
         val js : JsArray = result.responseBody match {
-          case jsArr : JsArray => jsArr
+          case Some(jsArr : JsArray) => jsArr
           case _ => JsArray()
         }
 

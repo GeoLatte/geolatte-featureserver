@@ -3,7 +3,7 @@ package integration
 import play.api.libs.json._
 import play.api.test.Helpers._
 import play.api.test.{FakeApplication, FakeRequest}
-import play.api.mvc.{ChunkedResult, PlainResult, AsyncResult, Result}
+import play.api.mvc._
 
 import language.implicitConversions
 import play.api.Logger
@@ -11,31 +11,65 @@ import org.geolatte.geom._
 import org.geolatte.geom.crs.CrsId
 import play.api.libs.iteratee.Iteratee
 import play.api.libs.json.Json.JsValueWrapper
-import scala.concurrent.{Future, Promise, Await}
+import scala.concurrent.{Future, Await}
 import scala.concurrent.duration._
 import scala.collection.mutable.ListBuffer
+import play.api.libs.json.JsArray
+import play.api.mvc.AsyncResult
+import play.api.test.FakeApplication
+import play.api.mvc.ChunkedResult
+import play.api.libs.json.JsObject
+import play.api.http.Writeable
 
 /**
  * @author Karel Maesen, Geovise BVBA
  *         creation-date: 10/12/13
  */
 
-trait OpResult {
-  def wrappedResult: Result
+case class FakeRequestResult[B,T](
+  url: String,
+  format: Option[Result => JsValue] = None,
+  requestBody: Option[B] = None,
+  mkRequest: (String, Option[B]) => FakeRequest[T])(
+    implicit val w: Writeable[T]
+  ) {
 
-  def status: Int
+  val wrappedResult: Result = {
+    val req = mkRequest(url, requestBody)
+    route(req) match {
+      case Some(res) => res
+      case None => throw new RuntimeException("No route for req: " + req)
+    }
+  }
 
-  def url: String
+  val status: Int = play.api.test.Helpers.status(wrappedResult)
+  val responseBody = format.map(f => f(wrappedResult))
+
 }
 
-case class GETResult(url: String, status: Int, responseBody: JsValue = JsNull, wrappedResult: Result) extends OpResult
+object FakeRequestResult {
 
-case class PUTResult(url: String, status: Int, requestBody: JsValue = JsNull, wrappedResult: Result) extends OpResult
+  import UtilityMethods._
 
-case class POSTResult(url: String, status: Int, requestBody: JsValue = JsNull, responseBody: JsValue = JsNull,
-                      wrappedResult: Result) extends OpResult
+  def GET(url: String, format: Result => JsValue) =
+    new FakeRequestResult[JsValue, AnyContentAsEmpty.type](url = url, format = Some(format), mkRequest = makeGetRequest)
 
-case class DELETEResult(url: String, status: Int, wrappedResult: Result) extends OpResult
+  def PUT(url:String, body: Option[JsValue] = None) = new FakeRequestResult[JsValue,AnyContentAsJson](url = url, requestBody = body, mkRequest = makePutRequest)
+
+  def DELETE(url: String) = new FakeRequestResult[JsValue, AnyContentAsEmpty.type](url = url, mkRequest = makeDeleteRequest)
+
+  def POSTJson(url: String, body: JsValue, format: Result => JsValue) =
+    new FakeRequestResult(url = url, format=Some(format), requestBody = Some(body), mkRequest = makePostRequestJson)
+
+  def POSTRaw(url: String, body: Array[Byte], format: Result => JsValue) =
+      new FakeRequestResult(url = url, format=Some(format), requestBody = Some(body), mkRequest = makePostRequestRaw)
+
+}
+
+//This is for pattern match
+object ResultCheck {
+  def unapply[B,T](fr : FakeRequestResult[B,T]) : Option[(Int, Option[JsValue])] = Some(fr.status, fr.responseBody)
+}
 
 
 object RestApiDriver {
@@ -43,104 +77,77 @@ object RestApiDriver {
   import UtilityMethods._
   import API._
 
-  def makeDatabase(dbName: String): PUTResult = {
+  def makeDatabase(dbName: String) = {
     Logger.info("START CREATING DATABASE")
     val url = DATABASES/dbName
-    val put = makePutRequest(url, JsNull)
-    val created = route(put).get
-    val st = status(created)
-    Logger.info("CREATED DATABASE")
-    PUTResult(url, st, wrappedResult = created)
+    FakeRequestResult.PUT(url)
   }
 
-  def dropDatabase(dbName: String): DELETEResult = {
-    val url = DATABASES/dbName
-    val dropReq = makeDeleteRequest(url)
-    val dropped = route(dropReq).get
-    DELETEResult(url, status(dropped), wrappedResult = dropped)
+  def dropDatabase(dbName: String) = {
+    FakeRequestResult.DELETE(DATABASES/dbName)
   }
 
-  def getDatabases: GETResult = {
-    val get = makeGetRequest(DATABASES)
-    val resp = route(get).get
-    val dbRepr = contentAsJson(resp) match {
+  def getDatabases = {
+    val format = (resp: Result) => contentAsJson(resp) match {
+            case jArray: JsArray => jArray
+            case _ => JsNull //indicates that something wrong
+          }
+    FakeRequestResult.GET(DATABASES, format)
+
+  }
+
+  def getDatabase(dbName: String) = {
+    val format  = (resp: Result) => contentAsJson(resp) match {
       case jArray: JsArray => jArray
       case _ => JsNull //indicates that something wrong
     }
-    GETResult(API.DATABASES, status(resp), dbRepr, wrappedResult = resp)
+    FakeRequestResult.GET(DATABASES/dbName, format)
   }
 
-  def getDatabase(dbName: String): GETResult = {
-    val get = makeGetRequest(DATABASES/dbName)
-    val resp = route(get).get
-    val dbRepr = contentAsJson(resp) match {
-      case jArray: JsArray => jArray
-      case _ => JsNull //indicates that something wrong
-    }
-    GETResult(DATABASES/dbName, status(resp), dbRepr, wrappedResult = resp)
-  }
-
-  def makeCollection(dbName: String, colName: String, metadata: JsObject = defaultCollectionMetadata): PUTResult = {
+  def makeCollection(dbName: String, colName: String, metadata: JsObject = defaultCollectionMetadata) = {
     Logger.info("START CREATING COLLECTION")
     val url = DATABASES/dbName/colName
-    val put = makePutRequest(url, metadata)
-    val created = route(put).get
-    assert(created.isInstanceOf[AsyncResult])
-    val st = status(created)
-    Logger.info("CREATED COLLECTION")
-    PUTResult(url, st,wrappedResult = created)
+    FakeRequestResult.PUT(url, Some(metadata))
   }
 
-  def getCollection(dbName: String, colName: String): GETResult = {
+  def getCollection(dbName: String, colName: String) = {
     Logger.info("Start GETTING Collection")
     val url = DATABASES/dbName/colName
-    val get = makeGetRequest(url)
-    val resp = route(get).get
-    assert(resp.isInstanceOf[AsyncResult])
-    GETResult(url, status(resp), contentAsJson(resp), wrappedResult = resp)
+    FakeRequestResult.GET(url, contentAsJson)
   }
 
-  def getDownload(dbName: String, colName: String): GETResult = {
+  def getDownload(dbName: String, colName: String) = {
       Logger.info("Start download Collection")
       val url = DATABASES/dbName/colName/DOWNLOAD
-      val get = makeGetRequest(url)
-      val resp : Result = route(get).get
-      GETResult(url, status(resp), contentAsJsonStream(resp), wrappedResult = resp)
+      FakeRequestResult.GET(url, contentAsJsonStream)
   }
 
-  def postMediaObject(dbName: String, colName: String, mediaObject: JsObject) : POSTResult = {
+  def postMediaObject(dbName: String, colName: String, mediaObject: JsObject)  = {
     val url = DATABASES/dbName/colName/MEDIA
-    val post = makePostRequest(url, mediaObject)
-    val posted = route(post).get
-    val resp = contentAsJson(posted) match {
+
+    val format = (posted: Result) => contentAsJson(posted) match {
       case obj : JsObject => obj
       case _ => JsNull
     }
-    POSTResult(url, status(posted), requestBody = mediaObject, responseBody = resp, wrappedResult = posted)
+    FakeRequestResult.POSTJson(url, mediaObject, format)
   }
 
-  def getMediaObject(url: String): GETResult = {
-      val get = makeGetRequest(url)
-      val resp = route(get).get
-      val mediaRepr = contentAsJson(resp) match {
+  def getMediaObject(url: String) = {
+      val format = (resp: Result) => contentAsJson(resp) match {
         case obj: JsObject => obj
         case _ => JsNull //indicates that something wrong
       }
-      GETResult(url, status(resp), mediaRepr, wrappedResult = resp)
+      FakeRequestResult.GET(url, format)
   }
 
 
-  def deleteMediaObject(url: String): DELETEResult = {
-     val delReq = makeDeleteRequest(url)
-     val deleted = route(delReq).get
-     DELETEResult(url, status(deleted), wrappedResult = deleted)
+  def deleteMediaObject(url: String) = {
+     FakeRequestResult.DELETE(url)
   }
 
-  def getViews(dbName: String, colName: String): GETResult = {
+  def getViews(dbName: String, colName: String) = {
     val url = DATABASES/dbName/colName/VIEWS
-    val get = makeGetRequest(url)
-    val resp = route(get).get
-    GETResult(url, status(resp), contentAsJson(resp), wrappedResult = resp)
+    FakeRequestResult.GET(url, contentAsJson)
   }
   
   def onDatabase[T](db: String, app: FakeApplication = FakeApplication())(block: => T) {
@@ -173,12 +180,9 @@ object RestApiDriver {
   def loadData[B](db: String, col: String, data: Array[Byte]) = {
     Logger.info("START LOADING TEST DATA")
     val url = DATABASES/db/col/TX/INSERT
-    val post = makePostRequest(url, data)
-    val resp = route(post).get
-    val st = status(resp)
+    val res = FakeRequestResult.POSTRaw(url, data, contentAsJson)
     Logger.info("LOADED TEST DATA")
-    if (st != OK) throw new IllegalStateException("Failure to load test data.")
-    POSTResult(url, st, contentAsJson(resp), wrappedResult = resp)
+    res
   }
 
   def withData[B, T](db: String, col: String, data: Array[Byte], app: FakeApplication = FakeApplication())(block: => T) {
@@ -204,22 +208,22 @@ object UtilityMethods {
     "index-level" -> defaultIndexLevel
   )
 
-  def makeGetRequest(url: String) = FakeRequest(GET, url).withHeaders("Accept" -> "application/json")
+  def makeGetRequest(url: String, js :Option[JsValue] = None) = FakeRequest(GET, url).withHeaders("Accept" -> "application/json")
 
 
-  def makePutRequest(url: String, body: JsValue) = FakeRequest(PUT, url)
+  def makePutRequest(url: String, body: Option[JsValue] = None) = FakeRequest(PUT, url)
     .withHeaders("Accept" -> "application/json")
-    .withJsonBody(body)
+    .withJsonBody(body.getOrElse(JsNull))
 
-  def makePostRequest(url: String, body: JsValue) = FakeRequest(POST, url)
+  def makePostRequestJson(url: String, body: Option[JsValue]) = FakeRequest(POST, url)
      .withHeaders("Accept" -> "application/json")
-     .withJsonBody(body)
+     .withJsonBody(body.getOrElse(JsNull))
 
-  def makePostRequest[B](url: String, body: Array[Byte] ) = FakeRequest(POST, url)
+  def makePostRequestRaw(url: String, body: Option[Array[Byte]] ) = FakeRequest(POST, url)
     .withHeaders("Accept" -> "application/json")
-    .withRawBody(body)
+    .withRawBody(body.getOrElse(Array[Byte]()))
 
-  def makeDeleteRequest(url: String) = FakeRequest(DELETE, url)
+  def makeDeleteRequest(url: String, body: Option[JsValue] = None) = FakeRequest(DELETE, url)
 
   def contentAsJson(result: Result): JsValue = {
     val responseText = contentAsString(result)

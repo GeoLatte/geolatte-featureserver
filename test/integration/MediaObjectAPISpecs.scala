@@ -31,7 +31,7 @@ class MediaObjectAPISpecs extends Specification {
           "name" -> "creative-commons",
           "data" -> imageInbase64)
         )
-        val urlOpt = (putResult.responseBody \ "url").asOpt[String]
+        val urlOpt = (putResult.responseBody.getOrElse(Json.obj()) \ "url").asOpt[String]
 
         urlOpt match {
           case None => failure

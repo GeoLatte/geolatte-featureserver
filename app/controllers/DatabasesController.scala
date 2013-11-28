@@ -1,7 +1,7 @@
 package controllers
 
 import play.api.mvc._
-import play.api.libs.json.{JsValue, JsError, JsNull}
+import play.api.libs.json.{Json, JsValue, JsError, JsNull}
 import scala.concurrent.Future
 import play.Logger
 import scala.Some
@@ -56,14 +56,15 @@ object DatabasesController extends AbstractNoSqlController {
     implicit request => {
 
       def parse(body: JsValue) = body match {
-        case JsNull => Right(None)
+        case JsNull => Left(Json.obj("error" -> "Received empty request body (null json)."))
         case js: JsValue => js.validate(Formats.CollectionFormat).fold(
           invalid = errs => Left(JsError.toFlatJson(errs)),
           valid = v => Right(Some(v)))
+        case _ => Left(Json.obj("error" -> "Received no request body."))
       }
 
       def doCreate(spatialSpecOpt: Option[Metadata]) = {
-        repository.createCollection(db, col, spatialSpecOpt).map(_ => Ok(s"$db/$col ")).recover {
+        repository.createCollection(db, col, spatialSpecOpt).map(_ => Created(s"$db/$col ")).recover {
           case ex: DatabaseNotFoundException => NotFound(s"No database $db")
           case ex: CollectionAlreadyExists => Conflict(s"Collection $db/$col already exists.")
           case ex: Throwable => InternalServerError(s"{ex.getMessage}")
