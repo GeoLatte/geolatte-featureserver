@@ -202,20 +202,6 @@ object SpatialQuery {
     new BaseSpatialQuery(window, query, projection)
       with SubdividingMCQueryOptimizer
 
-  def withCount[T](base: SpatialQuery[T]) = new SpatialQuery[(Int, T)] {
-        def selector(sc: MongoSpatialCollection) = base.selector(sc)
-        def projection = base.projection
-        def run(sc: MongoSpatialCollection) = {
-          import BSONFormats.BSONDocumentFormat._
-          val queryBson = partialReads(base.selector(sc)) match {
-            case JsSuccess(qb, _) => qb
-            case _ => throw new RuntimeException("Failure to convert JSON Query doc to BSONDocument")
-          }
-          val cntCmd = Count(sc.collection.name, Some(queryBson))
-          sc.collection.db.command(cntCmd).flatMap( cnt => base.run(sc).map( e => (cnt, e)) )
-        }
-      }
-
   implicit def metadata2mortoncontext(metadata: Metadata) = new MortonContext(metadata.envelope, metadata.level)
 
 }

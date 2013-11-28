@@ -24,6 +24,7 @@ import play.api.libs.json.JsNumber
 import utilities.QueryParam
 import nosql.Exceptions.InvalidQueryException
 import play.api.libs.json.JsObject
+import play.api.libs.iteratee
 
 
 object FeatureCollectionController extends AbstractNoSqlController {
@@ -60,18 +61,28 @@ object FeatureCollectionController extends AbstractNoSqlController {
       }
   }
 
+  case class fState(features: List[JsObject] = Nil, collected: Int = 0, total: Int = 0)
+
+  def collectFeatures(start: Int, max: Int) : Iteratee[JsObject, (Int, List[JsObject])] = {
+    Iteratee.fold[JsObject, fState]( fState( total = start ) ) ( (state, feature) =>
+      if (state.collected >= max) state.copy( total = state.total+1)
+      else fState(feature::state.features, state.collected + 1, state.total + 1)
+    ).map(state => (state.total, state.features))
+  }
+
   def list(db: String, collection: String) = repositoryAction( repo =>
     implicit request => {
       implicit val queryStr = request.queryString
-      def enumerator2list(enum: Enumerator[JsObject]) : Future[List[JsObject]] = {
+      def enumerator2list(enum: Enumerator[JsObject]) : Future[(Int, List[JsObject])] = {
         val limit = Math.min( QueryParams.LIMIT.extract.getOrElse(COLLECTION_LIMIT),COLLECTION_LIMIT)
         val start = QueryParams.START.extract.getOrElse(0)
-        enum &> (Enumeratee.drop(start) compose Enumeratee.take(limit)) |>>> Iteratee.getChunks[JsObject]
+        enum &> Enumeratee.drop(start)  |>>> collectFeatures(start, limit)
       }
+
       Logger.info(s"Query string $queryStr on $db, collection $collection")
       repo.metadata(db, collection).flatMap(md =>
-        qetQueryResultWithCount(db, collection, md).flatMap {
-          case (cnt, enum) => enumerator2list(enum).map( featureList => (cnt, featureList))
+        qetQueryResult(db, collection, md).flatMap {
+          case enum => enumerator2list(enum)
         }.map[Result]{
           case (cnt, features) => toResult(FeaturesResource(cnt, features))
         }
@@ -131,11 +142,6 @@ object FeatureCollectionController extends AbstractNoSqlController {
                             (implicit queryStr: Map[String, Seq[String]]) : Future[Enumerator[JsObject]] =
     queryString2SpatialQuery(db,collection,smd).flatMap( q =>  MongoRepository.query(db, collection, q) )
 
-  private def qetQueryResultWithCount(db: String, collection: String, smd: Metadata)
-                                     (implicit queryStr: Map[String, Seq[String]]) : Future[(Int, Enumerator[JsObject])] =
-    queryString2SpatialQuery(db,collection,smd)
-      .map( q =>  SpatialQuery.withCount(q))
-      .flatMap( qwc => MongoRepository.query(db, collection, qwc) )
 
   implicit def queryString2SpatialQuery(db: String, collection: String, smd: Metadata)
                                        (implicit queryStr: Map[String, Seq[String]]) = {
