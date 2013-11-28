@@ -95,7 +95,8 @@ trait Repository {
 
   def getView(database: String, collection: String, id: String) : Future[JsObject]
 
-  def getViewByName(database: String, collection: String, name: String) : Future[JsObject]
+  def dropView(database: String, collection: String, id: String) : Future[ReturnVal]
+
 }
 
 object MongoRepository extends Repository {
@@ -376,16 +377,22 @@ object MongoRepository extends Repository {
   def getViews(database: String, collection: String): Future[List[JsObject]] =
     getViewDefs(database, collection) flatMap (_.find(Json.obj()).cursor[JsObject].toList)
 
-  private def getViewDef(database: String, collection: String, selector: JsObject) : Future[JsObject] =
-    getViewDefs(database, collection) flatMap (_.find(selector).cursor[JsObject].headOption.collect {
-          case Some(js) => js
-          case None => Json.obj()
-    })
+  /**
+   *
+   * @param id  OID or name of the View
+   */
+  private def mkViewSelector(id: String) = Json.obj("$or"  -> Json.arr( Json.obj("_id" -> id), Json.obj("name" -> id)))
 
   def getView(database: String, collection: String, id: String): Future[JsObject] =
-    getViewDef(database, collection, Json.obj("$or"  -> Json.arr( Json.obj("_id" -> id), Json.obj("name" -> id))) )
-  //getViewDef(database, collection, Json.obj("_id" -> id))
+    getViewDefs(database, collection) flatMap (_.find(mkViewSelector(id)).cursor[JsObject].headOption.collect {
+          case Some(js) => js
+          case None => throw new ViewObjectNotFoundException()
+    })
 
-  def getViewByName(database: String, collection: String, name: String) : Future[JsObject] = getViewDef(database, collection, Json.obj("name" -> name))
+  def dropView(database: String, collection: String, id: String): Future[MongoRepository.ReturnVal] =
+    getViewDefs(database, collection)
+      .flatMap(_.remove(mkViewSelector(id)))
+      .map (le => if (le.n ==0 ) throw new ViewObjectNotFoundException() else le)
+
 }
 

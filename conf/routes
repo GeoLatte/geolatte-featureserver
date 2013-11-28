@@ -30,9 +30,10 @@ POST /api/databases/:db/:collection/media        controllers.MediaController.sav
 GET /api/databases/:db/:collection/media/:id     controllers.MediaController.get(db: String, collection: String, id: String)
 DELETE /api/databases/:db/:collection/media/:id     controllers.MediaController.delete(db: String, collection: String, id: String)
 
-POST /api/databases/:db/:collection/views             controllers.ViewController.save(db: String, collection: String)
-GET /api/databases/:db/:collection/views              controllers.ViewController.list(db: String, collection: String)
-GET /api/databases/:db/:collection/views/:view        controllers.ViewController.get(db: String, collection: String, view: String)
+POST /api/databases/:db/:collection/views               controllers.ViewController.save(db: String, collection: String)
+GET /api/databases/:db/:collection/views                controllers.ViewController.list(db: String, collection: String)
+GET /api/databases/:db/:collection/views/:view          controllers.ViewController.get(db: String, collection: String, view: String)
+DELETE /api/databases/:db/:collection/views/:view       controllers.ViewController.delete(db: String, collection: String, view: String)
 
 #GET /rest/:db/:collection/metadata     controllers.MetadataResource.metadata(db: String, collection: String)
 

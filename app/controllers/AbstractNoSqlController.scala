@@ -77,6 +77,7 @@ trait AbstractNoSqlController extends Controller {
     case ex: DatabaseNotFoundException => NotFound(s"Database $db does not exist.")
     case ex: CollectionNotFoundException => NotFound(s"Collection $db/$col does not exist.")
     case ex: MediaObjectNotFoundException => NotFound(s"Media object does not exist.")
+    case ex: ViewObjectNotFoundException => NotFound(s"View object does not exist.")
     case ex: Throwable => {
       Logger.error(s"Internal server error with message : ${ex.getMessage}", ex)
       InternalServerError(s"Internal server error ${ex.getClass.getCanonicalName} with message : ${ex.getMessage}")

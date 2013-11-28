@@ -38,7 +38,7 @@ object ViewController extends AbstractNoSqlController {
     repo => implicit req => {
       implicit val qstr = req.queryString
       QueryParams.NAME.extract.map(name =>
-        repo.getViewByName(db, collection, name)
+        repo.getView(db, collection, name)
           .map(viewDef2Result(db, collection))
       ).orElse {
         Some(
@@ -55,6 +55,16 @@ object ViewController extends AbstractNoSqlController {
     repo => implicit req => {
       repo.getView(db, collection, id)
         .map(viewDef2Result(db, collection))
+        .recover(commonExceptionHandler(db, collection))
+    }
+  }
+
+  def delete(db: String, collection: String, view: String) = repositoryAction {
+    repo => implicit req => {
+      repo.dropView(db, collection, view).map(v => {
+        Logger.info(s"Result of drop of view: $view: $v")
+        Ok("View dropped")
+      })
         .recover(commonExceptionHandler(db, collection))
     }
   }
