@@ -179,7 +179,7 @@ class BaseSpatialQuery (
       val toExtent = Enumeratee.map[JsObject](obj => (obj, (obj \ SpecialMongoProperties.BBOX).asOpt[Extent]))
       val filter = Enumeratee.filter[(JsObject, Option[Extent])](p => p match {
         case (obj, None) => false
-        case (_, Some(ex)) => window.contains(ex.toEnvelope(window.getCrsId))
+        case (_, Some(ex)) => window.intersects(ex.toEnvelope(window.getCrsId))
       })
       val toObj = Enumeratee.map[(JsObject, Option[Extent])](p => p._1)
       (toExtent compose filter compose toObj)
