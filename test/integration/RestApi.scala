@@ -20,6 +20,7 @@ import play.api.test.FakeApplication
 import play.api.mvc.ChunkedResult
 import play.api.libs.json.JsObject
 import play.api.http.Writeable
+import org.specs2.matcher.MatchResult
 
 /**
  * @author Karel Maesen, Geovise BVBA
@@ -41,9 +42,10 @@ case class FakeRequestResult[B,T](
       case None => throw new RuntimeException("No route for req: " + req)
     }
   }
-
   val status: Int = play.api.test.Helpers.status(wrappedResult)
   val responseBody = format.map(f => f(wrappedResult))
+
+  def applyMatcher[R]( matcher: FakeRequestResult[B,T] => MatchResult[R]) = matcher(this)
 
 }
 
@@ -257,6 +259,11 @@ object UtilityMethods {
       case AsyncResult(p) => contentAsJsonStream(p.await.get)
       case _ => Json.arr(contentAsJson(result))
     }
+  }
+
+  implicit def toArrayOpt(js: Option[JsValue]) : Option[JsArray] = js match {
+    case Some(ja :JsArray) => Some(ja)
+    case _ => None
   }
 
 }
