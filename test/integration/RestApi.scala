@@ -54,7 +54,8 @@ object FakeRequestResult {
   def GET(url: String, format: Result => JsValue) =
     new FakeRequestResult[JsValue, AnyContentAsEmpty.type](url = url, format = Some(format), mkRequest = makeGetRequest)
 
-  def PUT(url:String, body: Option[JsValue] = None) = new FakeRequestResult[JsValue,AnyContentAsJson](url = url, requestBody = body, mkRequest = makePutRequest)
+  def PUT(url:String, body: Option[JsValue] = None) =
+    new FakeRequestResult[JsValue,AnyContentAsJson](url = url, requestBody = body, mkRequest = makePutRequest)
 
   def DELETE(url: String) = new FakeRequestResult[JsValue, AnyContentAsEmpty.type](url = url, mkRequest = makeDeleteRequest)
 
@@ -150,7 +151,7 @@ object RestApiDriver {
     FakeRequestResult.GET(url, contentAsJson)
   }
   
-  def onDatabase[T](db: String, app: FakeApplication = FakeApplication())(block: => T) {
+  def onDatabase[T](db: String, app: FakeApplication = FakeApplication())(block: => T) : T = {
     running(app){
       try {
         makeDatabase(db)
@@ -170,7 +171,7 @@ object RestApiDriver {
    * @param block the code to execute
    * @tparam T type of the block
    */
-  def onCollection[T](db: String, col: String, app: FakeApplication  = FakeApplication())(block: => T) {
+  def onCollection[T](db: String, col: String, app: FakeApplication  = FakeApplication())(block: => T) : T =  {
     onDatabase(db,app){
       makeCollection(db,col)
       block
@@ -185,7 +186,8 @@ object RestApiDriver {
     res
   }
 
-  def withData[B, T](db: String, col: String, data: Array[Byte], app: FakeApplication = FakeApplication())(block: => T) {
+  def withData[B, T](db: String, col: String, data: Array[Byte],
+                     app: FakeApplication = FakeApplication())(block: => T) : T =  {
     onCollection(db,col) {
       loadData(db,col, data)
       block
@@ -208,7 +210,8 @@ object UtilityMethods {
     "index-level" -> defaultIndexLevel
   )
 
-  def makeGetRequest(url: String, js :Option[JsValue] = None) = FakeRequest(GET, url).withHeaders("Accept" -> "application/json")
+  def makeGetRequest(url: String, js :Option[JsValue] = None) =
+    FakeRequest(GET, url).withHeaders("Accept" -> "application/json")
 
 
   def makePutRequest(url: String, body: Option[JsValue] = None) = FakeRequest(PUT, url)

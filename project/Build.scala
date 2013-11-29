@@ -27,7 +27,7 @@ object GeolatteNoSqlBuild extends Build {
 
    //Dependencies
   lazy val dependencies = Seq(
-    "org.specs2" %% "specs2" % "1.14" % "test",    
+    "org.specs2" %% "specs2" % "2.3.4" % "test",
     "org.geolatte" % "geolatte-geom" %  "0.12-SNAPSHOT",
     "org.reactivemongo" %% "reactivemongo" % "0.9",
     "org.reactivemongo" %% "play2-reactivemongo" % "0.9",
@@ -38,8 +38,8 @@ object GeolatteNoSqlBuild extends Build {
   //Build Settings applied to all projects
   lazy val commonBuildSettings = Seq(
     organization := "org.geolatte.nosql",
-    scalaVersion := "2.10.0",
-    scalacOptions += "-feature",
+    scalaVersion := "2.10.3",
+    scalacOptions ++= Seq("-feature", "-language:postfixOps", "-language:implicitConversions"),
     resolvers ++= commonResolvers
   )
 

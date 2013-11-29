@@ -34,15 +34,14 @@ class MediaObjectAPISpecs extends Specification {
         val urlOpt = (putResult.responseBody.getOrElse(Json.obj()) \ "url").asOpt[String]
 
         urlOpt match {
-          case None => failure
           case Some(url) => {
-            println("returned URL: "  + url)
-            val getResult = getMediaObject(url)
-            val deleteResult = deleteMediaObject(url)
-            (putResult.status must equalTo(OK)) and
+              val getResult = getMediaObject(url)
+              val deleteResult = deleteMediaObject(url)
+              (putResult.status must equalTo(OK)) and
               (getResult.status must equalTo(OK)) and
               (deleteResult.status must equalTo(OK))
           }
+          case _ => ko
         }
 
       }

@@ -19,7 +19,7 @@ class ViewsAPISpecs extends Specification {
       import RestApiDriver._
 
       onCollection(testDbName, testColName, fakeApplication) {
-        //TODO
+        pending
       }
 
     }
