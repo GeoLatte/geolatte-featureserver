@@ -4,36 +4,29 @@ import scala._
 import org.specs2._
 import play.api.libs.json._
 import play.api.test.Helpers._
-import play.api.test.WithApplication
 import org.specs2.specification.Step
+import play.api.test.WithApplication
 
 
 /**
  * @author Karel Maesen, Geovise BVBA
  *         creation-date: 10/26/13
  */
-class DatabaseAPISpec extends Specification {
-
-  val testDbName = "xfstestdb"
-  val testColName = "xfstestcoll"
-
-  val running = new WithApplication {}
+class DatabaseAPISpec extends NoSqlSpecification {
 
   //These specifications need to be sequential (we test for objects created in previous steps/examples
   def is =  s2""" $sequential
 
     The /api/databases should return
-      an array of databases                             ${running(e1)}
-      with content-type                                 ${running(e2("vnd.geolatte-featureserver+json"))}
-      CREATED on PUT of a database                      ${running(e3)}
-      CONFLICT on attempt to create twice               ${running(e4)}
-      array containing the name of db after create      ${running(e5)}
-      the db metadata on GET of db                      ${running(e6)}
-      DELETED on deleting the database                  ${running(e7)}
-      array without name of db, after drop              ${running(e8)}
-                                                        ${Step(running(cleanup))}
-
-
+      an array of databases                             ${e1}
+      with content-type                                 ${e2("vnd.geolatte-featureserver+json")}
+      CREATED on PUT of a database                      ${e3}
+      CONFLICT on attempt to create twice               ${e4}
+      array containing the name of db after create      ${e5}
+      the db metadata on GET of db                      ${e6}
+      DELETED on deleting the database                  ${e7}
+      array without name of db, after drop              ${e8}
+                                                        ${Step(cleanup)}
   """
 
   import RestApiDriver._
@@ -66,42 +59,4 @@ class DatabaseAPISpec extends Specification {
       filtered must beSome( (sq:Seq[JsValue]) => sq must have size numTimes )
     }
 
-
- // TODO -- move this to its own specs
-
-
-//    "On a PUT/DELETE of a collection, the collection is created/deleted" in {
-//      RestApiDriver.onDatabase(testDbName, fakeApplication) {
-//        //the inbound collection metadata
-//        val inMd = Json.obj(
-//          "index-level" -> 4,
-//          "extent" -> Json.obj(
-//            "crs" -> 4326,
-//            "envelope" -> Json.arr(0.0, 0.0, 90.0, 90.0)
-//          )
-//        )
-//
-//        // the outbound collection metadata
-//        val outMd = inMd + ("collection" -> JsString(testColName)) + ("count" -> JsNumber(0))
-//
-//
-//        //create collection
-//        val createdColl = RestApiDriver.makeCollection(testDbName, testColName, inMd)
-//        val checkCreatedCol = createdColl match {
-//          case ResultCheck(status, None) if status == CREATED => success
-//          case _ => failure
-//        }
-//
-//        val checkGetCollAfterCreation = RestApiDriver.getCollection(testDbName, testColName) match {
-//          case ResultCheck(status, Some(body)) if (status == OK && body == outMd) => success
-//          case _ => failure
-//        }
-//
-//        //TODO -- still check the response of /database/:db GET
-//        // val getDb = RestApiDriver.getDatabase(testDbName)
-//
-//        checkCreatedCol and checkGetCollAfterCreation
-//      }
-//    }
-//  }
 }
