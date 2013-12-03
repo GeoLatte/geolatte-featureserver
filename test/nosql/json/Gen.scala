@@ -11,6 +11,7 @@ import scala.Predef._
 import scala.Some
 
 import scala.language.implicitConversions
+import java.util.concurrent.atomic.AtomicInteger
 
 //
 // TODO -- Make this compatible with ScalaCheck
@@ -63,7 +64,9 @@ object Gen {
     def sample = None
   }
 
-  def id : Gen[Int] = gen { () => Some(Random.nextInt()) }
+  def id : Gen[Int] = gen {
+    { val i : AtomicInteger = new AtomicInteger(1); () => Some(i.getAndIncrement) }
+  }
 
   /**
    * Turns a list of Gen[T] into a Gen[List[T]]
