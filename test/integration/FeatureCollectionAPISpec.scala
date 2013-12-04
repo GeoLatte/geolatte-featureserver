@@ -43,7 +43,7 @@ class FeatureCollectionAPISpec extends InCollectionSpecification {
   def e2 = {
     val features = featureArray(size = 10).sample.get
     withFeatures(testDbName, testColName, features){
-      RestApiDriver.getDownload(testDbName, testColName).applyMatcher(
+      getDownload(testDbName, testColName).applyMatcher(
         res => (res.status must equalTo(OK)) and (res.responseBody must beSome(matchFeatures(features)))
       )
     }
@@ -57,7 +57,7 @@ class FeatureCollectionAPISpec extends InCollectionSpecification {
     def test(js: JsValue) = (js \ "features") must matchFeatures(featuresIn01)
     withFeatures(testDbName, testColName, allFeatures) {
       getList(testDbName, testColName, Map("bbox" -> bbox)).applyMatcher(
-        res => (res.status must equalTo(OK)) and (res.responseBody must beSome( (js: JsValue) => (js \ "features") must matchFeatures(featuresIn01)))
+        res => (res.status must equalTo(OK)) and (res.responseBody must beSome( matchFeaturesAsJson(featuresIn01, 10)))
       )
     }
   }
@@ -66,6 +66,20 @@ class FeatureCollectionAPISpec extends InCollectionSpecification {
     val tr :Reads[JsObject] = (__ \ "_id").json.prune andThen ( __ \ "_mc").json.prune andThen ( __  \ "_bbox").json.prune
     js.transform(tr).asOpt.getOrElse(JsNull)
   }
+
+  //TODO - consider to split this up as 3 separate matchers
+  def matchFeaturesAsJson(expected: JsArray, total: Int) : Matcher[JsValue] = (
+    (rec : JsValue) => rec match {
+          case js: JsObject => {
+            val receivedFeatureArray = (js \ "features").as[JsValue]
+            ( (js \ "count").asOpt[Int] must beSome( expected.value.size) ).isSuccess  &&
+              (receivedFeatureArray must matchFeatures( expected )).isSuccess &&
+              ( (js \ "total").asOpt[Int] must beSome( total ) ).isSuccess  &&
+              (receivedFeatureArray must matchFeatures(expected)).isSuccess
+          }
+          case _ => failure.isFailure
+        }, "Featurecollection Json isn't as expected")
+
 
   def matchFeatures(expected: JsArray) : Matcher[JsValue] = (
     (rec : JsValue) => rec match {
