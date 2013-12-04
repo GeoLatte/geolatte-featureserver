@@ -21,6 +21,8 @@ import reactivemongo.bson._
 
 import config.AppExecutionContexts.streamContext
 import scala.language.implicitConversions
+import reactivemongo.api.indexes.Index
+import reactivemongo.api.indexes.IndexType.Ascending
 
 
 case class Media(id: String, md5: Option[String])
@@ -242,7 +244,7 @@ object MongoRepository extends Repository {
       case Failure(t) => Logger.error(s"Attempt to create collection $colName threw exception: ${t.getMessage}")
     }
 
-    def saveMetadata(specOpt: Option[Metadata]) = specOpt map {
+    def saveMetadata = spatialSpec map {
       spec => connection(dbName).collection[JSONCollection](MetadataCollection).insert(Json.obj(
         ExtentField -> spec.envelope,
         IndexLevelField -> spec.level,
@@ -254,14 +256,23 @@ object MongoRepository extends Repository {
       }.map(_ => true)
     } getOrElse { Future.successful(true) }
 
+    def ensureIndexes = {
+      val idxManager = connection(dbName).collection[JSONCollection](colName).indexesManager
+      val fSpatialIndexCreated = if(spatialSpec.isDefined) {
+        idxManager.ensure(new Index(Seq((SpecialMongoProperties.MC, Ascending))))
+      } else Future.successful(true)
+      val fIdIndex = idxManager.ensure(new Index(key = Seq((SpecialMongoProperties.ID, Ascending)), unique = true))
+      fIdIndex.flatMap(_ => fSpatialIndexCreated)
+    }
+
     existsDb(dbName).flatMap( dbExists =>
       if ( dbExists ) existsCollection(dbName, colName)
       else throw new DatabaseNotFoundException()
     ).flatMap ( collectionExists =>
       if (!collectionExists) doCreateCollection()
       else throw new CollectionAlreadyExists()
-    ).flatMap ( _ =>  saveMetadata(spatialSpec))
-
+    ).flatMap ( _ =>  saveMetadata
+    ).flatMap ( _ => ensureIndexes)
   }
 
   def deleteCollection(dbName: String, colName: String) = {

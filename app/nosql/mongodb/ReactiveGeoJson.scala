@@ -68,10 +68,7 @@ object ReactiveGeoJson {
   def mkStreamingIteratee(writer: FeatureWriter)(implicit ec: ExecutionContext) : Iteratee[Array[Byte], Either[Result, Future[State]]] =
     Iteratee.fold( Future{ State() } ) {
       (fState: Future[State], chunk: Array[Byte]) => fState.flatMap( state => processChunk(writer, state, chunk))
-    }.mapDone( fstate => {
-        val fState = for ( finalState <- fstate; b <- writer.updateIndex()) yield finalState
-        Right(fState)
-    })
+    }.map( fstate => Right(fstate) )
 
   def bodyParser(writer: FeatureWriter)(implicit ec: ExecutionContext) = BodyParser("GeoJSON feature BodyParser") { request =>
     mkStreamingIteratee(writer)

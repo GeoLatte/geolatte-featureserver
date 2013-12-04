@@ -18,8 +18,6 @@ trait FeatureWriter {
 
   def add(features: Seq[JsObject]): Future[Int]
 
-  def updateIndex(): Future[Boolean]
-
 }
 
 case class MongoWriter(db: String, collection: String) extends FeatureWriter {
@@ -48,17 +46,5 @@ case class MongoWriter(db: String, collection: String) extends FeatureWriter {
       fInt
     }
   }
-
-  def updateIndex(): Future[Boolean] =
-    fCollectionInfo.flatMap {
-      case (coll, _ , _) => {
-        val idxManager = coll.indexesManager
-        val fResult = idxManager.ensure(new Index(Seq((SpecialMongoProperties.MC, Ascending))))
-        fResult onFailure {
-          case ex => Logger.warn("Failure on creating mortoncode index on collection %s" format coll.name)
-        }
-        fResult
-      }
-    }
 
 }
