@@ -142,7 +142,7 @@ object Gen {
       p <- prop
       i <- id
     } yield {
-      Json.obj( "id" -> JsNumber(i), "geometry" -> Json.toJson(g)(GeometryWithoutCrsWrites), "properties" -> p)
+      Json.obj( "id" -> JsNumber(i), "type" -> "Feature", "geometry" -> Json.toJson(g)(GeometryWithoutCrsWrites), "properties" -> p)
     }
 
   implicit def mortonCode2Envelope(mcVal: String)(implicit mc: MortonCode): Envelope = {
