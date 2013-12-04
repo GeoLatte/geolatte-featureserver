@@ -7,6 +7,7 @@ import scala.concurrent.Future
 import config.AppExecutionContexts
 import utilities.{QueryParam, SupportedMediaTypes}
 import config.ConfigurationValues.Format
+import nosql.mongodb.Repository
 
 object ViewController extends AbstractNoSqlController {
 
@@ -18,14 +19,14 @@ object ViewController extends AbstractNoSqlController {
   }
 
   def save(db: String, collection: String) = repositoryAction(BodyParsers.parse.tolerantJson) {
-    repo => implicit req => {
+    implicit req => {
       req.body.validate(ViewDefIn) match {
         case JsError(er) => {
           Logger.warn(er.mkString("\n"))
           Future.successful(BadRequest("Invalid view definition: " + er.mkString("\n")))
         }
         case JsSuccess(js, _) => {
-          repo
+          Repository
             .saveView(db, collection, js)
             .map[Result](res => Created.withHeaders("Location" -> controllers.routes.ViewController.get(db, collection, res).url))
             .recover(commonExceptionHandler(db, collection))
@@ -35,14 +36,14 @@ object ViewController extends AbstractNoSqlController {
   }
 
   def list(db: String, collection: String) = repositoryAction {
-    repo => implicit req => {
+    implicit req => {
       implicit val qstr = req.queryString
       QueryParams.NAME.extract.map(name =>
-        repo.getView(db, collection, name)
+        Repository.getView(db, collection, name)
           .map(viewDef2Result(db, collection))
       ).orElse {
         Some(
-          repo.getViews(db, collection)
+          Repository.getViews(db, collection)
             .map(res => res.map(el => format(db, collection)(el)))
             .map(res => Ok(JsArray(res)).as(SupportedMediaTypes(Format.JSON)))
         )
@@ -52,16 +53,16 @@ object ViewController extends AbstractNoSqlController {
 
 
   def get(db: String, collection: String, id: String) = repositoryAction {
-    repo => implicit req => {
-      repo.getView(db, collection, id)
+    implicit req => {
+      Repository.getView(db, collection, id)
         .map(viewDef2Result(db, collection))
         .recover(commonExceptionHandler(db, collection))
     }
   }
 
   def delete(db: String, collection: String, view: String) = repositoryAction {
-    repo => implicit req => {
-      repo.dropView(db, collection, view).map(v => {
+    implicit req => {
+      Repository.dropView(db, collection, view).map(v => {
         Logger.info(s"Result of drop of view: $view: $v")
         Ok("View dropped")
       })

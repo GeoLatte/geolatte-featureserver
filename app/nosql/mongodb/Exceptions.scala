@@ -28,4 +28,6 @@ package object Exceptions {
 
   case class ViewObjectNotFoundException(msg: String = "") extends NoSqlException(msg)
 
+  case class InvalidParamsException(msg: String = "") extends NoSqlException(msg)
+
 }

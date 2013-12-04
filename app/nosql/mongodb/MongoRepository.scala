@@ -45,68 +45,21 @@ object SpatialQuery {
   def apply(window: Envelope, query: JsObject) : SpatialQuery = apply(Some(window), Some(query), None)
 }
 
-
-trait Repository {
-
-  /**
-   *The type returned by the database driver when reporting success or failure
-   */
-  type ReturnVal
-
-  type SpatialCollection
-
-  type MediaStore
-
-  def listDatabases: Future[List[String]]
-
-  def getMetadata(dbName: String) : JSONCollection
-
-  def createDb(dbname: String) : Future[ReturnVal]
-
-  def dropDb(dbname: String) : Future[ReturnVal]
-
-  def existsDb(dbname: String): Future[Boolean]
-
-  def listCollections(dbname: String): Future[List[String]]
-
-  def count(database: String, collection: String) : Future[Int]
-
-  def metadata(database: String, collection: String): Future[Metadata]
-
-  def existsCollection(dbName: String, colName: String): Future[Boolean]
-
-  def createCollection(dbName: String, colName: String, spatialSpec: Option[Metadata]) : Future[Boolean]
-
-  def deleteCollection(dbName: String, colName: String) : Future[ReturnVal]
-
-  def getCollection(dbName: String, colName: String): Future[(JSONCollection, Metadata)]
-
-  def getSpatialCollection(database: String, collection: String) : Future[SpatialCollection]
-
-  def query(database: String, collection: String, sc: SpatialQuery): Future[Enumerator[JsObject]]
-
-  def getMediaStore(database: String, collection: String): Future[MediaStore]
-
-  def saveMedia(database: String, collection: String, producer: Enumerator[Array[Byte]], fileName: String, contentType: Option[String]) : Future[Media]
-
-  def getMedia(database: String, collection: String, id: String) : Future[MediaReader]
-
-  def saveView(database: String, collection: String, viewDef: JsObject) : Future[String]
-
-  def getViews(database: String, collection: String) : Future[List[JsObject]]
-
-  def getView(database: String, collection: String, id: String) : Future[JsObject]
-
-  def dropView(database: String, collection: String, id: String) : Future[ReturnVal]
-
-}
-
-object MongoRepository extends Repository {
+object Repository {
 
   import scala.collection.JavaConversions._
-  type ReturnVal = LastError
+
   type SpatialCollection = MongoSpatialCollection
   type MediaStore = GridFS[BSONDocument, BSONDocumentReader, BSONDocumentWriter]
+
+  /**
+   * combines the JSONCollection, Metadata and transformer.
+   *
+   * The transformer is a Reads[JsObject] that transform an input Feature to a Feature for persistence
+   * in the JSONCollection
+   */
+  type CollectionInfo = (JSONCollection, Metadata, Reads[JsObject])
+
 
   val CREATED_DBS_COLLECTION = "createdDatabases"
   val CREATED_DB_PROP = "db"
@@ -312,6 +265,12 @@ object MongoRepository extends Repository {
       }
     }
 
+  def getCollectionInfo(dbName: String, colName: String): Future[CollectionInfo] = Repository.getCollection(dbName, colName) map {
+      case (dbcoll, smd) if !smd.envelope.isEmpty =>
+        (dbcoll, smd, FeatureTransformers.mkFeatureIndexingTranformer(smd.envelope, smd.level))
+      case _ => throw new NoSpatialMetadataException(s"$dbName/$colName is not spatially enabled")
+    }
+
   def getSpatialCollection(database: String, collection: String) = {
     val coll = connection(database).collection[JSONCollection](collection)
     metadata(database, collection).map( md => MongoSpatialCollection(coll, md) )
@@ -400,7 +359,7 @@ object MongoRepository extends Repository {
           case None => throw new ViewObjectNotFoundException()
     })
 
-  def dropView(database: String, collection: String, id: String): Future[MongoRepository.ReturnVal] =
+  def dropView(database: String, collection: String, id: String): Future[LastError] =
     getViewDefs(database, collection)
       .flatMap(_.remove(mkViewSelector(id)))
       .map (le => if (le.n ==0 ) throw new ViewObjectNotFoundException() else le)

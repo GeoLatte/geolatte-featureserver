@@ -25,18 +25,15 @@ import config.AppExecutionContexts.streamContext
  */
 trait AbstractNoSqlController extends Controller {
 
-  implicit val repository : Repository = MongoRepository
-
-  def repositoryAction[T](bp : BodyParser[T])(action: Repository => Request[T] => Future[Result])
-                         (implicit repo : Repository) = Action(bp) {
+  def repositoryAction[T](bp : BodyParser[T])(action: Request[T] => Future[Result]) = Action(bp) {
          request =>
             Async {
-              action(repo)(request)
+              action(request)
             }
         }
 
-  def repositoryAction(action: Repository => Request[AnyContent] => Future[Result]) (implicit repo : Repository) : Action[AnyContent] =
-    repositoryAction(BodyParsers.parse.anyContent)(action)(repo)
+  def repositoryAction(action: Request[AnyContent] => Future[Result])  : Action[AnyContent] =
+    repositoryAction(BodyParsers.parse.anyContent)(action)
 
   implicit def toResult[A <: RenderableResource](result: A)(implicit request: RequestHeader): Result = {
 
@@ -78,6 +75,7 @@ trait AbstractNoSqlController extends Controller {
     case ex: CollectionNotFoundException => NotFound(s"Collection $db/$col does not exist.")
     case ex: MediaObjectNotFoundException => NotFound(s"Media object does not exist.")
     case ex: ViewObjectNotFoundException => NotFound(s"View object does not exist.")
+    case ex: InvalidParamsException => BadRequest(s"Invalid parameters: ${ex.getMessage}")
     case ex: Throwable => {
       Logger.error(s"Internal server error with message : ${ex.getMessage}", ex)
       InternalServerError(s"Internal server error ${ex.getClass.getCanonicalName} with message : ${ex.getMessage}")

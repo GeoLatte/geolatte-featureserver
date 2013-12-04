@@ -6,6 +6,7 @@ import play.api.libs.json._
 import scala.concurrent.Future
 import config.AppExecutionContexts
 import play.api.{http, Logger}
+import nosql.mongodb.Repository
 
 /**
  * @author Karel Maesen, Geovise BVBA
@@ -20,14 +21,14 @@ object MediaController extends AbstractNoSqlController {
   import Formats._
 
   def save(db: String, collection: String) = repositoryAction(BodyParsers.parse.tolerantJson){
-    repo => implicit req => {
+    implicit req => {
         req.body.validate[MediaObjectIn] match {
           case JsError(er) => {
             Logger.warn(er.mkString("\n"))
             Future.successful(BadRequest("Invalid media object"))
           }
           case JsSuccess(m, _) => {
-            repo
+            Repository
               .saveMedia(db, collection, Enumerator.enumerate(List(m.data)), m.name, Some(m.contentType))
               .map[Result](res => {
                   val url = routes.MediaController.get(db, collection, res.id).url
@@ -40,8 +41,8 @@ object MediaController extends AbstractNoSqlController {
 
 
   def get(db: String, collection: String, id: String) = repositoryAction {
-    repo => implicit req => {
-      repo.getMedia(db, collection, id).map[Result]( res => MediaReaderResource(res) )
+    implicit req => {
+      Repository.getMedia(db, collection, id).map[Result]( res => MediaReaderResource(res) )
       .recover(commonExceptionHandler(db,collection))
     }
   }

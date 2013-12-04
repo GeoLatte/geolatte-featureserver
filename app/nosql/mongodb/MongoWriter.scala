@@ -5,10 +5,8 @@ import scala.concurrent._
 import play.modules.reactivemongo.json.collection.JSONCollection
 import play.api.libs.iteratee.Enumerator
 import scala.util.{Failure, Success}
-import reactivemongo.api.indexes.Index
-import reactivemongo.api.indexes.IndexType.Ascending
 import play.api.libs.json._
-import nosql.Exceptions.DatabaseNotFoundException
+import nosql.mongodb.Repository.CollectionInfo
 
 /**
  * @author Karel Maesen, Geovise BVBA
@@ -24,13 +22,7 @@ case class MongoWriter(db: String, collection: String) extends FeatureWriter {
 
   import config.AppExecutionContexts.streamContext
 
-  type CollectionInfo = (JSONCollection, Metadata, Reads[JsObject])
-
-  val fCollectionInfo: Future[CollectionInfo] = MongoRepository.getCollection(db, collection) map {
-    case (dbcoll, smd) =>
-      (dbcoll, smd, FeatureTransformers.mkFeatureIndexingTranformer(smd.envelope, smd.level))
-    case _ => throw new DatabaseNotFoundException(s"$db/$collection not found, or collection is not spatially enabled")
-  }
+  val fCollectionInfo: Future[CollectionInfo] = Repository.getCollectionInfo(db, collection)
 
   def add(features: Seq[JsObject]) =
     fCollectionInfo.flatMap{ case (coll, smd, transfo) => {

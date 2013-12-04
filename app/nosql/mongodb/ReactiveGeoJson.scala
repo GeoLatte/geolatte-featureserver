@@ -15,6 +15,7 @@ import scala.concurrent.{Future, ExecutionContext}
 import play.api.libs.json.JsSuccess
 import play.api.data.validation.ValidationError
 import scala.util.Try
+import utilities.JsonHelper
 
 /**
  * @author Karel Maesen, Geovise BVBA
@@ -30,20 +31,9 @@ object ReactiveGeoJson {
    */
   case class State(msg: String = "", warnings: List[String] =  List(), dataRemaining: String = "")
 
-  /**
-   * Converts a Json validation error sequence for a Feature into a single error message String.
-   * @param errors JsonValidation errors
-   * @return
-   */
-  def processErrors(errors: Seq[(JsPath, Seq[ValidationError])]): String = {
-    errors map {
-      case (jspath, valerrors) => jspath + " :" + valerrors.map(ve => ve.message).mkString("; ")
-    } mkString "\n"
-  }
-
   def parseAsString( json: JsValue, state: State, features: List[JsObject]) = json.validate[JsObject] match {
     case JsSuccess(f, _) => (f :: features, state)
-    case JsError(seq) => (features, State("With Errors", processErrors(seq) :: state.warnings, ""))
+    case JsError(seq) => (features, State("With Errors", JsonHelper.JsValidationErrors2String(seq) :: state.warnings, ""))
   }
 
   def processChunk(writer: FeatureWriter, state: State, chunk: Array[Byte])

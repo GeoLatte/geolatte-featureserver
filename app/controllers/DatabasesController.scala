@@ -6,7 +6,7 @@ import scala.concurrent.Future
 import play.Logger
 import scala.Some
 import nosql.Exceptions._
-import nosql.mongodb.{Metadata, MongoRepository}
+import nosql.mongodb.{Repository, Metadata}
 
 
 /**
@@ -18,7 +18,7 @@ object DatabasesController extends AbstractNoSqlController {
   import config.AppExecutionContexts.streamContext
 
   def list() = repositoryAction(
-    repo => implicit request => repo.listDatabases.map[Result](dbs => DatabasesResource(dbs)).recover {
+    implicit request => Repository.listDatabases.map[Result](dbs => DatabasesResource(dbs)).recover {
       case ex =>
         Logger.error(s"Couldn't list databases : ${ex.getMessage}")
         InternalServerError(ex.getMessage)
@@ -26,7 +26,7 @@ object DatabasesController extends AbstractNoSqlController {
   )
 
   def getDb(db: String) = repositoryAction(
-    repo => implicit request  => repo.listCollections(db).map[Result](colls => {
+    implicit request  => Repository.listCollections(db).map[Result](colls => {
       Logger.info("collections found: " + colls)
       DatabaseResource(db, colls)
     }).recover(commonExceptionHandler(db))
@@ -34,7 +34,7 @@ object DatabasesController extends AbstractNoSqlController {
 
 
   def putDb(db: String) = repositoryAction (
-    repo => implicit request => repo.createDb(db).map(_ => Created(s"database $db created") ).recover {
+    implicit request => Repository.createDb(db).map(_ => Created(s"database $db created") ).recover {
           case ex : DatabaseAlreadyExists => Conflict(ex.getMessage)
           case ex : DatabaseCreationException => {
             Logger.error("Error: creating database", ex)
@@ -48,13 +48,13 @@ object DatabasesController extends AbstractNoSqlController {
   )
 
 
-  def deleteDb(db: String) = repositoryAction ( repo => implicit request =>
-        repo.dropDb(db).map( _ => Ok(s"database $db dropped") )
+  def deleteDb(db: String) = repositoryAction ( implicit request =>
+    Repository.dropDb(db).map( _ => Ok(s"database $db dropped") )
           .recover (commonExceptionHandler(db))
   )
 
-  def getCollection(db: String, collection: String) = repositoryAction ( repo => implicit request =>
-    repo.metadata(db, collection).map[Result](md => CollectionResource(md))
+  def getCollection(db: String, collection: String) = repositoryAction ( implicit request =>
+    Repository.metadata(db, collection).map[Result](md => CollectionResource(md))
           .recover(commonExceptionHandler(db,collection))
   )
 
@@ -70,7 +70,7 @@ object DatabasesController extends AbstractNoSqlController {
       }
 
       def doCreate(spatialSpecOpt: Option[Metadata]) = {
-        repository.createCollection(db, col, spatialSpecOpt).map(_ => Created(s"$db/$col ")).recover {
+        Repository.createCollection(db, col, spatialSpecOpt).map(_ => Created(s"$db/$col ")).recover {
           case ex: DatabaseNotFoundException => NotFound(s"No database $db")
           case ex: CollectionAlreadyExists => Conflict(s"Collection $db/$col already exists.")
           case ex: Throwable => InternalServerError(s"{ex.getMessage}")
@@ -87,8 +87,8 @@ object DatabasesController extends AbstractNoSqlController {
     }
   }
 
-  def deleteCollection(db: String, col: String) = repositoryAction (repo => implicit request =>
-    repo.deleteCollection(db, col).map(_ => Ok(s"Collection $db/$col deleted."))
+  def deleteCollection(db: String, col: String) = repositoryAction (implicit request =>
+    Repository.deleteCollection(db, col).map(_ => Ok(s"Collection $db/$col deleted."))
           .recover(commonExceptionHandler(db,col)))
 
 }

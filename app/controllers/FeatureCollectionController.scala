@@ -41,21 +41,21 @@ object FeatureCollectionController extends AbstractNoSqlController {
 
   val COLLECTION_LIMIT = current.configuration.getInt("max-collection-size").getOrElse[Int](10000)
 
-  def query(db: String, collection: String) = repositoryAction ( repo =>
+  def query(db: String, collection: String) = repositoryAction (
     implicit request => {
         implicit val queryStr = request.queryString
         Logger.info(s"Query string $queryStr on $db, collection $collection")
-        repo.metadata(db, collection).flatMap(md =>
+        Repository.metadata(db, collection).flatMap(md =>
           doQuery(db, collection, md).map[Result](x => x)
         ).recover {
           case ex: InvalidQueryException => BadRequest(s"${ex.getMessage}")
         }.recover (commonExceptionHandler(db, collection))
     })
 
-  def download(db: String, collection: String) = repositoryAction { repo =>
+  def download(db: String, collection: String) = repositoryAction {
     implicit request => {
         Logger.info(s"Downloading $db/$collection.")
-        repo.query(db, collection, SpatialQuery()).map[Result](x => x).recover {
+        Repository.query(db, collection, SpatialQuery()).map[Result](x => x).recover {
           commonExceptionHandler(db, collection)
         }
       }
@@ -72,7 +72,7 @@ object FeatureCollectionController extends AbstractNoSqlController {
 
   }
 
-  def list(db: String, collection: String) = repositoryAction( repo =>
+  def list(db: String, collection: String) = repositoryAction(
     implicit request => {
       implicit val queryStr = request.queryString
       def enumerator2list(enum: Enumerator[JsObject]) : Future[(Int, List[JsObject])] = {
@@ -82,7 +82,7 @@ object FeatureCollectionController extends AbstractNoSqlController {
       }
 
       Logger.info(s"Query string $queryStr on $db, collection $collection")
-      repo.metadata(db, collection).flatMap(md =>
+      Repository.metadata(db, collection).flatMap(md =>
         doQuery(db, collection, md).flatMap {
           case enum => enumerator2list(enum)
         }.map[Result]{
@@ -151,13 +151,13 @@ object FeatureCollectionController extends AbstractNoSqlController {
 
   private def doQuery(db: String, collection: String, smd: Metadata)
                             (implicit queryStr: Map[String, Seq[String]]) : Future[Enumerator[JsObject]] =
-    queryString2SpatialQuery(db,collection,smd).flatMap( q =>  MongoRepository.query(db, collection, q) )
+    queryString2SpatialQuery(db,collection,smd).flatMap( q =>  Repository.query(db, collection, q) )
 
 
   implicit def queryString2SpatialQuery(db: String, collection: String, smd: Metadata)
                                        (implicit queryStr: Map[String, Seq[String]]) = {
     val windowOpt = Bbox(QueryParams.BBOX.extractOrElse(""), smd.envelope.getCrsId)
-    val viewDef = QueryParams.WITH_VIEW.extract.map(vd => MongoRepository.getView(db, collection, vd))
+    val viewDef = QueryParams.WITH_VIEW.extract.map(vd => Repository.getView(db, collection, vd))
       .getOrElse(Future {Json.obj() })
     viewDef.map(vd => vd.as(Formats.ViewDefExtract))
       .map{ case (queryOpt, projOpt) => SpatialQuery(windowOpt, queryOpt, projOpt) }

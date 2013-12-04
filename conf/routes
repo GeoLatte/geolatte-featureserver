@@ -21,6 +21,7 @@ DELETE /api/databases/:db/:collection  controllers.DatabasesController.deleteCol
 POST /api/databases/:db/:collection/tx/insert controllers.TxController.insert(db: String, collection: String)
 POST /api/databases/:db/:collection/tx/remove controllers.TxController.remove(db: String, collection: String)
 POST /api/databases/:db/:collection/tx/update controllers.TxController.update(db: String, collection: String)
+POST /api/databases/:db/:collection/tx/upsert controllers.TxController.upsert(db: String, collection: String)
 
 GET /api/databases/:db/:collection/query         controllers.FeatureCollectionController.query(db: String, collection: String)
 GET /api/databases/:db/:collection/featurecollection         controllers.FeatureCollectionController.list(db: String, collection: String)

@@ -5,11 +5,17 @@ import reactivemongo.core.commands.{LastError, GetLastError}
 import config.AppExecutionContexts
 import scala.concurrent.Future
 import play.api.libs.json._
+import play.api.libs.functional.syntax._
+
 import org.codehaus.jackson.JsonParseException
-import play.modules.reactivemongo.json.collection.JSONCollection
 import scala.util.Try
-import nosql.mongodb._
 import nosql.mongodb.ReactiveGeoJson._
+import play.api.data.validation.ValidationError
+import utilities.JsonHelper
+import nosql.Exceptions.InvalidParamsException
+import nosql.mongodb.{ReactiveGeoJson, MongoWriter, Repository}
+import nosql.mongodb.Repository._
+
 
 /**
  * @author Karel Maesen, Geovise BVBA
@@ -20,7 +26,7 @@ object TxController extends AbstractNoSqlController {
   /**
    * An update operation on a MongoCollection using the sequence of MongoDBObjects as arguments
    */
-  type UpdateOp = (JSONCollection, Seq[JsValue]) => Future[LastError]
+  type UpdateOp = (CollectionInfo, TxParams) => Future[LastError]
 
   import AppExecutionContexts.streamContext
 
@@ -34,29 +40,55 @@ object TxController extends AbstractNoSqlController {
   }
 
   def remove(db: String, col: String) = mkUpdateAction(db, col)(
-    extractor = extractKey(_, "query"),
-    updateOp = (coll, arguments) => coll.remove(arguments(0), GetLastError(awaitJournalCommit = true)),
+    extractor = js => TxParams((js \"query").as[JsObject]) ,
+    updateOp = (collInfo, args) => {
+      val (coll, _, _) = collInfo
+      coll.remove(args.selectorDoc, GetLastError(awaitJournalCommit = true))
+    },
     "remove"
   )
 
   def update(db: String, col: String) = mkUpdateAction(db, col)(
-    extractor = extractKey(_, "query", "update"),
-    updateOp = (coll, arguments) => coll.update(arguments(0), arguments(1), GetLastError(awaitJournalCommit = true),
-      upsert= false, multi = true),
+    extractor = js => TxParams( (js \ "query").as[JsObject], (js \"update").asOpt[JsObject]),
+    updateOp = (collInfo, args) => {
+      val (coll, _, featureTransformer) = collInfo
+      if (!args.isUpdateDocWithOnlyOperators) throw InvalidParamsException("Only operators allowed in update document when updating.")
+      args.getUpdateDoc(featureTransformer) match {
+        case Right(updateDocJs) =>
+          coll.update(args.selectorDoc, updateDocJs, GetLastError(awaitJournalCommit = true),
+            upsert= false, multi = true)
+        case Left(seq) => throw InvalidParamsException(JsonHelper.JsValidationErrors2String(seq))
+      }
+    },
     "Update"
   )
 
+  def upsert(db: String, col: String) = mkUpdateAction(db, col)(
+      extractor = js => TxParams( Json.obj("id" -> (js \ "id").as[JsValue]), (js \"update").asOpt[JsObject]),
+      updateOp = (collInfo, args) => {
+          val (coll, _, featureTransformer) = collInfo
+          if (!args.isUpdateDocWithOnlyFields) throw InvalidParamsException("Only fields allowed in update document when upserting.")
+          args.getUpdateDoc(featureTransformer) match {
+            case Right(updateDocJs) =>
+              coll.update(args.selectorDoc, updateDocJs, GetLastError(awaitJournalCommit = true),
+                upsert= true, multi = false)
+            case Left(seq) => sys.error(JsonHelper.JsValidationErrors2String(seq))
+          }
+        },
+      "Upsert"
+    )
+
   private def mkUpdateAction(db: String, col: String)
-                            (extractor: JsValue => Seq[JsValue],
+                            (extractor: JsValue => TxParams,
                              updateOp: UpdateOp,
                              updateOpName: String) =
     Action(BodyParsers.parse.tolerantText) {
       implicit request => Async {
         val opArgumentsEither = toDBObject(request.body)(extractor)
-        repository.getCollection(db, col).flatMap( c =>
+        Repository.getCollectionInfo(db, col).flatMap( c =>
           (c, opArgumentsEither) match {
-            case ( (collection, _), Right(opArguments)) => {
-              updateOp(collection, opArguments)
+            case ( collInfo, Right(opArguments)) => {
+              updateOp(collInfo, opArguments)
             }
             case (_, Left(err)) => throw new IllegalArgumentException(s"Problem with update action arguments: $err")
           }
@@ -66,7 +98,7 @@ object TxController extends AbstractNoSqlController {
       }
     }
 
-  private def toDBObject(txt: String)(implicit extractor: JsValue => Seq[JsValue]): Either[String, Seq[JsValue]] = {
+  private def toDBObject(txt: String)(implicit extractor: JsValue => TxParams): Either[String, TxParams] = {
     Try {
       val jsValue = Json.parse(txt)
       jsValue match {
@@ -79,12 +111,24 @@ object TxController extends AbstractNoSqlController {
     }.get
   }
 
-  private def extractKey(mobj: JsValue, keys: String*): Seq[JsValue] =
-    for {
-      key <- keys
-      kVal =  mobj \ key
-      if !kVal.isInstanceOf[JsUndefined]
-    } yield kVal
+  case class TxParams(selectorDoc: JsObject = Json.obj(), updateDoc: Option[JsObject] = None) {
+    def isUpdateDocWithOnlyOperators : Boolean =
+      updateDoc.exists(ud => ud.keys.filterNot(k => k.startsWith("$")).isEmpty)
+
+    def isUpdateDocWithOnlyFields : Boolean =
+          updateDoc.exists(ud => ud.keys.filter(k => k.startsWith("$")).isEmpty)
+
+    def getUpdateDoc(trans: Reads[JsObject]) = {
+      if (isUpdateDocWithOnlyOperators) Right(updateDoc.get)
+      else if (isUpdateDocWithOnlyFields) {
+        updateDoc.get.transform(trans).asEither
+      } else {
+        Left(Seq((__ \ "update",Seq(ValidationError("No update document, or mixture of fields and operators")))))
+      }
+    }
+
+  }
+
 
   /**
    * Creates a new BodyParser that deserializes GeoJson features in the input and
