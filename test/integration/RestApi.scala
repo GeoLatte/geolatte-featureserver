@@ -152,7 +152,8 @@ object RestApiDriver {
     val url = DATABASES/dbName/colName/VIEWS
     FakeRequestResult.GET(url, contentAsJson)
   }
-  
+
+  @deprecated
   def onDatabase[T](db: String, app: FakeApplication = FakeApplication())(block: => T) : T = {
     running(app){
       try {
@@ -173,6 +174,7 @@ object RestApiDriver {
    * @param block the code to execute
    * @tparam T type of the block
    */
+  @deprecated
   def onCollection[T](db: String, col: String, app: FakeApplication  = FakeApplication())(block: => T) : T =  {
     onDatabase(db,app){
       makeCollection(db,col)
@@ -188,6 +190,14 @@ object RestApiDriver {
     res
   }
 
+  def removeData(db: String, col:String) = {
+    Logger.info("START REMOVING TEST DATA")
+    val url = DATABASES/db/col/TX/REMOVE
+    FakeRequestResult.POSTJson(url, Json.obj("query" -> Json.obj()), res => JsNull )
+    Logger.info("REMOVED TEST DATA")
+  }
+
+  @deprecated
   def withData[B, T](db: String, col: String, data: Array[Byte],
                      app: FakeApplication = FakeApplication())(block: => T) : T =  {
     onCollection(db,col) {
