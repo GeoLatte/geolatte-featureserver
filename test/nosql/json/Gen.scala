@@ -145,6 +145,8 @@ object Gen {
       Json.obj( "id" -> JsNumber(i), "type" -> "Feature", "geometry" -> Json.toJson(g)(GeometryWithoutCrsWrites), "properties" -> p)
     }
 
+  def geoJsonFeatureArray( jsonGen: Gen[JsObject], size: Int) : Gen[JsArray] = sequence(List.fill(size)(jsonGen)).map(js => JsArray(js))
+
   implicit def mortonCode2Envelope(mcVal: String)(implicit mc: MortonCode): Envelope = {
      mc.envelopeOf(mcVal)
    }
