@@ -1,6 +1,8 @@
 package integration
 
 import play.api.libs.json._
+import play.api.libs.functional.syntax._
+
 import play.api.test.Helpers._
 import play.api.test.{FakeApplication, FakeRequest}
 import play.api.mvc._
@@ -18,9 +20,11 @@ import play.api.libs.json.JsArray
 import play.api.mvc.AsyncResult
 import play.api.test.FakeApplication
 import play.api.mvc.ChunkedResult
-import play.api.libs.json.JsObject
 import play.api.http.Writeable
-import org.specs2.matcher.MatchResult
+import org.specs2._
+import org.specs2.matcher._
+import config.ConfigurationValues
+import org.geolatte.geom.curve.{MortonContext, MortonCode}
 
 /**
  * @author Karel Maesen, Geovise BVBA
@@ -125,6 +129,12 @@ object RestApiDriver {
       FakeRequestResult.GET(url, contentAsJsonStream)
   }
 
+  def getList(dbName: String, colName: String, queryStr: String ) = {
+    Logger.info("Start /list on collection")
+    val url = DATABASES/dbName/colName/FEATURECOLLECTION?queryStr
+    FakeRequestResult.GET(url, contentAsJson)
+  }
+
   def postMediaObject(dbName: String, colName: String, mediaObject: JsObject)  = {
     val url = DATABASES/dbName/colName/MEDIA
 
@@ -197,15 +207,15 @@ object RestApiDriver {
     Logger.info("REMOVED TEST DATA")
   }
 
-  @deprecated
-  def withData[B, T](db: String, col: String, data: Array[Byte],
-                     app: FakeApplication = FakeApplication())(block: => T) : T =  {
-    onCollection(db,col) {
-      loadData(db,col, data)
+  def withFeatures[B,T](db: String, col:String, features: JsArray)(block:  => T) = {
+    val data = features.value map(j => Json.stringify(j)) mkString ConfigurationValues.jsonSeparator getBytes("UTF-8")
+    loadData(db,col,data)
+    try {
       block
+    } finally {
+      removeData(db,col)
     }
   }
-  
 
 }
 
@@ -213,14 +223,17 @@ object UtilityMethods {
 
   import play.api.libs.concurrent._
 
-  implicit val defaultExtent = new Envelope(0,0,90,90, CrsId.valueOf(4326))
   val defaultIndexLevel = 4
+  implicit val defaultExtent = new Envelope(0,0,90,90, CrsId.valueOf(4326))
+  implicit val defaultMortonCode = new MortonCode(new MortonContext(defaultExtent, defaultIndexLevel))
 
   val defaultCollectionMetadata = Json.obj(
     "extent" -> Json.obj("crs" -> defaultExtent.getCrsId.getCode, "envelope" ->
       Json.arr(defaultExtent.getMinX,defaultExtent.getMinY,defaultExtent.getMaxX,defaultExtent.getMaxY)),
     "index-level" -> defaultIndexLevel
   )
+
+  implicit def mapOfQParams2QueryStr(params: Map[String,String]) : String = params.map { case (k,v) => s"$k=$v"} mkString "&"
 
   def makeGetRequest(url: String, js :Option[JsValue] = None) =
     FakeRequest(GET, url).withHeaders("Accept" -> "application/json")
@@ -283,6 +296,7 @@ object API {
 
   case class URLToken(token: String) {
     def /(other: URLToken): URLToken = URLToken(s"$token/${other.token}")
+    def ?(other:URLToken) : URLToken = URLToken(s"$token?${other.token}")
   }
 
   implicit def URLToken2String(urlToken : URLToken): String = urlToken.token
@@ -296,6 +310,8 @@ object API {
   val DOWNLOAD = "download"
 
   val QUERY = "query"
+
+  val FEATURECOLLECTION = "featurecollection"
 
   val INSERT = "insert"
 

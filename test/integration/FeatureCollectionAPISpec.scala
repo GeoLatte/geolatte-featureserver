@@ -1,20 +1,31 @@
 package integration
 
-import org.specs2.mutable.Specification
-import play.api.test.FakeApplication
 import nosql.json.Gen
+import nosql.json.Gen._
 import play.api.libs.json._
+import play.api.libs.functional.syntax._
 import play.api.http.Status._
+import org.specs2.matcher.Matcher
+import java.util.regex.MatchResult
+import org.geolatte.geom.Envelope
 
 /**
  * @author Karel Maesen, Geovise BVBA
  *         creation-date: 11/22/13
  */
-class FeatureCollectionAPISpec extends Specification {
+class FeatureCollectionAPISpec extends InCollectionSpecification {
 
-  "The application" should {
-    val testDbName = "xfstestdb"
-    val testColName = "xfstestcoll"
+
+  def is = s2""" $sequential
+
+     The FeatureCollection /download should:
+       return 404 when the collection does not exist                $e1
+       return all elements when the collection does exist           $e2
+
+     The FeatureCollection /list should:
+       return the objects contained within the specified bbox       $e3
+
+  """
 
     //import default values
     import UtilityMethods._
@@ -22,41 +33,52 @@ class FeatureCollectionAPISpec extends Specification {
 
     //Generators for data
     val prop = Gen.properties("foo" -> Gen.oneOf("bar1", "bar2", "bar3"), "num" -> Gen.oneOf(1, 2, 3))
-    val geom = Gen.lineString(3)
-    val feature = Gen.geoJsonFeature(Gen.id, geom, prop)
-    val fakeApplication = FakeApplication()
+    def geom(mc: String = "") = Gen.lineString(3)(mc)
+    val idGen = Gen.id
+    def feature(mc: String = "") = Gen.geoJsonFeature(idGen, geom(mc), prop)
+    def featureArray(mc: String = "", size: Int = 10) = Gen.geoJsonFeatureArray(feature(mc), size)
 
-    "On a GET db/col the collection metadata should contain the number of elements" in {
-      val dataStr = List.fill(100)(0).map(_ => Json.stringify(feature.sample.get)) mkString "\n"
-      val rawBody = dataStr.getBytes("UTF-8")
-      withData(testDbName, testColName, rawBody, fakeApplication) {
-        val result = RestApiDriver.getCollection(testDbName, testColName)
-        val js = result.responseBody.getOrElse(Json.obj())
+  def e1 = getDownload(testDbName, "nonExistingCollection").applyMatcher( _.status must equalTo(NOT_FOUND))
 
-        (result.status must equalTo(OK)) and
-          ((js \ "count").as[Int] must equalTo(100)) and
-          ((js \ "extent" \ "crs").as[Int] must equalTo(defaultExtent.getCrsId.getCode)) and
-          ((js \ "collection").as[String] must equalTo(testColName)) and
-          ((js \ "index-level").as[Int] must equalTo(defaultIndexLevel))
-      }
+  def e2 = {
+    val features = featureArray(size = 10).sample.get
+    withFeatures(testDbName, testColName, features){
+      RestApiDriver.getDownload(testDbName, testColName).applyMatcher(
+        res => (res.status must equalTo(OK)) and (res.responseBody must beSome(matchFeatures(features)))
+      )
     }
-
-    "On a download of db/col the result should contain the number of elements" in {
-      val dataStr = List.fill(10)(0).map(_ => Json.stringify(feature.sample.get)) mkString "\n"
-      val rawBody = dataStr.getBytes("UTF-8")
-      withData(testDbName, testColName, rawBody, fakeApplication) {
-        val result = RestApiDriver.getDownload(testDbName, testColName)
-
-        //if result isn't an array then turn it into an empty JsArray
-        val js : JsArray = result.responseBody match {
-          case Some(jsArr : JsArray) => jsArr
-          case _ => JsArray()
-        }
-
-        (result.status must equalTo(OK)) and
-          (js.value.size must equalTo(10))
-      }
-    }
-
   }
+
+  def e3 = {
+    val (featuresIn01, allFeatures) = featureArray("01", 10)
+      .flatMap(f1 => featureArray("1", 20).map(f2 => (f1, f2 ++ f1))).sample.get
+    val env: Envelope = "01"
+    val bbox = s"${env.getMinX},${env.getMinY},${env.getMaxX},${env.getMaxY}"
+    def test(js: JsValue) = (js \ "features") must matchFeatures(featuresIn01)
+    withFeatures(testDbName, testColName, allFeatures) {
+      getList(testDbName, testColName, Map("bbox" -> bbox)).applyMatcher(
+        res => (res.status must equalTo(OK)) and (res.responseBody must beSome( (js: JsValue) => (js \ "features") must matchFeatures(featuresIn01)))
+      )
+    }
+  }
+
+  def pruneSpecialProperties(js: JsValue) : JsValue = {
+    val tr :Reads[JsObject] = (__ \ "_id").json.prune andThen ( __ \ "_mc").json.prune andThen ( __  \ "_bbox").json.prune
+    js.transform(tr).asOpt.getOrElse(JsNull)
+  }
+
+  def matchFeatures(expected: JsArray) : Matcher[JsValue] = (
+    (rec : JsValue) => rec match {
+      case jsv: JsArray =>
+        jsv.value.map(pruneSpecialProperties).toSet.equals(expected.value.toSet) //toSet so test in order independent
+
+      case _ => false
+    }, "Features don't match")
+
+
+
+
+
+
+
 }
