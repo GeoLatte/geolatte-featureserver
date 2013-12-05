@@ -7,6 +7,7 @@ import play.api.libs.iteratee.Enumerator
 import scala.util.{Failure, Success}
 import play.api.libs.json._
 import nosql.mongodb.Repository.CollectionInfo
+import utilities.JsonHelper
 
 /**
  * @author Karel Maesen, Geovise BVBA
@@ -25,17 +26,22 @@ case class MongoWriter(db: String, collection: String) extends FeatureWriter {
   val fCollectionInfo: Future[CollectionInfo] = Repository.getCollectionInfo(db, collection)
 
   def add(features: Seq[JsObject]) =
-    fCollectionInfo.flatMap{ case (coll, smd, transfo) => {
-      val docs = features.map(f => f.transform(transfo)).collect {
-        case JsSuccess(transformed, _) => transformed
+    if(features.isEmpty) Future.successful(0)
+    else {
+      fCollectionInfo.flatMap{ case (coll, smd, transfo) => {
+        Logger.debug("Received as input: " + features)
+        val docs = features.map(f => f.transform(transfo)).collect {
+          case JsSuccess(transformed, _) => transformed
+        }
+        Logger.debug(" Flushing data to mongodb (" + docs.size + " features)")
+        val fInt = coll.bulkInsert(Enumerator.enumerate(docs))
+        fInt.onSuccess {
+          case num => Logger.info(s"Successfully inserted $num features")
+        }
+        fInt.recover {
+          case t : Throwable => { Logger.warn(s"Insert failed with error: ${t.getMessage}"); 0 }
+        }
       }
-      Logger.debug(" Flushing data to mongodb (" + docs.size + " features)")
-      val fInt = coll.bulkInsert(Enumerator.enumerate(docs))
-      fInt.onComplete {
-        case Success(num) => Logger.info(s"Successfully inserted $num features")
-        case Failure(f) => Logger.warn(s"Insert failed with error: ${f.getMessage}")
-      }
-      fInt
     }
   }
 
