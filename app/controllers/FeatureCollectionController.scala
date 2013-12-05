@@ -34,9 +34,16 @@ object FeatureCollectionController extends AbstractNoSqlController {
   object QueryParams {
     //we leave bbox as a String parameter because an Envelope needs a CrsId
     val BBOX = QueryParam("bbox", (s: String) => Some(s))
+
     val WITH_VIEW = QueryParam("with-view", (s: String) => Some(s))
+
     val LIMIT = QueryParam("limit", (s:String) => Some(s.toInt))
+
     val START = QueryParam("start", (s:String) => Some(s.toInt))
+
+    val PROJECTION : QueryParam[JsArray] =QueryParam("projection", (s:String) => Some(
+      JsArray( s.split(',').toSeq.map(e => JsString(e)) )
+    ))
   }
 
   val COLLECTION_LIMIT = current.configuration.getInt("max-collection-size").getOrElse[Int](10000)
@@ -157,12 +164,23 @@ object FeatureCollectionController extends AbstractNoSqlController {
   implicit def queryString2SpatialQuery(db: String, collection: String, smd: Metadata)
                                        (implicit queryStr: Map[String, Seq[String]]) = {
     val windowOpt = Bbox(QueryParams.BBOX.extractOrElse(""), smd.envelope.getCrsId)
+    val projectionOpt = QueryParams.PROJECTION.extract
     val viewDef = QueryParams.WITH_VIEW.extract.map(vd => Repository.getView(db, collection, vd))
       .getOrElse(Future {Json.obj() })
     viewDef.map(vd => vd.as(Formats.ViewDefExtract))
-      .map{ case (queryOpt, projOpt) => SpatialQuery(windowOpt, queryOpt, projOpt) }
+      .map{ case (queryOpt, projOpt) => SpatialQuery(windowOpt, queryOpt, jsOptMerge(projOpt, projectionOpt)) }
   }
 
+
+  //utility to easily merge Options of JsArray (or other sequence)
+  private def jsOptMerge(elem: Option[JsArray]*) : Option[JsArray]=
+    elem.foldLeft( None: Option[JsArray] ){
+      (s,e) => e match {
+        case None => s
+        case Some(_) if s.isDefined =>  e.map(js => js ++ s.get)
+        case _ => e
+      }
+    }
 
   object Bbox {
 

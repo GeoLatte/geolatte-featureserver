@@ -124,9 +124,15 @@ object RestApiDriver {
   }
 
   def getDownload(dbName: String, colName: String) = {
-      Logger.info("Start download Collection")
-      val url = DATABASES/dbName/colName/DOWNLOAD
-      FakeRequestResult.GET(url, contentAsJsonStream)
+    Logger.info("Start download Collection")
+    val url = DATABASES / dbName / colName / DOWNLOAD
+    FakeRequestResult.GET(url, contentAsJsonStream)
+  }
+
+  def getQuery(dbName:String, colName: String, queryStr: String) = {
+    Logger.info("Start Collection Query")
+    val url = DATABASES/dbName/colName/QUERY?queryStr
+    FakeRequestResult.GET(url, contentAsJsonStream)
   }
 
   def getList(dbName: String, colName: String, queryStr: String ) = {

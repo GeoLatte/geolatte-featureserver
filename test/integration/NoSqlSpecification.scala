@@ -14,7 +14,7 @@ import play.api.test.FakeApplication
 import play.api.libs.json.JsArray
 import play.api.test.FakeApplication
 import play.api.libs.json.JsObject
-import org.specs2.matcher.Matcher
+import org.specs2.matcher.{Expectable, Matcher}
 
 /**
  * @author Karel Maesen, Geovise BVBA
@@ -62,7 +62,7 @@ abstract class InCollectionSpecification(app: FakeApplication = FakeApplication(
   def matchFeaturesInJson(expected: JsArray): Matcher[JsValue] = (
     (js: JsValue) => {
       val receivedFeatureArray = (js \ "features").as[JsValue]
-      (receivedFeatureArray must matchFeatures(expected)).isSuccess
+      (receivedFeatureArray must beFeatures(expected)).isSuccess
 
     }, "Featurecollection Json doesn't contain expected features")
 
@@ -76,13 +76,43 @@ abstract class InCollectionSpecification(app: FakeApplication = FakeApplication(
       ((recJs \ "count").asOpt[Int] must beSome(expectedCount)).isSuccess
     }, "FeatureCollection Json doesn't have expected value for count field")
 
-  def matchFeatures(expected: JsArray): Matcher[JsValue] = (
-    (rec: JsValue) => rec match {
-      case jsv: JsArray =>
-        jsv.value.map(pruneSpecialProperties).toSet.equals(expected.value.toSet) //toSet so test in order independent
 
-      case _ => false
-    }, "Features don't match")
+  def verify(rec: JsValue, expected: JsArray) = rec match {
+    case jsv: JsArray =>
+      val received = jsv.value.map(pruneSpecialProperties)
+      val ok = received.toSet.equals(expected.value.toSet) //toSet so test in order independent
+    val msg = if (!ok) {
+        (for (f <- received if !expected.value.contains(f)) yield f).headOption.
+          map(f => s" e.g. ${Json.stringify(f)}\nnot found among received features. Example of expected:\n" +
+          s"${expected.value.headOption.getOrElse("<None expected.>")}")
+          .getOrElse("<Missing object in received>")
+      } else "Received array matches expected"
+      (ok, msg)
+    case _ => (false, "Did not receive array")
+  }
+
+  case class beFeatures(expected: JsArray) extends Matcher[JsValue] {
+    def apply[J <: JsValue](r: Expectable[J]) = {
+      lazy val (succ, msg) = verify(r.value, expected)
+      result(succ,
+        msg,
+        msg,
+        r)
+    }
+  }
+
+  case class beSomeFeatures(expected: JsArray) extends Matcher[Option[JsValue]] {
+    def apply[J <: Option[JsValue]](r: Expectable[J]) = {
+      lazy val (succ, msg) = if (!r.value.isDefined)
+        (false, "Expected Some(<features>), received None")
+        else verify(r.value.get, expected)
+      result(succ,
+        "received Some(<features>) with features matching expected",
+        msg,
+        r)
+    }
+  }
+
 
 }
 

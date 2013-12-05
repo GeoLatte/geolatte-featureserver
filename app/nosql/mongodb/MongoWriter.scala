@@ -29,7 +29,7 @@ case class MongoWriter(db: String, collection: String) extends FeatureWriter {
     if(features.isEmpty) Future.successful(0)
     else {
       fCollectionInfo.flatMap{ case (coll, smd, transfo) => {
-        Logger.debug("Received as input: " + features)
+        //Logger.debug("Received as input: " + features)  //even for debug this produces way too much loggin data
         val docs = features.map(f => f.transform(transfo)).collect {
           case JsSuccess(transformed, _) => transformed
         }

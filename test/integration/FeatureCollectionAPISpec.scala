@@ -21,10 +21,15 @@ class FeatureCollectionAPISpec extends InCollectionSpecification {
        return all elements when the collection does exist                         $e2
 
      The FeatureCollection /list should:
-       return the objectscontained within the specified bbox as json object       $e3
+       return the objects contained within the specified bbox as json object      $e3
        respond to the start query-param                                           $e4
        respond to the limit query-param                                           $e5
        support pagination                                                         $e6
+
+     The FeatureCollection /query should:
+      return the objects contained within the specified bbox as a stream          $e7
+      support the PROJECTION parameter                                            $e8
+
 
   """
 
@@ -33,7 +38,7 @@ class FeatureCollectionAPISpec extends InCollectionSpecification {
     import RestApiDriver._
 
     //Generators for data
-    val prop = Gen.properties("foo" -> Gen.oneOf("bar1", "bar2", "bar3"), "num" -> Gen.oneOf(1, 2, 3))
+    val prop = Gen.properties("foo" -> Gen.oneOf("bar1", "bar2", "bar3"), "num" -> Gen.oneOf(1, 2, 3), "something" -> Gen.oneOf("else", "bad"))
     def geom(mc: String = "") = Gen.lineString(3)(mc)
     val idGen = Gen.id
     def feature(mc: String = "") = Gen.geoJsonFeature(idGen, geom(mc), prop)
@@ -45,7 +50,7 @@ class FeatureCollectionAPISpec extends InCollectionSpecification {
     val features = featureArray(size = 10).sample.get
     withFeatures(testDbName, testColName, features){
       getDownload(testDbName, testColName).applyMatcher(
-        res => (res.status must equalTo(OK)) and (res.responseBody must beSome(matchFeatures(features)))
+        res => (res.status must equalTo(OK)) and (res.responseBody must beSomeFeatures(features))
       )
     }
   }
@@ -77,13 +82,31 @@ class FeatureCollectionAPISpec extends InCollectionSpecification {
         for (start <- 0 to 90 by 10) {
           buffer += getList(testDbName, testColName, Map("bbox" -> bbox, "start" -> start, "limit" -> 10)).responseBody.get
         }
-        collectFeatures(buffer.toSeq) must matchFeatures(featuresIn01)
+        collectFeatures(buffer.toSeq) must beFeatures(featuresIn01)
       }
     }
 
+  def e7 = withTestFeatures(10,10) {
+    (bbox: String, featuresIn01: JsArray) => {
+      getQuery(testDbName, testColName, Map("bbox"-> bbox)).applyMatcher {
+        res => res.responseBody must beSomeFeatures(featuresIn01)
+      }
+    }
+  }
+
+  def e8 = withTestFeatures(10, 10) {
+    (bbox: String, featuresIn01: JsArray) => {
+      val projection = "properties.foo,properties.num"
+      val projectedFeatures = project(featuresIn01)
+      getQuery(testDbName, testColName, Map("bbox" -> bbox, "projection" -> projection)).applyMatcher {
+        res => res.responseBody must beSomeFeatures(projectedFeatures)
+      }
+    }
+  }
+
   def withTestFeatures[T](sizeInsideBbox: Int, sizeOutsideBbox: Int)( block: (String, JsArray) => T) = {
-    val (featuresIn01, allFeatures) = featureArray("01", 100)
-          .flatMap(f1 => featureArray("1", 200).map(f2 => (f1, f2 ++ f1))).sample.get
+    val (featuresIn01, allFeatures) = featureArray("01", sizeInsideBbox)
+          .flatMap(f1 => featureArray("1", sizeOutsideBbox).map(f2 => (f1, f2 ++ f1))).sample.get
         val env: Envelope = "01"
         val bbox = s"${env.getMinX},${env.getMinY},${env.getMaxX},${env.getMaxY}"
         withFeatures(testDbName, testColName, allFeatures) {
@@ -91,11 +114,21 @@ class FeatureCollectionAPISpec extends InCollectionSpecification {
         }
   }
 
-  def collectFeatures(listOfResponses: Seq[JsValue]) =
-    listOfResponses.foldLeft( JsArray() ) ( (state, elem) =>  (elem \ "features").asOpt[JsArray] match {
-        case Some(arr) => state ++ arr
-        case _ => state
-      }
+  //hardcoded projection parameter for now
+  def project(features: JsArray) = {
+    import play.api.libs.functional.syntax._
+    val pruner : Reads[JsObject] = (__ \ "id").json.prune andThen
+      ( __ \ "properties" \ "something").json.prune
+    JsArray(
+      for (f <- features.value) yield f.transform(pruner).asOpt.get
     )
+  }
+  
+  def collectFeatures(listOfResponses: Seq[JsValue]) =
+    listOfResponses.foldLeft(JsArray())((state, elem) => (elem \ "features").asOpt[JsArray] match {
+      case Some(arr) => state ++ arr
+      case _ => state
+    })
+
 
 }
