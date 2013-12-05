@@ -29,6 +29,7 @@ class FeatureCollectionAPISpec extends InCollectionSpecification {
      The FeatureCollection /query should:
       return the objects contained within the specified bbox as a stream          $e7
       support the PROJECTION parameter                                            $e8
+      support the QUERY parameter                                                 $e9
 
 
   """
@@ -100,6 +101,19 @@ class FeatureCollectionAPISpec extends InCollectionSpecification {
       val projectedFeatures = project(featuresIn01)
       getQuery(testDbName, testColName, Map("bbox" -> bbox, "projection" -> projection)).applyMatcher {
         res => res.responseBody must beSomeFeatures(projectedFeatures)
+      }
+    }
+  }
+
+  def e9 = withTestFeatures(100, 200) {
+    (bbox: String, featuresIn01: JsArray) => {
+      val picksFoo = ( __ \ "properties" \ "foo").json.pick
+      val filteredFeatures = JsArray(
+        featuresIn01.value.filter( jsv => jsv.asOpt(picksFoo) == Some(JsString("bar1")))
+      )
+      val queryObj = Json.obj("properties.foo" -> "bar1")
+      getQuery(testDbName, testColName, Map("bbox" -> bbox, "query" -> queryObj)) applyMatcher {
+        res => res.responseBody must beSomeFeatures(filteredFeatures)
       }
     }
   }

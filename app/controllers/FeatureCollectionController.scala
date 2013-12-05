@@ -41,9 +41,11 @@ object FeatureCollectionController extends AbstractNoSqlController {
 
     val START = QueryParam("start", (s:String) => Some(s.toInt))
 
-    val PROJECTION : QueryParam[JsArray] =QueryParam("projection", (s:String) => Some(
+    val PROJECTION : QueryParam[JsArray] = QueryParam("projection", (s:String) => Some(
       JsArray( s.split(',').toSeq.map(e => JsString(e)) )
     ))
+
+    val QUERY : QueryParam[JsObject] = QueryParam("query", (s:String) => Json.parse(s).asOpt[JsObject])
   }
 
   val COLLECTION_LIMIT = current.configuration.getInt("max-collection-size").getOrElse[Int](10000)
@@ -165,19 +167,26 @@ object FeatureCollectionController extends AbstractNoSqlController {
                                        (implicit queryStr: Map[String, Seq[String]]) = {
     val windowOpt = Bbox(QueryParams.BBOX.extractOrElse(""), smd.envelope.getCrsId)
     val projectionOpt = QueryParams.PROJECTION.extract
+    val queryParamOpt = QueryParams.QUERY.extract
     val viewDef = QueryParams.WITH_VIEW.extract.map(vd => Repository.getView(db, collection, vd))
-      .getOrElse(Future {Json.obj() })
+      .getOrElse(Future {
+      Json.obj()
+    })
     viewDef.map(vd => vd.as(Formats.ViewDefExtract))
-      .map{ case (queryOpt, projOpt) => SpatialQuery(windowOpt, queryOpt, jsOptMerge(projOpt, projectionOpt)) }
+      .map {
+      case (queryOpt, projOpt) =>
+        SpatialQuery(
+          windowOpt,
+          jsOptMerge(queryOpt, queryParamOpt)(_ ++ _),
+          jsOptMerge(projOpt, projectionOpt)(_ ++ _))
+    }
   }
 
-
-  //utility to easily merge Options of JsArray (or other sequence)
-  private def jsOptMerge(elem: Option[JsArray]*) : Option[JsArray]=
-    elem.foldLeft( None: Option[JsArray] ){
-      (s,e) => e match {
+  private def jsOptMerge[J <: JsValue](elem: Option[J]*)(union: (J, J) => J): Option[J] =
+    elem.foldLeft(None: Option[J]) {
+      (s, e) => e match {
         case None => s
-        case Some(_) if s.isDefined =>  e.map(js => js ++ s.get)
+        case Some(_) if s.isDefined => e.map(js => union(js, s.get))
         case _ => e
       }
     }

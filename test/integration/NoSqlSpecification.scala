@@ -83,7 +83,7 @@ abstract class InCollectionSpecification(app: FakeApplication = FakeApplication(
       val ok = received.toSet.equals(expected.value.toSet) //toSet so test in order independent
     val msg = if (!ok) {
         (for (f <- received if !expected.value.contains(f)) yield f).headOption.
-          map(f => s" e.g. ${Json.stringify(f)}\nnot found among received features. Example of expected:\n" +
+          map(f => s" e.g. ${Json.stringify(f)}\nnot found among expected features. Example of expected:\n" +
           s"${expected.value.headOption.getOrElse("<None expected.>")}")
           .getOrElse("<Missing object in received>")
       } else "Received array matches expected"
