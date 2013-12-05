@@ -233,7 +233,7 @@ object UtilityMethods {
     "index-level" -> defaultIndexLevel
   )
 
-  implicit def mapOfQParams2QueryStr(params: Map[String,String]) : String = params.map { case (k,v) => s"$k=$v"} mkString "&"
+  implicit def mapOfQParams2QueryStr[T](params: Map[String,T]) : String = params.map { case (k,v) => s"$k=$v"} mkString "&"
 
   def makeGetRequest(url: String, js :Option[JsValue] = None) =
     FakeRequest(GET, url).withHeaders("Accept" -> "application/json")
