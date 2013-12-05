@@ -98,40 +98,4 @@ class FeatureCollectionAPISpec extends InCollectionSpecification {
       }
     )
 
-  def pruneSpecialProperties(js: JsValue) : JsValue = {
-    val tr :Reads[JsObject] = (__ \ "_id").json.prune andThen ( __ \ "_mc").json.prune andThen ( __  \ "_bbox").json.prune
-    js.transform(tr).asOpt.getOrElse(JsNull)
-  }
-
-  def matchFeaturesInJson(expected: JsArray) : Matcher[JsValue] = (
-    (js: JsValue) => {
-      val receivedFeatureArray = (js \ "features").as[JsValue]
-      (receivedFeatureArray must matchFeatures(expected)).isSuccess
-
-    }, "Featurecollection Json doesn't contain expected features")
-
-  def matchTotalInJson(expectedTotal: Int)  : Matcher[JsValue] = (
-    (recJs: JsValue) => {
-      (( recJs \ "total").asOpt[Int] must beSome(expectedTotal)).isSuccess
-    }, "FeatureCollection Json doesn't have expected value for total field")
-
-  def matchCountInJson(expectedCount: Int): Matcher[JsValue] = (
-      (recJs: JsValue) => {
-        (( recJs \ "count").asOpt[Int] must beSome( expectedCount)).isSuccess
-      }, "FeatureCollection Json doesn't have expected value for count field")
-
-  def matchFeatures(expected: JsArray) : Matcher[JsValue] = (
-    (rec : JsValue) => rec match {
-      case jsv: JsArray =>
-        jsv.value.map(pruneSpecialProperties).toSet.equals(expected.value.toSet) //toSet so test in order independent
-
-      case _ => false
-    }, "Features don't match")
-
-
-
-
-
-
-
 }

@@ -64,15 +64,16 @@ object TxController extends AbstractNoSqlController {
   )
 
   def upsert(db: String, col: String) = mkUpdateAction(db, col)(
-      extractor = js => TxParams( Json.obj("id" -> (js \ "id").as[JsValue]), (js \"update").asOpt[JsObject]),
+      extractor = js => TxParams( Json.obj("id" -> (js \ "id").as[JsValue]), js.asOpt[JsObject] ),
       updateOp = (collInfo, args) => {
           val (coll, _, featureTransformer) = collInfo
+          if( !args.hasUpdateDoc) throw InvalidParamsException("Request body does not contain an object")
           if (!args.isUpdateDocWithOnlyFields) throw InvalidParamsException("Only fields allowed in update document when upserting.")
           args.getUpdateDoc(featureTransformer) match {
             case Right(updateDocJs) =>
               coll.update(args.selectorDoc, updateDocJs, GetLastError(awaitJournalCommit = true),
                 upsert= true, multi = false)
-            case Left(seq) => sys.error(JsonHelper.JsValidationErrors2String(seq))
+            case Left(seq) => sys.error(s"Error on input: ${args.updateDoc} \n: ${JsonHelper.JsValidationErrors2String(seq)}")
           }
         },
       "Upsert"
@@ -112,6 +113,9 @@ object TxController extends AbstractNoSqlController {
   }
 
   case class TxParams(selectorDoc: JsObject = Json.obj(), updateDoc: Option[JsObject] = None) {
+
+    def hasUpdateDoc : Boolean = updateDoc.isDefined
+
     def isUpdateDocWithOnlyOperators : Boolean =
       updateDoc.exists(ud => ud.keys.filterNot(k => k.startsWith("$")).isEmpty)
 

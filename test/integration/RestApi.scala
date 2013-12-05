@@ -135,6 +135,18 @@ object RestApiDriver {
     FakeRequestResult.GET(url, contentAsJson)
   }
 
+  def postUpsert(dbName: String, colName: String, reqBody: JsObject) = {
+    Logger.info("START UPSERT COLLECTION")
+    val url = DATABASES/dbName/colName/TX/UPSERT
+    FakeRequestResult.POSTJson(url, reqBody, contentAsJson)
+  }
+
+  def postUpdate(dbName: String, colName: String, reqBody: JsObject) = {
+    Logger.info("START UPDATE COLLECTION")
+    val url = DATABASES/dbName/colName/TX/UPSERT
+    FakeRequestResult.POSTJson(url, reqBody, contentAsJson)
+  }
+
   def postMediaObject(dbName: String, colName: String, mediaObject: JsObject)  = {
     val url = DATABASES/dbName/colName/MEDIA
 
@@ -318,6 +330,8 @@ object API {
   val REMOVE = "remove"
 
   val UPDATE = "update"
+
+  val UPSERT = "upsert"
 
   val MEDIA = "media"
 
