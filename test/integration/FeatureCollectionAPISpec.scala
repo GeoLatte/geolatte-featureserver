@@ -4,7 +4,6 @@ import nosql.json.Gen
 import nosql.json.Gen._
 import play.api.libs.json._
 import play.api.http.Status._
-import org.specs2.matcher.Matcher
 import org.geolatte.geom.Envelope
 
 /**

@@ -31,7 +31,7 @@ POST /api/databases/:db/:collection/media               controllers.MediaControl
 GET /api/databases/:db/:collection/media/:id            controllers.MediaController.get(db: String, collection: String, id: String)
 DELETE /api/databases/:db/:collection/media/:id         controllers.MediaController.delete(db: String, collection: String, id: String)
 
-POST /api/databases/:db/:collection/views               controllers.ViewController.save(db: String, collection: String)
+PUT /api/databases/:db/:collection/views/:view          controllers.ViewController.put(db: String, collection: String, view: String)
 GET /api/databases/:db/:collection/views                controllers.ViewController.list(db: String, collection: String)
 GET /api/databases/:db/:collection/views/:view          controllers.ViewController.get(db: String, collection: String, view: String)
 DELETE /api/databases/:db/:collection/views/:view       controllers.ViewController.delete(db: String, collection: String, view: String)

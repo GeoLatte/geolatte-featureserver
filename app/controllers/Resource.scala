@@ -122,7 +122,6 @@ object Formats {
    }).map(m => JsObject(m.toSeq))     
 
   val ViewDefIn  = (
-      ( __ \ 'name).json.pickBranch(of[JsString]) and
       ( __ \ 'query).json.pickBranch(viewDefkeysReads(escape)) and
       ( __ \ 'projection).json.pickBranch(of[JsArray])
     ).reduce
@@ -131,7 +130,7 @@ object Formats {
       ( __ \ 'name).json.pickBranch(of[JsString]) and
       ( __ \ 'query).json.pickBranch(viewDefkeysReads(unescape)) and
       ( __ \ 'projection).json.pickBranch(of[JsArray]) and
-      ( __ \ 'url).json.copyFrom( ( __ \ '_id).json.pick.map( id => JsString(controllers.routes.ViewController.get(db, col, id.as[String]).url) ) )
+      ( __ \ 'url).json.copyFrom( ( __ \ 'name).json.pick.map( name => JsString(controllers.routes.ViewController.get(db, col, name.as[String]).url) ) )
     ).reduce
 
   val ViewDefExtract = (

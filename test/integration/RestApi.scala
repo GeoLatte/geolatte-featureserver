@@ -176,9 +176,24 @@ object RestApiDriver {
      FakeRequestResult.DELETE(url)
   }
 
+  def putView(dbName: String, colName: String, viewName: String, body: JsObject) = {
+    val url = DATABASES/dbName/colName/VIEWS/viewName
+    FakeRequestResult.PUT(url, Some(body))
+  }
+
   def getViews(dbName: String, colName: String) = {
     val url = DATABASES/dbName/colName/VIEWS
     FakeRequestResult.GET(url, contentAsJson)
+  }
+
+  def getView(dbName: String, colName: String, id: String) = {
+    val url = DATABASES/dbName/colName/VIEWS/id
+    FakeRequestResult.GET(url, contentAsJson)
+  }
+
+  def deleteView(dbName: String, colName: String, id: String) = {
+    val url = DATABASES/dbName/colName/VIEWS/id
+    FakeRequestResult.DELETE(url)
   }
 
   @deprecated

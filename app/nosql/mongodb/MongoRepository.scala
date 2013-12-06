@@ -333,12 +333,23 @@ object Repository {
       else throw new CollectionNotFoundException()
     )
 
-  def saveView(database: String, collection: String, viewDef: JsObject): Future[String] = {
-    getViewDefs(database, collection).map( c => {
-      val id = BSONObjectID.generate.stringify
-      c.insert(viewDef+("_id" -> JsString(id)), GetLastError(awaitJournalCommit = true))
-      id
-    }).andThen {
+  /**
+   * Saves a view for the specified database and collection.
+   *
+   * @param database the database for the view
+   * @param collection the collection for the view
+   * @param viewDef the view definition
+   * @return eventually true if this save resulted in the update of an existing view, false otherwise
+   */
+  def saveView(database: String, collection: String, viewDef: JsObject) : Future[Boolean] = {
+    getViewDefs(database, collection).flatMap( c => {
+      val lastError = c.update(Json.obj("name" -> (viewDef \ "name").as[String]), viewDef,
+        GetLastError(awaitJournalCommit = true), upsert = true, multi = false)
+      lastError.map( le => (c, le))
+    }).flatMap{ case (coll, lastError) =>
+      val indexLE = coll.indexesManager.ensure( Index( Seq(("name", Ascending)), unique = true ))
+      indexLE.map(_ => lastError.updatedExisting)
+    }.andThen {
       case Success(le) => Logger.info(s"Writing view $viewDef for $collection succeeded")
       case Failure(t) => Logger.error(s"Writing metadata for $collection threw exception: ${t.getMessage}")
     }

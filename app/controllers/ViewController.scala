@@ -5,7 +5,7 @@ import play.api.mvc.{Result, BodyParsers}
 import play.api.Logger
 import scala.concurrent.Future
 import config.AppExecutionContexts
-import utilities.{QueryParam, SupportedMediaTypes}
+import utilities.{JsonHelper, QueryParam, SupportedMediaTypes}
 import config.ConfigurationValues.Format
 import nosql.mongodb.Repository
 
@@ -18,7 +18,7 @@ object ViewController extends AbstractNoSqlController {
     val NAME = QueryParam("name", (s) => Some(s))
   }
 
-  def save(db: String, collection: String) = repositoryAction(BodyParsers.parse.tolerantJson) {
+  def put(db: String, collection: String, viewName: String) = repositoryAction(BodyParsers.parse.tolerantJson) {
     implicit req => {
       req.body.validate(ViewDefIn) match {
         case JsError(er) => {
@@ -26,10 +26,11 @@ object ViewController extends AbstractNoSqlController {
           Future.successful(BadRequest("Invalid view definition: " + er.mkString("\n")))
         }
         case JsSuccess(js, _) => {
-          Repository
-            .saveView(db, collection, js)
-            .map[Result](res => Created.withHeaders("Location" -> controllers.routes.ViewController.get(db, collection, res).url))
-            .recover(commonExceptionHandler(db, collection))
+          Repository.saveView(db, collection, js++Json.obj("name" -> viewName))
+            .map[Result] (updatedExisting =>
+                if (updatedExisting ) Ok
+                else Created.withHeaders("Location" -> controllers.routes.ViewController.get(db, collection, viewName).url)
+            ).recover(commonExceptionHandler(db, collection))
         }
       }
     }
@@ -74,7 +75,10 @@ object ViewController extends AbstractNoSqlController {
     val outFormat = ViewDefOut(db, col)
     viewDef.validate(outFormat) match {
       case JsSuccess(out, _) => out
-      case _ => throw new RuntimeException("Error when formatting view definition.")
+      case JsError(err) =>
+        throw new RuntimeException(
+          s"Error when formatting view definition: ${JsonHelper.JsValidationErrors2String(err)}"
+        )
     }
   }
 
