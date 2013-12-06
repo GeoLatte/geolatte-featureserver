@@ -7,36 +7,35 @@ GET     /                              controllers.Application.index
 
 # FeatureServer REST API
 
-GET /api/databases                     controllers.DatabasesController.list()
+GET /api/databases                                      controllers.DatabasesController.list()
 
-GET /api/databases/:db                 controllers.DatabasesController.getDb(db : String)
-PUT /api/databases/:db                 controllers.DatabasesController.putDb(db : String)
-DELETE /api/databases/:db              controllers.DatabasesController.deleteDb(db : String)
+GET /api/databases/:db                                  controllers.DatabasesController.getDb(db : String)
+PUT /api/databases/:db                                  controllers.DatabasesController.putDb(db : String)
+DELETE /api/databases/:db                               controllers.DatabasesController.deleteDb(db : String)
 
 
-GET /api/databases/:db/:collection     controllers.DatabasesController.getCollection(db: String, collection: String)
-PUT /api/databases/:db/:collection     controllers.DatabasesController.createCollection(db: String, collection: String)
-DELETE /api/databases/:db/:collection  controllers.DatabasesController.deleteCollection(db: String, collection: String)
+GET /api/databases/:db/:collection                      controllers.DatabasesController.getCollection(db: String, collection: String)
+PUT /api/databases/:db/:collection                      controllers.DatabasesController.createCollection(db: String, collection: String)
+DELETE /api/databases/:db/:collection                   controllers.DatabasesController.deleteCollection(db: String, collection: String)
 
-POST /api/databases/:db/:collection/tx/insert controllers.TxController.insert(db: String, collection: String)
-POST /api/databases/:db/:collection/tx/remove controllers.TxController.remove(db: String, collection: String)
-POST /api/databases/:db/:collection/tx/update controllers.TxController.update(db: String, collection: String)
-POST /api/databases/:db/:collection/tx/upsert controllers.TxController.upsert(db: String, collection: String)
+POST /api/databases/:db/:collection/tx/insert           controllers.TxController.insert(db: String, collection: String)
+POST /api/databases/:db/:collection/tx/remove           controllers.TxController.remove(db: String, collection: String)
+POST /api/databases/:db/:collection/tx/update           controllers.TxController.update(db: String, collection: String)
+POST /api/databases/:db/:collection/tx/upsert           controllers.TxController.upsert(db: String, collection: String)
 
-GET /api/databases/:db/:collection/query         controllers.FeatureCollectionController.query(db: String, collection: String)
-GET /api/databases/:db/:collection/featurecollection         controllers.FeatureCollectionController.list(db: String, collection: String)
-GET /api/databases/:db/:collection/download      controllers.FeatureCollectionController.download(db: String, collection: String)
+GET /api/databases/:db/:collection/query                controllers.FeatureCollectionController.query(db: String, collection: String)
+GET /api/databases/:db/:collection/featurecollection    controllers.FeatureCollectionController.list(db: String, collection: String)
+GET /api/databases/:db/:collection/download             controllers.FeatureCollectionController.download(db: String, collection: String)
 
-POST /api/databases/:db/:collection/media        controllers.MediaController.save(db: String, collection: String)
-GET /api/databases/:db/:collection/media/:id     controllers.MediaController.get(db: String, collection: String, id: String)
-DELETE /api/databases/:db/:collection/media/:id     controllers.MediaController.delete(db: String, collection: String, id: String)
+POST /api/databases/:db/:collection/media               controllers.MediaController.save(db: String, collection: String)
+GET /api/databases/:db/:collection/media/:id            controllers.MediaController.get(db: String, collection: String, id: String)
+DELETE /api/databases/:db/:collection/media/:id         controllers.MediaController.delete(db: String, collection: String, id: String)
 
 POST /api/databases/:db/:collection/views               controllers.ViewController.save(db: String, collection: String)
 GET /api/databases/:db/:collection/views                controllers.ViewController.list(db: String, collection: String)
 GET /api/databases/:db/:collection/views/:view          controllers.ViewController.get(db: String, collection: String, view: String)
 DELETE /api/databases/:db/:collection/views/:view       controllers.ViewController.delete(db: String, collection: String, view: String)
 
-#GET /rest/:db/:collection/metadata     controllers.MetadataResource.metadata(db: String, collection: String)
 
 # Map static resources from the /public folder to the /assets URL path
 GET     /assets/*file               controllers.Assets.at(path="/public", file)
