@@ -30,6 +30,8 @@ class FeatureCollectionAPISpec extends InCollectionSpecification {
       return the objects contained within the specified bbox as a stream          $e7
       support the PROJECTION parameter                                            $e8
       support the QUERY parameter                                                 $e9
+      BAD_REQUEST response code if the PROJECTION parameter is empty or invalid   $e10
+      BAD_REQUEST response code if the Query parameter is invalid JSON            $e11
 
 
   """
@@ -116,6 +118,14 @@ class FeatureCollectionAPISpec extends InCollectionSpecification {
         res => res.responseBody must beSomeFeatures(filteredFeatures)
       }
     }
+  }
+
+  def e10 = getQuery(testDbName, testColName, Map("projection" -> "")).applyMatcher {
+    _.status must equalTo(BAD_REQUEST)
+  }
+
+  def e11 = getQuery(testDbName, testColName, Map("query" -> """{"foo": 1""")).applyMatcher {
+    _.status must equalTo(BAD_REQUEST)
   }
 
   def withTestFeatures[T](sizeInsideBbox: Int, sizeOutsideBbox: Int)( block: (String, JsArray) => T) = {

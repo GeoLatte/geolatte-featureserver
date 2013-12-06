@@ -25,6 +25,8 @@ import utilities.QueryParam
 import nosql.Exceptions.InvalidQueryException
 import play.api.libs.json.JsObject
 import play.api.libs.iteratee
+import scala.util.Try
+import org.codehaus.jackson.JsonParseException
 
 
 object FeatureCollectionController extends AbstractNoSqlController {
@@ -41,11 +43,18 @@ object FeatureCollectionController extends AbstractNoSqlController {
 
     val START = QueryParam("start", (s:String) => Some(s.toInt))
 
-    val PROJECTION : QueryParam[JsArray] = QueryParam("projection", (s:String) => Some(
-      JsArray( s.split(',').toSeq.map(e => JsString(e)) )
-    ))
+    val PROJECTION : QueryParam[JsArray] = QueryParam("projection", (s:String) =>
+      if (s.isEmpty) throw InvalidQueryException("Empty PROJECTION parameter")
+      else Some(JsArray( s.split(',').toSeq.map(e => JsString(e)) ))
+    )
 
-    val QUERY : QueryParam[JsObject] = QueryParam("query", (s:String) => Json.parse(s).asOpt[JsObject])
+    val QUERY : QueryParam[JsObject] = QueryParam("query", (s:String) =>
+      try {
+        Json.parse(s).asOpt[JsObject]
+      } catch {
+        case e : JsonParseException => throw  InvalidQueryException(e.getMessage)
+      })
+
   }
 
   val COLLECTION_LIMIT = current.configuration.getInt("max-collection-size").getOrElse[Int](10000)
