@@ -17,7 +17,7 @@ object GeolatteNoSqlBuild extends Build {
 
   //Resolvers
   lazy val commonResolvers = Seq(
-    "Local Maven Repository" at "file://"+Path.userHome+"/.m2/repository",
+    "Local Maven Repository" at Path.userHome.asFile.toURI.toURL +"/.m2/repository",
     "Codahale Repo" at "http://repo.codahale.com",
     "Sonatype Repo" at "https://oss.sonatype.org/content/repositories/releases/",
     "Typesafe Repository" at "http://repo.typesafe.com/typesafe/releases/",    
