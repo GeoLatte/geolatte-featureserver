@@ -195,7 +195,7 @@ object FeatureCollectionController extends AbstractNoSqlController {
     elem.foldLeft(None: Option[J]) {
       (s, e) => e match {
         case None => s
-        case Some(_) if s.isDefined => e.map(js => union(js, s.get))
+        case Some(_) if s.isDefined => e.map(js => union(s.get, js))
         case _ => e
       }
     }
