@@ -33,6 +33,9 @@ class FeatureCollectionAPISpec extends InCollectionSpecification {
       BAD_REQUEST response code if the PROJECTION parameter is empty or invalid   $e10
       BAD_REQUEST response code if the Query parameter is invalid JSON            $e11
 
+     General:
+       Query parameters should be case insensitive                                $e12
+
 
   """
 
@@ -127,6 +130,14 @@ class FeatureCollectionAPISpec extends InCollectionSpecification {
   def e11 = getQuery(testDbName, testColName, Map("query" -> """{"foo": 1""")).applyMatcher {
     _.status must equalTo(BAD_REQUEST)
   }
+
+  def e12 =  withTestFeatures(10, 10) {
+        (bbox: String, featuresIn01: JsArray) => {
+          val lcResponse = getList(testDbName, testColName, Map("bbox" -> bbox, "limit" -> 5)).responseBody.get
+          val ucResponse = getList(testDbName, testColName, Map("BBOX" -> bbox, "LIMIT" -> 5)).responseBody.get
+          lcResponse must equalTo(ucResponse)
+        }
+      }
 
   def withTestFeatures[T](sizeInsideBbox: Int, sizeOutsideBbox: Int)( block: (String, JsArray) => T) = {
     val (featuresIn01, allFeatures) = featureArray("01", sizeInsideBbox)
