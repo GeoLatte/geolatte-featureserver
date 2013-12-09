@@ -24,7 +24,7 @@ class ViewDefsAPISpec extends InCollectionSpecification {
         and response has a LOCATION header                                        $e4
        Return OK when the view already existed                                    $e5
         and replace the view                                                      $e6
-       Allow empty query and projection parameters                                $e7
+       Allow empty projection parameters                                          $e7 
 
   """
 
@@ -35,8 +35,10 @@ class ViewDefsAPISpec extends InCollectionSpecification {
   val viewName = "view-1"
   val jsInViewDef = Json.obj("query" -> Json.obj("id" -> 1), "projection" -> Json.arr("foo", "bar"))
   val jsInViewDef2 = Json.obj("query" -> Json.obj("id" -> 2), "projection" -> Json.arr("foo", "bar"))
+  val InViewDefNoProjection = Json.obj( "query" -> Json.obj("foo" -> "bar") )
   val jsOutViewDef = Json.obj("name" -> viewName, "query" -> Json.obj("id" -> 1), "projection" -> Json.arr("foo", "bar"))
   val jsOutViewDef2 = Json.obj("name" -> viewName, "query" -> Json.obj("id" -> 2), "projection" -> Json.arr("foo", "bar"))
+  val OutViewDefNoProjection = InViewDefNoProjection ++ Json.obj("name" -> "view-2", "projection" -> Json.arr())
 
 
 
@@ -44,20 +46,24 @@ class ViewDefsAPISpec extends InCollectionSpecification {
 
   def e2 = putView(testDbName, testColName, viewName, jsInViewDef) applyMatcher( _.status must equalTo(CREATED) )
 
-  def e3 = getViews(testDbName, testColName) applyMatcher (_.responseBody.map(js => pruneUrl(js)) must beSome(Json.arr(jsOutViewDef)))
+  def e3 = getViews(testDbName, testColName) applyMatcher ( res => pruneUrl(res.responseBody) must beSome(Json.arr(jsOutViewDef)))
 
   def e4 = {
     deleteView(testDbName, testColName, viewName)
     putView(testDbName, testColName, viewName, jsInViewDef) applyMatcher( res =>
-      Helpers.headers(res).get("Location") must beSome( "/api/databases/xfstestdb/xfstestcoll/views/view-1")
+      Helpers.headers(res).get("Location") must beSome( s"/api/databases/$testDbName/$testColName/views/view-1")
     )
   }
 
   def e5 = putView(testDbName, testColName, viewName, jsInViewDef2) applyMatcher( _.status must equalTo(OK))
 
-  def e6 = getViews(testDbName, testColName) applyMatcher (_.responseBody.map(js => pruneUrl(js)) must beSome(Json.arr(jsOutViewDef2)))
+  def e6 = getViews(testDbName, testColName) applyMatcher ( res => pruneUrl(res.responseBody) must beSome(Json.arr(jsOutViewDef2)) )
 
-  def e7 = putView(testDbName, testColName, "view-2", Json.obj()) applyMatcher( _.status must equalTo(CREATED))
+  def e7 = {
+    val create = putView(testDbName, testColName, "view-2", InViewDefNoProjection)
+    val get = getView(testDbName, testColName, "view-2" )
+    (create.status must equalTo(CREATED)) and ( pruneUrl(get.responseBody) must beSome(OutViewDefNoProjection))
+  }
 
 
   val pruneUrlReads :  Reads[JsObject] = (__ \ "url").json.prune
@@ -66,5 +72,7 @@ class ViewDefsAPISpec extends InCollectionSpecification {
     case js : JsArray => JsArray(js.value.map( pruneUrl ))
     case _ => JsNull
   }
+
+  def pruneUrl(inOpt: Option[JsValue]) : Option[JsValue] = inOpt.map(js => pruneUrl(js))
 
 }

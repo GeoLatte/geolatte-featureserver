@@ -119,12 +119,14 @@ object Formats {
   def viewDefkeysReads(f: String => String) : Reads[JsObject]  =  __.read[JsObject].map( js => js.value.map{
      case (k, v : JsObject) => (f(k), v.as(viewDefkeysReads(f)))
      case (k,v : JsValue) => (f(k),v)
-   }).map(m => JsObject(m.toSeq))     
+   }).map(m => JsObject(m.toSeq))
+
+  val projection : Reads[JsArray] = (__ \ "projection").readNullable[JsArray].map(js=> js.getOrElse(Json.arr()))
 
   val ViewDefIn  = (
-      ( __ \ 'query).json.pickBranch(viewDefkeysReads(escape)) and
-      ( __ \ 'projection).json.pickBranch(of[JsArray])
-    ).reduce
+          ( __ \ 'query).json.pickBranch(viewDefkeysReads(escape)) and
+          ( __ \ 'projection).json.copyFrom( projection  )
+        ).reduce
 
   def ViewDefOut(db: String, col: String)  = (
       ( __ \ 'name).json.pickBranch(of[JsString]) and
