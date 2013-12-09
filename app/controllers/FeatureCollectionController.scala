@@ -24,9 +24,7 @@ import play.api.libs.json.JsNumber
 import utilities.QueryParam
 import nosql.Exceptions.InvalidQueryException
 import play.api.libs.json.JsObject
-import play.api.libs.iteratee
-import scala.util.Try
-import org.codehaus.jackson.JsonParseException
+import com.fasterxml.jackson.core.JsonParseException
 
 
 object FeatureCollectionController extends AbstractNoSqlController {
@@ -64,7 +62,7 @@ object FeatureCollectionController extends AbstractNoSqlController {
         implicit val queryStr = request.queryString
         Logger.info(s"Query string $queryStr on $db, collection $collection")
         Repository.metadata(db, collection).flatMap(md =>
-          doQuery(db, collection, md).map[Result](x => x)
+          doQuery(db, collection, md).map[SimpleResult](x => x)
         ).recover {
           case ex: InvalidQueryException => BadRequest(s"${ex.getMessage}")
         }.recover (commonExceptionHandler(db, collection))
@@ -73,7 +71,7 @@ object FeatureCollectionController extends AbstractNoSqlController {
   def download(db: String, collection: String) = repositoryAction {
     implicit request => {
         Logger.info(s"Downloading $db/$collection.")
-        Repository.query(db, collection, SpatialQuery()).map[Result](x => x).recover {
+        Repository.query(db, collection, SpatialQuery()).map[SimpleResult](x => x).recover {
           commonExceptionHandler(db, collection)
         }
       }
@@ -98,13 +96,12 @@ object FeatureCollectionController extends AbstractNoSqlController {
         val start = QueryParams.START.extract.getOrElse(0)
         enum &> Enumeratee.drop(start)  |>>> collectFeatures(start, limit)
       }
-
       Logger.info(s"Query string $queryStr on $db, collection $collection")
       Repository.metadata(db, collection).flatMap(md =>
         doQuery(db, collection, md).flatMap {
           case enum => enumerator2list(enum)
-        }.map[Result]{
-          case (cnt, features) => toResult(FeaturesResource(cnt, features))
+        }.map[SimpleResult]{
+          case (cnt, features) => toSimpleResult(FeaturesResource(cnt, features))
         }
       ).recover {
         case ex: InvalidQueryException => BadRequest(s"${ex.getMessage}")
@@ -121,8 +118,8 @@ object FeatureCollectionController extends AbstractNoSqlController {
    * @param req
    * @return
    */
-  implicit def enumJsontoResult(enum: Enumerator[JsObject])(implicit req: RequestHeader): Result =
-    toResult(new JsonStreamable with CsvStreamable {
+  implicit def enumJsontoResult(enum: Enumerator[JsObject])(implicit req: RequestHeader): SimpleResult =
+    toSimpleResult(new JsonStreamable with CsvStreamable {
 
       val encoder = new DefaultCsvEncoder()
 

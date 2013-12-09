@@ -16,6 +16,8 @@ class ApplicationSpec extends Specification {
 
   "The application" should {
 
+    import UtilityMethods._
+
     "redirect to the index page" in {
       running(FakeApplication()) {
         val home = route(FakeRequest(GET, "/")).get

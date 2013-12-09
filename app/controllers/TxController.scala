@@ -7,7 +7,6 @@ import scala.concurrent.Future
 import play.api.libs.json._
 import play.api.libs.functional.syntax._
 
-import org.codehaus.jackson.JsonParseException
 import scala.util.Try
 import nosql.mongodb.ReactiveGeoJson._
 import play.api.data.validation.ValidationError
@@ -15,13 +14,18 @@ import utilities.JsonHelper
 import nosql.Exceptions.InvalidParamsException
 import nosql.mongodb.{ReactiveGeoJson, MongoWriter, Repository}
 import nosql.mongodb.Repository._
+import reactivemongo.bson.BSONInteger
+import com.fasterxml.jackson.core.JsonParseException
 
+//TODO -- this should use repository, rather than directly perform updates
 
 /**
  * @author Karel Maesen, Geovise BVBA
  *         creation-date: 7/25/13
  */
 object TxController extends AbstractNoSqlController {
+
+  val awaitJournalCommit = GetLastError(j = true, w = Some(BSONInteger(1)))
 
   /**
    * An update operation on a MongoCollection using the sequence of MongoDBObjects as arguments
@@ -43,7 +47,7 @@ object TxController extends AbstractNoSqlController {
     extractor = js => TxParams((js \"query").as[JsObject]) ,
     updateOp = (collInfo, args) => {
       val (coll, _, _) = collInfo
-      coll.remove(args.selectorDoc, GetLastError(awaitJournalCommit = true))
+      coll.remove(args.selectorDoc, awaitJournalCommit)
     },
     "remove"
   )
@@ -55,8 +59,7 @@ object TxController extends AbstractNoSqlController {
       if (!args.isUpdateDocWithOnlyOperators) throw InvalidParamsException("Only operators allowed in update document when updating.")
       args.getUpdateDoc(featureTransformer) match {
         case Right(updateDocJs) =>
-          coll.update(args.selectorDoc, updateDocJs, GetLastError(awaitJournalCommit = true),
-            upsert= false, multi = true)
+          coll.update(args.selectorDoc, updateDocJs, awaitJournalCommit, upsert= false, multi = true)
         case Left(seq) => throw InvalidParamsException(JsonHelper.JsValidationErrors2String(seq))
       }
     },
@@ -71,8 +74,7 @@ object TxController extends AbstractNoSqlController {
           if (!args.isUpdateDocWithOnlyFields) throw InvalidParamsException("Only fields allowed in update document when upserting.")
           args.getUpdateDoc(featureTransformer) match {
             case Right(updateDocJs) =>
-              coll.update(args.selectorDoc, updateDocJs, GetLastError(awaitJournalCommit = true),
-                upsert= true, multi = false)
+              coll.update(args.selectorDoc, updateDocJs, awaitJournalCommit, upsert= true, multi = false)
             case Left(seq) => sys.error(s"Error on input: ${args.updateDoc} \n: ${JsonHelper.JsValidationErrors2String(seq)}")
           }
         },

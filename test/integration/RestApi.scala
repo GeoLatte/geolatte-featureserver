@@ -3,45 +3,42 @@ package integration
 import play.api.libs.json._
 import play.api.libs.functional.syntax._
 
-import play.api.test.Helpers._
-import play.api.test.{FakeApplication, FakeRequest}
+import play.api.test._
 import play.api.mvc._
 
 import language.implicitConversions
 import play.api.Logger
 import org.geolatte.geom._
 import org.geolatte.geom.crs.CrsId
-import play.api.libs.iteratee.Iteratee
-import play.api.libs.json.Json.JsValueWrapper
-import scala.concurrent.{Future, Await}
+import scala.concurrent.{Await, Future}
 import scala.concurrent.duration._
-import scala.collection.mutable.ListBuffer
-import play.api.libs.json.JsArray
-import play.api.mvc.AsyncResult
-import play.api.test.FakeApplication
-import play.api.mvc.ChunkedResult
-import play.api.http.Writeable
+import play.api.http.{HttpProtocol, Status, HeaderNames, Writeable}
 import org.specs2._
 import org.specs2.matcher._
 import config.ConfigurationValues
 import org.geolatte.geom.curve.{MortonContext, MortonCode}
+import scala.collection.mutable.ListBuffer
+import akka.util.Timeout
+import play.api.libs.iteratee.Iteratee
+
 
 /**
- * Test Helper for Requests. On creation the request is executed and the thread blocks until the
- * response is completely received.
+ * Test Helper for Requests.
  *
  * @author Karel Maesen, Geovise BVBA
  *         creation-date: 10/12/13
  */
 case class FakeRequestResult[B,T](
   url: String,
-  format: Option[Result => JsValue] = None,
+  format: Option[Future[SimpleResult] => JsValue] = None,
   requestBody: Option[B] = None,
   mkRequest: (String, Option[B]) => FakeRequest[T])(
     implicit val w: Writeable[T]
   ) {
 
-  val wrappedResult: Result = {
+  import UtilityMethods._
+
+  val wrappedResult: Future[SimpleResult] = {
     val req = mkRequest(url, requestBody)
     route(req) match {
       case Some(res) => res
@@ -49,7 +46,8 @@ case class FakeRequestResult[B,T](
     }
   }
   val status: Int = play.api.test.Helpers.status(wrappedResult)
-  val responseBody = format.map(f => f(wrappedResult))
+
+  val responseBody = format.map(f => f(wrappedResult) )
 
   def applyMatcher[R]( matcher: FakeRequestResult[B,T] => MatchResult[R]) = matcher(this)
 
@@ -59,7 +57,7 @@ object FakeRequestResult {
 
   import UtilityMethods._
 
-  def GET(url: String, format: Result => JsValue) =
+  def GET(url: String, format: Future[SimpleResult] => JsValue) =
     new FakeRequestResult[JsValue, AnyContentAsEmpty.type](url = url, format = Some(format), mkRequest = makeGetRequest)
 
   def PUT(url:String, body: Option[JsValue] = None) =
@@ -67,10 +65,10 @@ object FakeRequestResult {
 
   def DELETE(url: String) = new FakeRequestResult[JsValue, AnyContentAsEmpty.type](url = url, mkRequest = makeDeleteRequest)
 
-  def POSTJson(url: String, body: JsValue, format: Result => JsValue) =
+  def POSTJson(url: String, body: JsValue, format: Future[SimpleResult] => JsValue) =
     new FakeRequestResult(url = url, format=Some(format), requestBody = Some(body), mkRequest = makePostRequestJson)
 
-  def POSTRaw(url: String, body: Array[Byte], format: Result => JsValue) =
+  def POSTRaw(url: String, body: Array[Byte], format: Future[SimpleResult] => JsValue) =
       new FakeRequestResult(url = url, format=Some(format), requestBody = Some(body), mkRequest = makePostRequestRaw)
 
 }
@@ -97,7 +95,7 @@ object RestApiDriver {
   }
 
   def getDatabases = {
-    val format = (resp: Result) => contentAsJson(resp) match {
+    val format = (resp: Future[SimpleResult]) => contentAsJson(resp) match {
             case jArray: JsArray => jArray
             case _ => JsNull //indicates that something wrong
           }
@@ -106,7 +104,7 @@ object RestApiDriver {
   }
 
   def getDatabase(dbName: String) = {
-    val format  = (resp: Result) => contentAsJson(resp) match {
+    val format  = (resp: Future[SimpleResult]) => contentAsJson(resp) match {
       case jArray: JsArray => jArray
       case _ => JsNull //indicates that something wrong
     }
@@ -158,7 +156,7 @@ object RestApiDriver {
   def postMediaObject(dbName: String, colName: String, mediaObject: JsObject)  = {
     val url = DATABASES/dbName/colName/MEDIA
 
-    val format = (posted: Result) => contentAsJson(posted) match {
+    val format = (posted: Future[SimpleResult]) => contentAsJson(posted) match {
       case obj : JsObject => obj
       case _ => JsNull
     }
@@ -166,7 +164,7 @@ object RestApiDriver {
   }
 
   def getMediaObject(url: String) = {
-      val format = (resp: Result) => contentAsJson(resp) match {
+      val format = (resp: Future[SimpleResult]) => contentAsJson(resp) match {
         case obj: JsObject => obj
         case _ => JsNull //indicates that something wrong
       }
@@ -254,9 +252,20 @@ object RestApiDriver {
 
 }
 
-object UtilityMethods {
+object UtilityMethods extends PlayRunners
+  with HeaderNames
+  with Status
+  with HttpProtocol
+  with DefaultAwaitTimeout
+  with ResultExtractors
+  with Writeables
+  with RouteInvokers
+  with WsTestClient
+  with FutureAwaits {
 
   import play.api.libs.concurrent._
+
+  override implicit def defaultAwaitTimeout = 60.seconds
 
   val defaultIndexLevel = 4
   implicit val defaultExtent = new Envelope(0,0,90,90, CrsId.valueOf(4326))
@@ -288,35 +297,55 @@ object UtilityMethods {
 
   def makeDeleteRequest(url: String, body: Option[JsValue] = None) = FakeRequest(DELETE, url)
 
-  def contentAsJson(result: Result): JsValue = {
-    val responseText = contentAsString(result)
+  private def parseJson(responseText: String): JsValue =
     try {
       Json.parse(responseText)
     } catch {
-      case ex : Throwable => {
-        if(! responseText.isEmpty) Logger.warn("Error on parsing text: " + responseText)
+      case ex: Throwable => {
+        if (!responseText.isEmpty) Logger.warn(s"Error on parsing text: $responseText \nError-message is: ${ex.getMessage}")
         JsNull
       }
     }
+
+  override def contentAsJson(result: Future[SimpleResult])(implicit timeout: Timeout): JsValue = {
+    val responseText = contentAsString(result)(timeout)
+    parseJson(responseText)
   }
 
-  def contentAsJsonStream(result: Result): JsArray = {
-    import scala.concurrent.ExecutionContext.Implicits.global
-    val buf = ListBuffer[JsValue]()
-    val consumer: Iteratee[Array[Byte], Unit] =
-      Iteratee.fold[Array[Byte], ListBuffer[JsValue]]( buf) ( (buf, bytes) => {
-        val s = new String(bytes,"UTF-8")
-        try {  buf += Json.parse(s) } catch { case _ : Throwable => buf }
-      }).map( _ => Unit)
-    result match {
-      case chunkedRes  : ChunkedResult[Array[Byte]]=> {
-          val fUnit = chunkedRes.chunks(consumer).asInstanceOf[ Future[Iteratee[Any, Unit]]]
-          Await.result(fUnit, 10 second)
-          JsArray(buf.toSeq)
-      }
-      case AsyncResult(p) => contentAsJsonStream(p.await.get)
-      case _ => Json.arr(contentAsJson(result))
+  def extractSizeAndData(bytes: Array[Byte]) : (Int, String) = {
+    val elems = new String(bytes, "UTF-8").split("\r\n")
+    val chunkSize = Integer.parseInt(elems(0),16)
+    if (elems.size == 1) (chunkSize, "")
+    else (chunkSize, elems(1))
+
+  }
+
+  def contentAsJsonStream(result: Future[SimpleResult])(implicit timeout: Timeout): JsArray = {
+
+    def readChunked(result: Future[SimpleResult]) = {
+      import scala.concurrent.ExecutionContext.Implicits.global
+      val buf = ListBuffer[JsValue]()
+      val consumer: Iteratee[Array[Byte], Unit] =
+        Iteratee.fold[Array[Byte], ListBuffer[JsValue]](buf)((buf, bytes) => {
+          val (size, text) = extractSizeAndData(bytes)
+          try {
+            buf += Json.parse(text)
+          } catch {
+            case _: Throwable => buf
+          }
+        }).map(_ => Unit)
+      val body = Await.result(result, timeout.duration).body
+      val f = (body |>>> consumer)
+      Await.result(f, timeout.duration)
+      JsArray(buf.toSeq)
     }
+
+    //check we get a chunked-response
+    header("Transfer-Encoding", result)(timeout) match {
+      case Some("chunked") => readChunked(result)
+      case _ => Json.arr(contentAsJson(result)(timeout))
+    }
+
   }
 
   implicit def toArrayOpt(js: Option[JsValue]) : Option[JsArray] = js match {
@@ -324,7 +353,7 @@ object UtilityMethods {
     case _ => None
   }
 
-  implicit def fakeRequestToResult[B,T](fake: FakeRequestResult[B,T]) : Result = fake.wrappedResult
+  implicit def fakeRequestToResult[B,T](fake: FakeRequestResult[B,T]) : Future[SimpleResult] = fake.wrappedResult
 
 }
 

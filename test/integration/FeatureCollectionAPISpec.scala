@@ -19,6 +19,8 @@ class FeatureCollectionAPISpec extends InCollectionSpecification {
        return 404 when the collection does not exist                              $e1
        return all elements when the collection does exist                         $e2
 
+
+
      The FeatureCollection /list should:
        return the objects contained within the specified bbox as json object      $e3
        respond to the start query-param                                           $e4
@@ -52,7 +54,7 @@ class FeatureCollectionAPISpec extends InCollectionSpecification {
   def e1 = getDownload(testDbName, "nonExistingCollection").applyMatcher( _.status must equalTo(NOT_FOUND))
 
   def e2 = {
-    val features = featureArray(size = 10).sample.get
+    val features = featureArray(size = 1).sample.get
     withFeatures(testDbName, testColName, features){
       getDownload(testDbName, testColName).applyMatcher(
         res => (res.status must equalTo(OK)) and (res.responseBody must beSomeFeatures(features))

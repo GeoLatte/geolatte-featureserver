@@ -52,6 +52,8 @@ object Repository {
   type SpatialCollection = MongoSpatialCollection
   type MediaStore = GridFS[BSONDocument, BSONDocumentReader, BSONDocumentWriter]
 
+  val awaitJournalCommit = GetLastError(j = true, w = Some(BSONInteger(1)))
+
   /**
    * combines the JSONCollection, Metadata and transformer.
    *
@@ -163,7 +165,7 @@ object Repository {
     def readMetadata() = {
       val metaCollection = connection(database).collection[JSONCollection](MetadataCollection)
       val metadataCursor = metaCollection.find( Json.obj(CollectionField -> collection)).cursor[JsObject]
-      metadataCursor.headOption().map {
+      metadataCursor.headOption.map {
         case Some(doc) => doc.asOpt[Metadata]
         case _ => None
       }
@@ -202,7 +204,7 @@ object Repository {
         ExtentField -> spec.envelope,
         IndexLevelField -> spec.level,
         CollectionField -> colName),
-        GetLastError(awaitJournalCommit = true)
+        GetLastError( j = true, w = Some(BSONInteger(1)) )
       ).andThen {
         case Success(le) => Logger.info(s"Writing metadata for $colName has result: ${le.ok}")
         case Failure(t) => Logger.error(s"Writing metadata for $colName threw exception: ${t.getMessage}")
@@ -344,7 +346,7 @@ object Repository {
   def saveView(database: String, collection: String, viewDef: JsObject) : Future[Boolean] = {
     getViewDefs(database, collection).flatMap( c => {
       val lastError = c.update(Json.obj("name" -> (viewDef \ "name").as[String]), viewDef,
-        GetLastError(awaitJournalCommit = true), upsert = true, multi = false)
+        awaitJournalCommit, upsert = true, multi = false)
       lastError.map( le => (c, le))
     }).flatMap{ case (coll, lastError) =>
       val indexLE = coll.indexesManager.ensure( Index( Seq(("name", Ascending)), unique = true ))
@@ -356,7 +358,7 @@ object Repository {
   }
 
   def getViews(database: String, collection: String): Future[List[JsObject]] =
-    getViewDefs(database, collection) flatMap (_.find(Json.obj()).cursor[JsObject].toList)
+    getViewDefs(database, collection) flatMap (_.find(Json.obj()).cursor[JsObject].collect[List]())
 
   /**
    *

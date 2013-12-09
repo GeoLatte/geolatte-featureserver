@@ -1,6 +1,6 @@
 package nosql.mongodb
 
-import play.api.mvc.{Result, BodyParser}
+import play.api.mvc.{SimpleResult, BodyParser}
 import play.api.libs.json._
 import play.api.libs.iteratee.Iteratee
 import play.Logger
@@ -55,7 +55,7 @@ object ReactiveGeoJson {
     writer.add(fs).map( int => newState)
   }
 
-  def mkStreamingIteratee(writer: FeatureWriter)(implicit ec: ExecutionContext) : Iteratee[Array[Byte], Either[Result, Future[State]]] =
+  def mkStreamingIteratee(writer: FeatureWriter)(implicit ec: ExecutionContext) : Iteratee[Array[Byte], Either[SimpleResult, Future[State]]] =
     Iteratee.fold( Future{ State() } ) {
       (fState: Future[State], chunk: Array[Byte]) => fState.flatMap( state => processChunk(writer, state, chunk))
     }.map( fstate => Right(fstate) )

@@ -30,7 +30,7 @@ object MediaController extends AbstractNoSqlController {
           case JsSuccess(m, _) => {
             Repository
               .saveMedia(db, collection, Enumerator.enumerate(List(m.data)), m.name, Some(m.contentType))
-              .map[Result](res => {
+              .map[SimpleResult](res => {
                   val url = routes.MediaController.get(db, collection, res.id).url
                   MediaMetadataResource(res.id, res.md5, url)})
               .recover(commonExceptionHandler(db,collection))
@@ -42,7 +42,7 @@ object MediaController extends AbstractNoSqlController {
 
   def get(db: String, collection: String, id: String) = repositoryAction {
     implicit req => {
-      Repository.getMedia(db, collection, id).map[Result]( res => MediaReaderResource(res) )
+      Repository.getMedia(db, collection, id).map[SimpleResult]( res => MediaReaderResource(res) )
       .recover(commonExceptionHandler(db,collection))
     }
   }

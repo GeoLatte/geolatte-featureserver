@@ -6,6 +6,7 @@ import play.api.libs.json._
 import play.api.http.Status._
 import org.geolatte.geom.Envelope
 import play.api.test.Helpers
+import akka.util.Timeout
 
 
 /**
@@ -39,8 +40,6 @@ class ViewDefsAPISpec extends InCollectionSpecification {
   val jsOutViewDef = Json.obj("name" -> viewName, "query" -> Json.obj("id" -> 1), "projection" -> Json.arr("foo", "bar"))
   val jsOutViewDef2 = Json.obj("name" -> viewName, "query" -> Json.obj("id" -> 2), "projection" -> Json.arr("foo", "bar"))
   val OutViewDefNoProjection = InViewDefNoProjection ++ Json.obj("name" -> "view-2", "projection" -> Json.arr())
-
-
 
   def e1 = putView(testDbName, "NonExistingCollection", viewName, jsInViewDef) applyMatcher( _.status must equalTo(NOT_FOUND))
 

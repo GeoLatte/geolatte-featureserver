@@ -17,6 +17,7 @@ import scala.language.implicitConversions
 import scala.language.reflectiveCalls
 
 import config.AppExecutionContexts.streamContext
+import reactivemongo.bson.BSONInteger
 
 
 /**
@@ -25,17 +26,14 @@ import config.AppExecutionContexts.streamContext
  */
 trait AbstractNoSqlController extends Controller {
 
-  def repositoryAction[T](bp : BodyParser[T])(action: Request[T] => Future[Result]) = Action(bp) {
-         request =>
-            Async {
-              action(request)
-            }
-        }
+  def repositoryAction[T](bp : BodyParser[T])(action: Request[T] => Future[SimpleResult]) =
+    Action.async(bp) { request => action(request) }
 
-  def repositoryAction(action: Request[AnyContent] => Future[Result])  : Action[AnyContent] =
+
+  def repositoryAction(action: Request[AnyContent] => Future[SimpleResult])  : Action[AnyContent] =
     repositoryAction(BodyParsers.parse.anyContent)(action)
 
-  implicit def toResult[A <: RenderableResource](result: A)(implicit request: RequestHeader): Result = {
+  implicit def toSimpleResult[A <: RenderableResource](result: A)(implicit request: RequestHeader): SimpleResult = {
 
 
     implicit def toStr(js : JsObject) : String = Json.stringify(js)
@@ -43,8 +41,8 @@ trait AbstractNoSqlController extends Controller {
     (result, request) match {
       case (r : Jsonable, SupportedMediaTypes(Format.JSON, version)) => Ok(r.toJson).as(SupportedMediaTypes(Format.JSON, version))
       case (r : Csvable, SupportedMediaTypes(Format.CSV, version)) => Ok(r.toCsv).as(SupportedMediaTypes(Format.CSV, version))
-      case (r : JsonStreamable, SupportedMediaTypes(Format.JSON, version)) => Ok.stream(toStream(r.toJsonStream)).as(SupportedMediaTypes(Format.JSON, version))
-      case (r : CsvStreamable, SupportedMediaTypes(Format.CSV, version)) => Ok.stream(toStream(r.toCsvStream)).as(SupportedMediaTypes(Format.CSV, version))
+      case (r : JsonStreamable, SupportedMediaTypes(Format.JSON, version)) => Ok.chunked(toStream(r.toJsonStream)).as(SupportedMediaTypes(Format.JSON, version))
+      case (r : CsvStreamable, SupportedMediaTypes(Format.CSV, version)) => Ok.chunked(toStream(r.toCsvStream)).as(SupportedMediaTypes(Format.CSV, version))
       case _ => UnsupportedMediaType("No supported media type: " + request.acceptedTypes.mkString(";"))
     }
   }
@@ -70,7 +68,7 @@ trait AbstractNoSqlController extends Controller {
      (jsons &> toBytes) andThen finalSeparatorEnumerator andThen Enumerator.eof
    }
 
-  def commonExceptionHandler(db : String, col : String = "") : PartialFunction[Throwable, Result] = {
+  def commonExceptionHandler(db : String, col : String = "") : PartialFunction[Throwable, SimpleResult] = {
     case ex: DatabaseNotFoundException => NotFound(s"Database $db does not exist.")
     case ex: CollectionNotFoundException => NotFound(s"Collection $db/$col does not exist.")
     case ex: MediaObjectNotFoundException => NotFound(s"Media object does not exist.")

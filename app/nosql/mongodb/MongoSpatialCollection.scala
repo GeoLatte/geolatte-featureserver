@@ -169,8 +169,8 @@ abstract class MongoSpatialCollection(collection: JSONCollection, metadata: Meta
     Logger.debug(s"Run query with selector: ${Json.stringify(selector(query))}; and projection: ${Json.stringify(projection(query))} ")
     val cursor = collection.find(selector(query), projection(query)).cursor[JsObject]
     query.windowOpt match {
-      case Some(w) => cursor.enumerate through filteringEnumeratee(w)
-      case _ => cursor.enumerate
+      case Some(w) => cursor.enumerate() through filteringEnumeratee(w)
+      case _ => cursor.enumerate()
     }
   }
 

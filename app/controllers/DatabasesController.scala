@@ -18,7 +18,7 @@ object DatabasesController extends AbstractNoSqlController {
   import config.AppExecutionContexts.streamContext
 
   def list() = repositoryAction(
-    implicit request => Repository.listDatabases.map[Result](dbs => DatabasesResource(dbs)).recover {
+    implicit request => Repository.listDatabases.map[SimpleResult](dbs => DatabasesResource(dbs)).recover {
       case ex =>
         Logger.error(s"Couldn't list databases : ${ex.getMessage}")
         InternalServerError(ex.getMessage)
@@ -26,7 +26,7 @@ object DatabasesController extends AbstractNoSqlController {
   )
 
   def getDb(db: String) = repositoryAction(
-    implicit request  => Repository.listCollections(db).map[Result](colls => {
+    implicit request  => Repository.listCollections(db).map[SimpleResult](colls => {
       Logger.info("collections found: " + colls)
       DatabaseResource(db, colls)
     }).recover(commonExceptionHandler(db))
@@ -54,7 +54,7 @@ object DatabasesController extends AbstractNoSqlController {
   )
 
   def getCollection(db: String, collection: String) = repositoryAction ( implicit request =>
-    Repository.metadata(db, collection).map[Result](md => CollectionResource(md))
+    Repository.metadata(db, collection).map[SimpleResult](md => CollectionResource(md))
           .recover(commonExceptionHandler(db,collection))
   )
 

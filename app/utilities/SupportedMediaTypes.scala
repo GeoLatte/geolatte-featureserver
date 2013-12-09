@@ -1,9 +1,10 @@
 package utilities
 
-import play.api.mvc.{RequestHeader}
-import play.api.http.MediaRange
+
 import config.ConfigurationValues.{Version, Format}
 import play.api.Logger
+import play.api.http.MediaRange
+import play.api.mvc.RequestHeader
 
 
 object SupportedMediaTypes {
@@ -19,18 +20,18 @@ object SupportedMediaTypes {
 
   def unapply( mediaRange: MediaRange ) : Option[(Format.Value, Version.Value)] = {
 
-    val MediaRange(mediaType, subtype, params) = mediaRange
-    val formatOpt = (mediaType, subtype) match {
+
+    val formatOpt = (mediaRange.mediaType, mediaRange.mediaSubType) match {
       case ("*", "*") | ("application", "*") => Some(Format.JSON)
       case ("application",  "json") => Some(Format.JSON)
       case ("application", GeolatteSubTypeRegex(Format(format))) => Some(format)
       case _ => None
     }
 
-    val versionOpt = params match {
-      case Some(VersionParamRegex(Version(version))) => Some(version)
-      case Some(VersionParamRegex(_)) => None
-      case _ => Some(Version.default)
+    val versionOpt = mediaRange.parameters.find(_._1 == "version").flatMap( _._2) match {
+      case Some(Version(version)) => Some(version)
+      case Some(_) => None
+      case None => Some(Version.default)
     }
 
     (formatOpt, versionOpt) match {

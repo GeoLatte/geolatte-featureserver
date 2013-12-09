@@ -55,7 +55,7 @@ abstract class InCollectionSpecification(app: FakeApplication = FakeApplication(
     js match {
       case js: JsObject => js.transform(tr).asOpt.getOrElse(JsNull)
       case js: JsArray => JsArray(js.value.map(el => pruneSpecialProperties(el)))
-      case _ => sys.error("Can't prune value which isn't JSON object or array.")
+      case _ => sys.error(s"Can't prune value which isn't JSON object or array: ${Json.stringify(js)}")
     }
   }
 
@@ -81,7 +81,7 @@ abstract class InCollectionSpecification(app: FakeApplication = FakeApplication(
     case jsv: JsArray =>
       val received = jsv.value.map(pruneSpecialProperties)
       val ok = received.toSet.equals(expected.value.toSet) //toSet so test in order independent
-    val msg = if (!ok) {
+      val msg = if (!ok) {
         (for (f <- received if !expected.value.contains(f)) yield f).headOption.
           map(f => s" e.g. ${Json.stringify(f)}\nnot found among expected features. Example of expected:\n" +
           s"${expected.value.headOption.getOrElse("<None expected.>")}")
