@@ -12,7 +12,7 @@ class CollectionAPISpec extends InDatabaseSpecification {
   def is = s2""" $sequential
 
       The Collection API should:
-        return CREATED on POST of a collection                                              $e1
+        return CREATED on PUT of a collection                                               $e1
         return CONFLICT on attempt to POST to same collection name                          $e2
         Out Metadata contains collection and count fields                                   $e3
 

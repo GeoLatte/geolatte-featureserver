@@ -27,10 +27,12 @@ import config.ConfigurationValues
 import org.geolatte.geom.curve.{MortonContext, MortonCode}
 
 /**
+ * Test Helper for Requests. On creation the request is executed and the thread blocks until the
+ * response is completely received.
+ *
  * @author Karel Maesen, Geovise BVBA
  *         creation-date: 10/12/13
  */
-
 case class FakeRequestResult[B,T](
   url: String,
   format: Option[Result => JsValue] = None,
@@ -43,7 +45,7 @@ case class FakeRequestResult[B,T](
     val req = mkRequest(url, requestBody)
     route(req) match {
       case Some(res) => res
-      case None => throw new RuntimeException("No route for req: " + req)
+      case None => throw new RuntimeException("Route failed to execute for req: " + req)
     }
   }
   val status: Int = play.api.test.Helpers.status(wrappedResult)
@@ -321,6 +323,8 @@ object UtilityMethods {
     case Some(ja :JsArray) => Some(ja)
     case _ => None
   }
+
+  implicit def fakeRequestToResult[B,T](fake: FakeRequestResult[B,T]) : Result = fake.wrappedResult
 
 }
 
