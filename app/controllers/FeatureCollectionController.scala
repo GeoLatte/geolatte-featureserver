@@ -25,11 +25,15 @@ import utilities.QueryParam
 import nosql.Exceptions.InvalidQueryException
 import play.api.libs.json.JsObject
 import com.fasterxml.jackson.core.JsonParseException
+import nosql.Instrumented
+import nl.grons.metrics.scala.FutureMetrics
 
 
-object FeatureCollectionController extends AbstractNoSqlController {
+object FeatureCollectionController extends AbstractNoSqlController with Instrumented with FutureMetrics {
 
   import AppExecutionContexts.streamContext
+
+//  private[this] val timer = metrics.timer("query_request_timer")
 
   object QueryParams {
     //we leave bbox as a String parameter because an Envelope needs a CrsId
@@ -57,8 +61,8 @@ object FeatureCollectionController extends AbstractNoSqlController {
 
   val COLLECTION_LIMIT = current.configuration.getInt("max-collection-size").getOrElse[Int](10000)
 
-  def query(db: String, collection: String) = repositoryAction (
-    implicit request => {
+  def query(db: String, collection: String) =
+    repositoryAction ( implicit request => {
         implicit val queryStr = request.queryString
         Logger.info(s"Query string $queryStr on $db, collection $collection")
         Repository.metadata(db, collection).flatMap(md =>
@@ -68,14 +72,16 @@ object FeatureCollectionController extends AbstractNoSqlController {
         }.recover (commonExceptionHandler(db, collection))
     })
 
+
   def download(db: String, collection: String) = repositoryAction {
-    implicit request => {
+      implicit request => {
         Logger.info(s"Downloading $db/$collection.")
         Repository.query(db, collection, SpatialQuery()).map[SimpleResult](x => x).recover {
           commonExceptionHandler(db, collection)
         }
       }
-  }
+    }
+
 
   def collectFeatures(start: Int, max: Int) : Iteratee[JsObject, (Int, List[JsObject])] = {
 

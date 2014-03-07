@@ -2,9 +2,7 @@ import sbt._
 import Keys._
 import play.Project._
 
-
 object GeolatteNoSqlBuild extends Build {
-
 
    val appName         = "geolatte-nosql"
    val appVersion      = "0.1"
@@ -23,11 +21,13 @@ object GeolatteNoSqlBuild extends Build {
    //Dependencies
   lazy val dependencies = Seq(
     "org.specs2" %% "specs2" % "2.3.4" % "test",
-    "org.geolatte" % "geolatte-geom" %  "0.12-SNAPSHOT",
-    "org.reactivemongo" %% "reactivemongo" % "0.10-SNAPSHOT",
-     "org.reactivemongo" %% "play2-reactivemongo" % "0.10.0-SNAPSHOT",
+    "org.geolatte" % "geolatte-geom" %  "0.12",
+    "org.reactivemongo" %% "reactivemongo" % "0.10.0",
+     "org.reactivemongo" %% "play2-reactivemongo" % "0.10.2",
     "commons-codec" % "commons-codec" % "1.8",
-    "net.sf.supercsv" % "super-csv" % "2.1.0"
+    "net.sf.supercsv" % "super-csv" % "2.1.0",
+     "nl.grons" %% "metrics-scala" % "3.0.4",
+    filters
   )
 
   //Build Settings applied to all projects
@@ -55,6 +55,7 @@ object GeolatteNoSqlBuild extends Build {
 
   val main = play.Project(
     	appName,
-    	dependencies = dependencies).settings( (defaultSettings ++ testSettings):_*)
+    	dependencies = dependencies
+  )
 
 }

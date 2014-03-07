@@ -23,6 +23,7 @@ import config.AppExecutionContexts.streamContext
 import scala.language.implicitConversions
 import reactivemongo.api.indexes.Index
 import reactivemongo.api.indexes.IndexType.Ascending
+import nosql.Instrumented
 
 
 case class Media(id: String, md5: Option[String])
@@ -45,7 +46,9 @@ object SpatialQuery {
   def apply(window: Envelope, query: JsObject) : SpatialQuery = apply(Some(window), Some(query), None)
 }
 
-object Repository {
+object Repository extends Instrumented {
+
+  private[this] val queryTimer = metrics.timer("query_timer")
 
   import scala.collection.JavaConversions._
 
@@ -279,7 +282,9 @@ object Repository {
   }
 
   def query(database: String, collection: String, spatialQuery : SpatialQuery): Future[Enumerator[JsObject]] =
-    getSpatialCollection(database, collection).map(sc => sc.run(spatialQuery))
+    queryTimer.time {
+      getSpatialCollection(database, collection).map(sc => sc.run(spatialQuery))
+    }
 
   def getMediaStore(database: String, collection: String) : Future[MediaStore] = {
     import reactivemongo.api.collections.default._
