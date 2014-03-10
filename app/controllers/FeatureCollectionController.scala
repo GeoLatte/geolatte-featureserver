@@ -29,11 +29,9 @@ import nosql.Instrumented
 import nl.grons.metrics.scala.FutureMetrics
 
 
-object FeatureCollectionController extends AbstractNoSqlController with Instrumented with FutureMetrics {
+object FeatureCollectionController extends AbstractNoSqlController {
 
   import AppExecutionContexts.streamContext
-
-//  private[this] val timer = metrics.timer("query_request_timer")
 
   object QueryParams {
     //we leave bbox as a String parameter because an Envelope needs a CrsId

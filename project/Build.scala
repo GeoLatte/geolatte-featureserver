@@ -43,7 +43,8 @@ object GeolatteNoSqlBuild extends Build {
   		commonBuildSettings ++
   		Seq(
     		libraryDependencies ++= dependencies,
-    		javaOptions in (Test,run) += "-XX:MaxPermSize=128m -agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=5005"
+    		javaOptions in (Test,run) += "-XX:MaxPermSize=128m -agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=5005",
+        javacOptions ++= Seq("-source", "1.6", "-target", "1.6")
   		)
 
   //Options for running tests
@@ -56,6 +57,6 @@ object GeolatteNoSqlBuild extends Build {
   val main = play.Project(
     	appName,
     	dependencies = dependencies
-  )
+  ).settings( (defaultSettings ++ testSettings):_*)
 
 }
