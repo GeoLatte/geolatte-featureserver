@@ -25,11 +25,12 @@ import utilities.QueryParam
 import nosql.Exceptions.InvalidQueryException
 import play.api.libs.json.JsObject
 import com.fasterxml.jackson.core.JsonParseException
-import nosql.Instrumented
+import nosql.{FutureInstrumented, Instrumented}
 import nl.grons.metrics.scala.FutureMetrics
+import java.util.concurrent.atomic.AtomicInteger
 
 
-object FeatureCollectionController extends AbstractNoSqlController {
+object FeatureCollectionController extends AbstractNoSqlController with FutureInstrumented {
 
   import AppExecutionContexts.streamContext
 
@@ -60,7 +61,7 @@ object FeatureCollectionController extends AbstractNoSqlController {
   val COLLECTION_LIMIT = current.configuration.getInt("max-collection-size").getOrElse[Int](10000)
 
   def query(db: String, collection: String) =
-    repositoryAction ( implicit request => {
+    repositoryAction ( implicit request => futureTimed("featurecollection-query"){
         implicit val queryStr = request.queryString
         Logger.info(s"Query string $queryStr on $db, collection $collection")
         Repository.metadata(db, collection).flatMap(md =>
@@ -93,7 +94,7 @@ object FeatureCollectionController extends AbstractNoSqlController {
   }
 
   def list(db: String, collection: String) = repositoryAction(
-    implicit request => {
+    implicit request => futureTimed("featurecollection-list"){
       implicit val queryStr = request.queryString
       def enumerator2list(enum: Enumerator[JsObject]) : Future[(Int, List[JsObject])] = {
         val limit = Math.min( QueryParams.LIMIT.extract.getOrElse(COLLECTION_LIMIT),COLLECTION_LIMIT)

@@ -47,6 +47,7 @@ import scala.util.Failure
 import scala.Some
 
 
+
 object MetadataIdentifiers {
   val MetadataCollectionPrefix = "geolatte_nosql."
   val MetadataCollection = "geolatte_nosql.collections"
@@ -82,6 +83,7 @@ trait MortonCodeQueryOptimizer {
 }
 
 trait SubdividingMCQueryOptimizer extends MortonCodeQueryOptimizer {
+
 
   def optimize(window: Envelope, mortoncode: MortonCode): QueryDocuments = Try{
 
@@ -166,8 +168,10 @@ abstract class MongoSpatialCollection(collection: JSONCollection, metadata: Meta
   }
 
   def run(query: SpatialQuery) : Enumerator[JsObject] = {
-    Logger.debug(s"Run query with selector: ${Json.stringify(selector(query))}; and projection: ${Json.stringify(projection(query))} ")
-    val cursor = collection.find(selector(query), projection(query)).cursor[JsObject]
+    val sel = selector(query)
+    val proj = projection(query)
+    Logger.debug(s"Run query with selector: ${Json.stringify(sel)}; and projection: ${Json.stringify(proj)} ")
+    val cursor = collection.find(sel, proj).cursor[JsObject]
     query.windowOpt match {
       case Some(w) => cursor.enumerate() through filteringEnumeratee(w)
       case _ => cursor.enumerate()

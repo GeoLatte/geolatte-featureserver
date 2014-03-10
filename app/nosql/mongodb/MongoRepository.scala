@@ -23,7 +23,8 @@ import config.AppExecutionContexts.streamContext
 import scala.language.implicitConversions
 import reactivemongo.api.indexes.Index
 import reactivemongo.api.indexes.IndexType.Ascending
-import nosql.Instrumented
+import nosql.{FutureInstrumented, Instrumented}
+import nl.grons.metrics.scala.FutureMetrics
 
 
 case class Media(id: String, md5: Option[String])
@@ -46,9 +47,7 @@ object SpatialQuery {
   def apply(window: Envelope, query: JsObject) : SpatialQuery = apply(Some(window), Some(query), None)
 }
 
-object Repository extends Instrumented {
-
-  private[this] val queryTimer = metrics.timer("query_timer")
+object Repository extends FutureInstrumented {
 
   import scala.collection.JavaConversions._
 
@@ -281,8 +280,9 @@ object Repository extends Instrumented {
     metadata(database, collection).map( md => MongoSpatialCollection(coll, md) )
   }
 
+
   def query(database: String, collection: String, spatialQuery : SpatialQuery): Future[Enumerator[JsObject]] =
-    queryTimer.time {
+    futureTimed("query-timer") {
       getSpatialCollection(database, collection).map(sc => sc.run(spatialQuery))
     }
 
