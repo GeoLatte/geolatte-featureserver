@@ -18,13 +18,14 @@ import scala.language.reflectiveCalls
 
 import config.AppExecutionContexts.streamContext
 import reactivemongo.bson.BSONInteger
+import nosql.FutureInstrumented
 
 
 /**
  * @author Karel Maesen, Geovise BVBA
  *         creation-date: 10/11/13
  */
-trait AbstractNoSqlController extends Controller {
+trait AbstractNoSqlController extends Controller with FutureInstrumented {
 
   def repositoryAction[T](bp : BodyParser[T])(action: Request[T] => Future[SimpleResult]) =
     Action.async(bp) { request => action(request) }
@@ -51,21 +52,38 @@ trait AbstractNoSqlController extends Controller {
   // this code won't be called
   def toStream[A](features: Enumerator[A])(implicit toStr: A => String) : Enumerator[Array[Byte]] = {
 
-      val finalSeparatorEnumerator = Enumerator.enumerate(List(ConfigurationValues.jsonSeparator.getBytes("UTF-8")))
+    val finalSeparatorEnumerator = Enumerator.enumerate(List(ConfigurationValues.jsonSeparator.getBytes("UTF-8")))
+
+    val startTime = System.nanoTime()
+
+    /**
+     * Adds side-effecting timer toe aan Play enumInput
+     *
+     * TODO -- solve by better by wrapping the futureTimed in a new Enumeratee
+     *
+     */
+    def enumInput[E](e: Input[E]) = new Enumerator[E] {
+        def apply[A](i: Iteratee[E, A]): Future[Iteratee[E, A]] =
+            futureTimed("json-feature-enumerator", startTime) {i.fold {
+              case Step.Cont(k) => Future(k(e))
+              case _ => Future.successful(i)
+            }
+          }
+      }
 
      //this is due to James Roper (see https://groups.google.com/forum/#!topic/play-framework/PrPTIrLdPmY)
      class CommaSeparate extends Enumeratee.CheckDone[String, String] {
+       val start = System.currentTimeMillis()
        def continue[A](k: K[String, A]) = Cont {
          case in @ (Input.Empty) => this &> k(in)
          case in: Input.El[String] => Enumeratee.map[String](ConfigurationValues.jsonSeparator + _) &> k(in)
          case Input.EOF => Done(Cont(k), Input.EOF)
        }
      }
-
      val commaSeparate = new CommaSeparate
      val jsons = features.map( f => toStr(f)) &> commaSeparate
      val toBytes = Enumeratee.map[String]( _.getBytes("UTF-8") )
-     (jsons &> toBytes) andThen finalSeparatorEnumerator andThen Enumerator.eof
+     (jsons &> toBytes) andThen finalSeparatorEnumerator andThen enumInput(Input.EOF) //Enumerator.eof
    }
 
   def commonExceptionHandler(db : String, col : String = "") : PartialFunction[Throwable, SimpleResult] = {
