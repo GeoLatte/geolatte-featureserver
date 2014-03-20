@@ -8,42 +8,90 @@ import config.ConfigurationValues.Format
 import play.Logger
 import nosql.mongodb._
 
-import scala.language.implicitConversions
 import scala.concurrent.Future
-import nosql.Exceptions.CollectionNotFoundException
-import nosql.Exceptions.DatabaseNotFoundException
+import play.api.libs.iteratee._
+import play.api.libs.json._
+import config.ConfigurationValues
+
+import scala.language.implicitConversions
+import scala.language.reflectiveCalls
+
+import config.AppExecutionContexts.streamContext
+import reactivemongo.bson.BSONInteger
+import nosql.FutureInstrumented
+
 
 /**
  * @author Karel Maesen, Geovise BVBA
  *         creation-date: 10/11/13
  */
-trait AbstractNoSqlController extends Controller {
+trait AbstractNoSqlController extends Controller with FutureInstrumented {
 
-  implicit val repository : Repository = MongoRepository
+  def repositoryAction[T](bp : BodyParser[T])(action: Request[T] => Future[SimpleResult]) =
+    Action.async(bp) { request => action(request) }
 
-  def repositoryAction[T](bp : BodyParser[T])(action: Repository => Request[T] => Future[Result])
-                         (implicit repo : Repository) = Action(bp) {
-         request =>
-            Async {
-              action(repo)(request)
-            }
-        }
 
-  def repositoryAction(action: Repository => Request[AnyContent] => Future[Result]) (implicit repo : Repository) : Action[AnyContent] =
-    repositoryAction(BodyParsers.parse.anyContent)(action)(repo)
+  def repositoryAction(action: Request[AnyContent] => Future[SimpleResult])  : Action[AnyContent] =
+    repositoryAction(BodyParsers.parse.anyContent)(action)
 
-  implicit def toResult[A <: RenderableResource](result: A)(implicit request: RequestHeader): Result = {
+  implicit def toSimpleResult[A <: RenderableResource](result: A)(implicit request: RequestHeader): SimpleResult = {
+
+
+    implicit def toStr(js : JsObject) : String = Json.stringify(js)
+
     (result, request) match {
       case (r : Jsonable, SupportedMediaTypes(Format.JSON, version)) => Ok(r.toJson).as(SupportedMediaTypes(Format.JSON, version))
       case (r : Csvable, SupportedMediaTypes(Format.CSV, version)) => Ok(r.toCsv).as(SupportedMediaTypes(Format.CSV, version))
+      case (r : JsonStreamable, SupportedMediaTypes(Format.JSON, version)) => Ok.chunked(toStream(r.toJsonStream)).as(SupportedMediaTypes(Format.JSON, version))
+      case (r : CsvStreamable, SupportedMediaTypes(Format.CSV, version)) => Ok.chunked(toStream(r.toCsvStream)).as(SupportedMediaTypes(Format.CSV, version))
       case _ => UnsupportedMediaType("No supported media type: " + request.acceptedTypes.mkString(";"))
     }
   }
 
-  def commonExceptionHandler(db : String, col : String = "") : PartialFunction[Throwable, Result] = {
+  //Note: this can't be made implicit, because in the case of A == JsValue, Ok.stream accepts features enum, and
+  // this code won't be called
+  def toStream[A](features: Enumerator[A])(implicit toStr: A => String) : Enumerator[Array[Byte]] = {
+
+    val finalSeparatorEnumerator = Enumerator.enumerate(List(ConfigurationValues.jsonSeparator.getBytes("UTF-8")))
+
+    val startTime = System.nanoTime()
+
+    /**
+     * Adds side-effecting timer toe aan Play enumInput
+     *
+     * TODO -- solve by better by wrapping the futureTimed in a new Enumeratee
+     *
+     */
+    def enumInput[E](e: Input[E]) = new Enumerator[E] {
+        def apply[A](i: Iteratee[E, A]): Future[Iteratee[E, A]] =
+            futureTimed("json-feature-enumerator", startTime) {i.fold {
+              case Step.Cont(k) => Future(k(e))
+              case _ => Future.successful(i)
+            }
+          }
+      }
+
+     //this is due to James Roper (see https://groups.google.com/forum/#!topic/play-framework/PrPTIrLdPmY)
+     class CommaSeparate extends Enumeratee.CheckDone[String, String] {
+       val start = System.currentTimeMillis()
+       def continue[A](k: K[String, A]) = Cont {
+         case in @ (Input.Empty) => this &> k(in)
+         case in: Input.El[String] => Enumeratee.map[String](ConfigurationValues.jsonSeparator + _) &> k(in)
+         case Input.EOF => Done(Cont(k), Input.EOF)
+       }
+     }
+     val commaSeparate = new CommaSeparate
+     val jsons = features.map( f => toStr(f)) &> commaSeparate
+     val toBytes = Enumeratee.map[String]( _.getBytes("UTF-8") )
+     (jsons &> toBytes) andThen finalSeparatorEnumerator andThen enumInput(Input.EOF) //Enumerator.eof
+   }
+
+  def commonExceptionHandler(db : String, col : String = "") : PartialFunction[Throwable, SimpleResult] = {
     case ex: DatabaseNotFoundException => NotFound(s"Database $db does not exist.")
     case ex: CollectionNotFoundException => NotFound(s"Collection $db/$col does not exist.")
     case ex: MediaObjectNotFoundException => NotFound(s"Media object does not exist.")
+    case ex: ViewObjectNotFoundException => NotFound(s"View object does not exist.")
+    case ex: InvalidParamsException => BadRequest(s"Invalid parameters: ${ex.getMessage}")
     case ex: Throwable => {
       Logger.error(s"Internal server error with message : ${ex.getMessage}", ex)
       InternalServerError(s"Internal server error ${ex.getClass.getCanonicalName} with message : ${ex.getMessage}")

@@ -1,63 +1,206 @@
 package controllers
 
 import scala.language.reflectiveCalls
+import scala.language.implicitConversions
 
-import org.geolatte.geom.Envelope
+import org.geolatte.geom.{Point, Geometry, Envelope}
 import org.geolatte.geom.crs.CrsId
 import play.api.mvc._
 import play.api.Logger
-import utilities.SupportedMediaTypes
+import nosql.mongodb._
 import play.api.libs.iteratee._
-import nosql.mongodb.{Metadata, MongoRepository}
-import config.ConfigurationValues.{Version, Format}
-import config.{ConfigurationValues, AppExecutionContexts}
+import config.AppExecutionContexts
+import play.api.libs.json._
+import nosql.json.GeometryReaders._
+import org.supercsv.encoder.DefaultCsvEncoder
+import org.supercsv.prefs.CsvPreference
+import scala.concurrent.Future
+import play.api.Play._
+import play.api.libs.json.JsUndefined
+import play.api.libs.json.JsString
+import play.api.libs.json.JsBoolean
 import scala.Some
+import play.api.libs.json.JsNumber
 import utilities.QueryParam
-import nosql.Exceptions._
-import play.api.libs.json.{Json, JsObject}
+import nosql.Exceptions.InvalidQueryException
+import play.api.libs.json.JsObject
+import com.fasterxml.jackson.core.JsonParseException
+import nosql.{FutureInstrumented, Instrumented}
+import nl.grons.metrics.scala.FutureMetrics
+import java.util.concurrent.atomic.AtomicInteger
 
 
-object FeatureCollectionController extends AbstractNoSqlController {
+object FeatureCollectionController extends AbstractNoSqlController with FutureInstrumented {
 
   import AppExecutionContexts.streamContext
 
   object QueryParams {
     //we leave bbox as a String parameter because an Envelope needs a CrsId
     val BBOX = QueryParam("bbox", (s: String) => Some(s))
+
+    val WITH_VIEW = QueryParam("with-view", (s: String) => Some(s))
+
+    val LIMIT = QueryParam("limit", (s:String) => Some(s.toInt))
+
+    val START = QueryParam("start", (s:String) => Some(s.toInt))
+
+    val PROJECTION : QueryParam[JsArray] = QueryParam("projection", (s:String) =>
+      if (s.isEmpty) throw InvalidQueryException("Empty PROJECTION parameter")
+      else Some(JsArray( s.split(',').toSeq.map(e => JsString(e)) ))
+    )
+
+    val QUERY : QueryParam[JsObject] = QueryParam("query", (s:String) =>
+      try {
+        Json.parse(s).asOpt[JsObject]
+      } catch {
+        case e : JsonParseException => throw  InvalidQueryException(e.getMessage)
+      })
+
   }
 
+  val COLLECTION_LIMIT = current.configuration.getInt("max-collection-size").getOrElse[Int](10000)
 
-  def query(db: String, collection: String) = repositoryAction ( repo =>
-    request => {
+  def query(db: String, collection: String) =
+    repositoryAction ( implicit request => futureTimed("featurecollection-query"){
         implicit val queryStr = request.queryString
         Logger.info(s"Query string $queryStr on $db, collection $collection")
-        repo.metadata(db, collection).flatMap(md =>
-          qetQueryResult(db, collection, md)
+        Repository.metadata(db, collection).flatMap(md =>
+          doQuery(db, collection, md).map[SimpleResult](x => x)
         ).recover {
           case ex: InvalidQueryException => BadRequest(s"${ex.getMessage}")
         }.recover (commonExceptionHandler(db, collection))
     })
 
-  def download(db: String, collection: String) = repositoryAction { repo =>
-    request => {
+
+  def download(db: String, collection: String) = repositoryAction {
+      implicit request => {
         Logger.info(s"Downloading $db/$collection.")
-        repo.getData(db, collection).map( fs => mkChunked(fs) ).recover {
+        Repository.query(db, collection, SpatialQuery()).map[SimpleResult](x => x).recover {
           commonExceptionHandler(db, collection)
         }
       }
+    }
+
+
+  def collectFeatures(start: Int, max: Int) : Iteratee[JsObject, (Int, List[JsObject])] = {
+
+    case class fState(features: List[JsObject] = Nil, collected: Int = 0, total: Int = 0)
+
+    Iteratee.fold[JsObject, fState]( fState( total = start ) ) ( (state, feature) =>
+      if (state.collected >= max) state.copy( total = state.total+1)
+      else fState(feature::state.features, state.collected + 1, state.total + 1)
+    ).map(state => (state.total, state.features))
+
   }
 
-  private def qetQueryResult(db: String, collection: String, smd: Metadata)(implicit queryStr: Map[String, Seq[String]]) = {
-    Bbox(QueryParams.BBOX.extractOrElse(""), smd.envelope.getCrsId) match {
-      case Some(window) =>
-        MongoRepository.query(db, collection, window) map (q => mkChunked(q))
-      case None => throw new InvalidQueryException(s"BadRequest: No or invalid bbox parameter in query string.")
+  def list(db: String, collection: String) = repositoryAction(
+    implicit request => futureTimed("featurecollection-list"){
+      implicit val queryStr = request.queryString
+      def enumerator2list(enum: Enumerator[JsObject]) : Future[(Int, List[JsObject])] = {
+        val limit = Math.min( QueryParams.LIMIT.extract.getOrElse(COLLECTION_LIMIT),COLLECTION_LIMIT)
+        val start = QueryParams.START.extract.getOrElse(0)
+        enum &> Enumeratee.drop(start)  |>>> collectFeatures(start, limit)
+      }
+      Logger.info(s"Query string $queryStr on $db, collection $collection")
+      Repository.metadata(db, collection).flatMap(md =>
+        doQuery(db, collection, md).flatMap {
+          case enum => enumerator2list(enum)
+        }.map[SimpleResult]{
+          case (cnt, features) => toSimpleResult(FeaturesResource(cnt, features))
+        }
+      ).recover {
+        case ex: InvalidQueryException => BadRequest(s"${ex.getMessage}")
+      }.recover (commonExceptionHandler(db, collection))
+
+    }
+  )
+
+  /**
+   * converts a JsObject Enumerator to an RenderableStreamingResource supporting both Json and Csv output
+   *
+   * Limitations: when the passed Json is not a valid GeoJson object, this will pass a stream of empty points
+   * @param enum
+   * @param req
+   * @return
+   */
+  implicit def enumJsontoResult(enum: Enumerator[JsObject])(implicit req: RequestHeader): SimpleResult =
+    toSimpleResult(new JsonStreamable with CsvStreamable {
+
+      val encoder = new DefaultCsvEncoder()
+
+      def encode(v: JsString) = "\"" + encoder.encode(v.value, null, CsvPreference.STANDARD_PREFERENCE) + "\""
+
+      //TODO -- refactor to clarify structure
+      def project(js: JsObject)(pf: PartialFunction[Option[(String, String)], String], pf2: Geometry => String) = {
+        val jsObj = (js \ "properties").asOpt[JsObject].getOrElse(JsObject(List()))
+        val attributes = jsObj.fields.map {
+          case (k, v: JsString) => Some((k, encode(v)))
+          case (k, v: JsNumber) => Some((k, v.value.toString))
+          case (k, v: JsBoolean) => Some((k, v.value.toString))
+          case (k, JsNull) => Some((k, ""))
+          case (k, _: JsUndefined) => Some((k, ""))
+          case _ => None
+        }.collect(pf)
+        val geom = pf2((js \ "geometry").asOpt(GeometryReads(CrsId.UNDEFINED)).getOrElse(Point.createEmpty()))
+        val idOpt = (js \ "_id" \ "$oid").asOpt[String].map(v => ("_id", v))
+        pf(idOpt) +: geom +: attributes
+      }
+
+      val toCsvRecord = (js: JsObject) => project(js)({
+        case Some((k, v)) => v
+        case _ => "None"
+      }, g => g.asText).mkString(",")
+      val toCsvHeader = (js: JsObject) => project(js)({
+        case Some((k, v)) => k
+        case _ => "None"
+      }, _ => "geometry-wkt").mkString(",")
+
+      // toCsv works as a state machine, on first invocation it print header, and record,
+      // on subsequent invocations, only the record
+      var toCsv: (JsObject) => String = js => {
+        this.toCsv = toCsvRecord
+        toCsvHeader(js) + "\n" + toCsvRecord(js)
+      }
+
+      def toJsonStream = enum
+
+      def toCsvStream = enum.map(js => toCsv(js))
+
+    }
+    )
+
+  private def doQuery(db: String, collection: String, smd: Metadata)
+                            (implicit queryStr: Map[String, Seq[String]]) : Future[Enumerator[JsObject]] =
+    queryString2SpatialQuery(db,collection,smd).flatMap( q =>  Repository.query(db, collection, q) )
+
+
+  implicit def queryString2SpatialQuery(db: String, collection: String, smd: Metadata)
+                                       (implicit queryStr: Map[String, Seq[String]]) = {
+    val windowOpt = Bbox(QueryParams.BBOX.extractOrElse(""), smd.envelope.getCrsId)
+    val projectionOpt = QueryParams.PROJECTION.extract
+    val queryParamOpt = QueryParams.QUERY.extract
+    val viewDef = QueryParams.WITH_VIEW.extract.map(vd => Repository.getView(db, collection, vd))
+      .getOrElse(Future {
+      Json.obj()
+    })
+    viewDef.map(vd => vd.as(Formats.ViewDefExtract))
+      .map {
+      case (queryOpt, projOpt) =>
+        SpatialQuery(
+          windowOpt,
+          jsOptMerge(queryOpt, queryParamOpt)(_ ++ _),
+          jsOptMerge(projOpt, projectionOpt)(_ ++ _))
     }
   }
 
-  private def mkChunked(features : Enumerator[JsObject]) = {
-      Ok.stream( toStream(features) andThen finalSeparatorEnumerator andThen Enumerator.eof ).as(SupportedMediaTypes(Format.JSON, Version.default))
-  }
+  private def jsOptMerge[J <: JsValue](elem: Option[J]*)(union: (J, J) => J): Option[J] =
+    elem.foldLeft(None: Option[J]) {
+      (s, e) => e match {
+        case None => s
+        case Some(_) if s.isDefined => e.map(js => union(s.get, js))
+        case _ => e
+      }
+    }
 
   object Bbox {
 
@@ -79,21 +222,5 @@ object FeatureCollectionController extends AbstractNoSqlController {
     }
   }
 
-  private def finalSeparatorEnumerator = Enumerator.enumerate(List(ConfigurationValues.jsonSeparator.getBytes("UTF-8")))
-
-  private def toStream(features: Enumerator[JsObject]) : Enumerator[Array[Byte]] = {
-    //this is due to James Roper (see https://groups.google.com/forum/#!topic/play-framework/PrPTIrLdPmY)
-    class CommaSeparate extends Enumeratee.CheckDone[String, String] {
-      def continue[A](k: K[String, A]) = Cont {
-        case in @ (Input.Empty) => this &> k(in)
-        case in: Input.El[String] => Enumeratee.map[String](ConfigurationValues.jsonSeparator + _) &> k(in)
-        case Input.EOF => Done(Cont(k), Input.EOF)
-      }
-    }
-val commaSeparate = new CommaSeparate
-    val jsons = features.map( f => Json.stringify(f) ) &> commaSeparate
-    val toBytes = Enumeratee.map[String]( _.getBytes("UTF-8") )
-    jsons &> toBytes
-  }
 
 }

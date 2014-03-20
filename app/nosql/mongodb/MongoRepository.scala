@@ -21,6 +21,10 @@ import reactivemongo.bson._
 
 import config.AppExecutionContexts.streamContext
 import scala.language.implicitConversions
+import reactivemongo.api.indexes.Index
+import reactivemongo.api.indexes.IndexType.Ascending
+import nosql.{FutureInstrumented, Instrumented}
+import nl.grons.metrics.scala.FutureMetrics
 
 
 case class Media(id: String, md5: Option[String])
@@ -32,61 +36,34 @@ case class MediaReader(id: String,
                        contentType: Option[String],
                        data: Array[Byte])
 
-trait Repository {
+case class SpatialQuery ( windowOpt: Option[Envelope], queryOpt: Option[JsObject], projectionOpt: Option[JsArray])
 
-  /**
-   *The type returned by the database driver when reporting success or failure
-   */
-  type ReturnVal
+object SpatialQuery {
 
-  type SpatialCollection
+  def apply() : SpatialQuery = apply(None, None, None)
 
-  type MediaStore
+  def apply(window: Envelope) :SpatialQuery = apply(Some(window), None, None)
 
-  def listDatabases: Future[List[String]]
-
-  def getMetadata(dbName: String) : JSONCollection
-
-  def createDb(dbname: String) : Future[ReturnVal]
-
-  def dropDb(dbname: String) : Future[ReturnVal]
-
-  def existsDb(dbname: String): Future[Boolean]
-
-  def listCollections(dbname: String): Future[List[String]]
-
-  def count(database: String, collection: String) : Future[Int]
-
-  def metadata(database: String, collection: String): Future[Metadata]
-
-  def existsCollection(dbName: String, colName: String): Future[Boolean]
-
-  def createCollection(dbName: String, colName: String, spatialSpec: Option[Metadata]) : Future[Boolean]
-
-  def deleteCollection(dbName: String, colName: String) : Future[ReturnVal]
-
-  def getCollection(dbName: String, colName: String): Future[(JSONCollection, Metadata)]
-
-  def getSpatialCollection(database: String, collection: String) : Future[SpatialCollection]
-
-  def query(database: String, collection: String, window: Envelope): Future[Enumerator[JsObject]]
-
-  def getData(database: String, collection: String): Future[Enumerator[JsObject]]
-
-  def getMediaStore(database: String, collection: String): Future[MediaStore]
-
-  def saveMedia(database: String, collection: String, producer: Enumerator[Array[Byte]], fileName: String, contentType: Option[String]) : Future[Media]
-
-  def getMedia(database: String, collection: String, id: String) : Future[MediaReader]
-
+  def apply(window: Envelope, query: JsObject) : SpatialQuery = apply(Some(window), Some(query), None)
 }
 
-object MongoRepository extends Repository {
+object Repository extends FutureInstrumented {
 
   import scala.collection.JavaConversions._
-  type ReturnVal = LastError
+
   type SpatialCollection = MongoSpatialCollection
   type MediaStore = GridFS[BSONDocument, BSONDocumentReader, BSONDocumentWriter]
+
+  val awaitJournalCommit = GetLastError(j = true, w = Some(BSONInteger(1)))
+
+  /**
+   * combines the JSONCollection, Metadata and transformer.
+   *
+   * The transformer is a Reads[JsObject] that transform an input Feature to a Feature for persistence
+   * in the JSONCollection
+   */
+  type CollectionInfo = (JSONCollection, Metadata, Reads[JsObject])
+
 
   val CREATED_DBS_COLLECTION = "createdDatabases"
   val CREATED_DB_PROP = "db"
@@ -122,6 +99,11 @@ object MongoRepository extends Repository {
   def getMetadata(dbName: String) = connection.db(dbName).collection[JSONCollection](MetadataCollection)
 
   private def isMetadata(name: String): Boolean = (name startsWith MetadataCollectionPrefix) || (name startsWith "system.")
+
+  private def isSpecialCollection(name: String) : Boolean = isMetadata(name) ||
+    name.endsWith(".files") ||
+    name.endsWith(".chunks") ||
+    name.endsWith(".views")
 
   def createDb(dbname: String) = {
 
@@ -168,7 +150,7 @@ object MongoRepository extends Repository {
 
   def listCollections(dbname: String): Future[List[String]] =
     existsDb(dbname).flatMap {
-      case true => connection.db(dbname).collectionNames.map(_.filterNot(isMetadata(_)))
+      case true => connection.db(dbname).collectionNames.map(_.filterNot(isSpecialCollection))
       case _ => throw new DatabaseNotFoundException(s"database $dbname doesn't exist")
     }
 
@@ -185,7 +167,7 @@ object MongoRepository extends Repository {
     def readMetadata() = {
       val metaCollection = connection(database).collection[JSONCollection](MetadataCollection)
       val metadataCursor = metaCollection.find( Json.obj(CollectionField -> collection)).cursor[JsObject]
-      metadataCursor.headOption().map {
+      metadataCursor.headOption.map {
         case Some(doc) => doc.asOpt[Metadata]
         case _ => None
       }
@@ -219,17 +201,26 @@ object MongoRepository extends Repository {
       case Failure(t) => Logger.error(s"Attempt to create collection $colName threw exception: ${t.getMessage}")
     }
 
-    def saveMetadata(specOpt: Option[Metadata]) = specOpt map {
+    def saveMetadata = spatialSpec map {
       spec => connection(dbName).collection[JSONCollection](MetadataCollection).insert(Json.obj(
         ExtentField -> spec.envelope,
         IndexLevelField -> spec.level,
         CollectionField -> colName),
-        GetLastError(awaitJournalCommit = true)
+        GetLastError( j = true, w = Some(BSONInteger(1)) )
       ).andThen {
         case Success(le) => Logger.info(s"Writing metadata for $colName has result: ${le.ok}")
         case Failure(t) => Logger.error(s"Writing metadata for $colName threw exception: ${t.getMessage}")
       }.map(_ => true)
     } getOrElse { Future.successful(true) }
+
+    def ensureIndexes = {
+      val idxManager = connection(dbName).collection[JSONCollection](colName).indexesManager
+      val fSpatialIndexCreated = if(spatialSpec.isDefined) {
+        idxManager.ensure(new Index(Seq((SpecialMongoProperties.MC, Ascending))))
+      } else Future.successful(true)
+      val fIdIndex = idxManager.ensure(new Index(key = Seq((SpecialMongoProperties.ID, Ascending)), unique = true))
+      fIdIndex.flatMap(_ => fSpatialIndexCreated)
+    }
 
     existsDb(dbName).flatMap( dbExists =>
       if ( dbExists ) existsCollection(dbName, colName)
@@ -237,8 +228,8 @@ object MongoRepository extends Repository {
     ).flatMap ( collectionExists =>
       if (!collectionExists) doCreateCollection()
       else throw new CollectionAlreadyExists()
-    ).flatMap ( _ =>  saveMetadata(spatialSpec))
-
+    ).flatMap ( _ =>  saveMetadata
+    ).flatMap ( _ => ensureIndexes)
   }
 
   def deleteCollection(dbName: String, colName: String) = {
@@ -252,6 +243,8 @@ object MongoRepository extends Repository {
       case Success(le) => Logger.info(s"Removing metadata for $dbName/$colName: ${le.ok}")
       case Failure(t) => Logger.warn(s"Removing of $dbName/$colName failed: ${t.getMessage}")
     }
+
+    //TODO -- remove also fs.<colName> gridFs and views collections
 
     existsDb(dbName).flatMap(dbExists =>
       if (dbExists) existsCollection(dbName, colName)
@@ -276,20 +269,22 @@ object MongoRepository extends Repository {
       }
     }
 
+  def getCollectionInfo(dbName: String, colName: String): Future[CollectionInfo] = Repository.getCollection(dbName, colName) map {
+      case (dbcoll, smd) if !smd.envelope.isEmpty =>
+        (dbcoll, smd, FeatureTransformers.mkFeatureIndexingTranformer(smd.envelope, smd.level))
+      case _ => throw new NoSpatialMetadataException(s"$dbName/$colName is not spatially enabled")
+    }
+
   def getSpatialCollection(database: String, collection: String) = {
     val coll = connection(database).collection[JSONCollection](collection)
-    metadata(database, collection).map( md =>
-      MongoSpatialCollection(coll, md)
-    )
+    metadata(database, collection).map( md => MongoSpatialCollection(coll, md) )
   }
 
-  def query(database: String, collection: String, window: Envelope): Future[Enumerator[JsObject]] = {
-    getSpatialCollection(database, collection).map(_.query(window))
-  }
 
-  def getData(database: String, collection: String): Future[Enumerator[JsObject]] = {
-    getSpatialCollection(database, collection).map(_.out())
-  }
+  def query(database: String, collection: String, spatialQuery : SpatialQuery): Future[Enumerator[JsObject]] =
+    futureTimed("query-timer") {
+      getSpatialCollection(database, collection).map(sc => sc.run(spatialQuery))
+    }
 
   def getMediaStore(database: String, collection: String) : Future[MediaStore] = {
     import reactivemongo.api.collections.default._
@@ -336,6 +331,56 @@ object MongoRepository extends Repository {
       }
     }
   }
+
+  private def generateViewsCollName(collection: String) = s"fs.$collection.views"
+
+  def getViewDefs(database: String, collection: String): Future[JSONCollection] =
+    existsCollection(database, collection).map(exists =>
+      if (exists) connection(database).collection[JSONCollection](generateViewsCollName(collection))
+      else throw new CollectionNotFoundException()
+    )
+
+  /**
+   * Saves a view for the specified database and collection.
+   *
+   * @param database the database for the view
+   * @param collection the collection for the view
+   * @param viewDef the view definition
+   * @return eventually true if this save resulted in the update of an existing view, false otherwise
+   */
+  def saveView(database: String, collection: String, viewDef: JsObject) : Future[Boolean] = {
+    getViewDefs(database, collection).flatMap( c => {
+      val lastError = c.update(Json.obj("name" -> (viewDef \ "name").as[String]), viewDef,
+        awaitJournalCommit, upsert = true, multi = false)
+      lastError.map( le => (c, le))
+    }).flatMap{ case (coll, lastError) =>
+      val indexLE = coll.indexesManager.ensure( Index( Seq(("name", Ascending)), unique = true ))
+      indexLE.map(_ => lastError.updatedExisting)
+    }.andThen {
+      case Success(le) => Logger.info(s"Writing view $viewDef for $collection succeeded")
+      case Failure(t) => Logger.error(s"Writing metadata for $collection threw exception: ${t.getMessage}")
+    }
+  }
+
+  def getViews(database: String, collection: String): Future[List[JsObject]] =
+    getViewDefs(database, collection) flatMap (_.find(Json.obj()).cursor[JsObject].collect[List]())
+
+  /**
+   *
+   * @param id  OID or name of the View
+   */
+  private def mkViewSelector(id: String) = Json.obj("$or"  -> Json.arr( Json.obj("_id" -> id), Json.obj("name" -> id)))
+
+  def getView(database: String, collection: String, id: String): Future[JsObject] =
+    getViewDefs(database, collection) flatMap (_.find(mkViewSelector(id)).cursor[JsObject].headOption.collect {
+          case Some(js) => js
+          case None => throw new ViewObjectNotFoundException()
+    })
+
+  def dropView(database: String, collection: String, id: String): Future[LastError] =
+    getViewDefs(database, collection)
+      .flatMap(_.remove(mkViewSelector(id)))
+      .map (le => if (le.n ==0 ) throw new ViewObjectNotFoundException() else le)
 
 }
 

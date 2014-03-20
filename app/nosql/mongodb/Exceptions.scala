@@ -26,4 +26,8 @@ package object Exceptions {
 
   case class MediaObjectNotFoundException(msg: String = "") extends NoSqlException(msg)
 
+  case class ViewObjectNotFoundException(msg: String = "") extends NoSqlException(msg)
+
+  case class InvalidParamsException(msg: String = "") extends NoSqlException(msg)
+
 }

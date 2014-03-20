@@ -1,66 +1,62 @@
 package integration
 
-import org.specs2.mutable.Specification
-import play.api.test.{FakeRequest, FakeApplication, WithServer}
+import scala._
+import org.specs2._
+import play.api.libs.json._
 import play.api.test.Helpers._
-import scala.Some
-import play.api.libs.ws.WS
-import play.api.libs.json.JsArray
+import org.specs2.specification.Step
+import play.api.test.WithApplication
+
 
 /**
  * @author Karel Maesen, Geovise BVBA
  *         creation-date: 10/26/13
  */
-class DatabaseAPISpec extends Specification {
+class DatabaseAPISpec extends NoSqlSpecification {
 
-  val testDbName = "xfstestdb"
-  val testColName = "xfstestcoll"
+  //These specifications need to be sequential (we test for objects created in previous steps/examples
+  def is =  s2""" $sequential
 
-  "Application" should {
+    The /api/databases should return
+      an array of databases                             ${e1}
+      with content-type                                 ${e2("vnd.geolatte-featureserver+json")}
+      CREATED on PUT of a database                      ${e3}
+      CONFLICT on attempt to create twice               ${e4}
+      array containing the name of db after create      ${e5}
+      the db metadata on GET of db                      ${e6}
+      DELETED on deleting the database                  ${e7}
+      array without name of db, after drop              ${e8}
+                                                        ${Step(cleanup)}
+  """
 
-    val fakeApplication = FakeApplication()
+  import RestApiDriver._
+  import UtilityMethods._
 
-    "send an array of databases on /api/databases" in {
-      running(fakeApplication) {
+  def e1 =  getDatabases.applyMatcher{ it => it.status must equalTo(OK) and
+        (it.responseBody must beSome(beAnInstanceOf[JsArray])) }
 
-        val result = RestApiDriver.getDatabases
+  def e2(expected: String) =  getDatabases applyMatcher { it => contentType(it.wrappedResult) must beSome(expected) }
 
-        result.status must equalTo(OK) and
-        ( contentType(result.wrappedResult) must equalTo(Some("vnd.geolatte-featureserver+json"))) and
-        ( result.responseBody must beAnInstanceOf[JsArray] )
-      }
+  def e3 = makeDatabase(testDbName) applyMatcher( _.status must equalTo(CREATED))
+
+  def e4 = makeDatabase(testDbName) applyMatcher( _.status must equalTo(CONFLICT))
+
+  def e5 = getDatabases.applyMatcher( testResponseContains(testDbName, 1))
+
+  def e6 = pending    //TODO - pending test
+
+  def e7 = dropDatabase(testDbName) applyMatcher( _.status must equalTo(OK))
+
+  def e8 = getDatabases.applyMatcher( testResponseContains(testDbName, 0))
+
+  def cleanup = { RestApiDriver.dropDatabase(testDbName); success }
+
+  def testResponseContains(dbName: String, numTimes: Int) = ( res: FakeRequestResult[JsValue, _]) => {
+      val jsArrOpt : Option[JsArray] = res.responseBody
+      val test = ( __ \ "name").read[String]
+      //TODO -- test for presence of correct URL
+      val filtered = jsArrOpt.map( js => js.value.filter( value => value.validate(test).asOpt.getOrElse("") == testDbName) )
+      filtered must beSome( (sq:Seq[JsValue]) => sq must have size numTimes )
     }
 
-    "On a PUT/DELETE of a database, the database is created/deleted" in {
-      running(fakeApplication) {
-
-        val createResult = RestApiDriver.makeDatabase(testDbName)
-        val getDatabases = RestApiDriver.getDatabases
-        val getResultDb = RestApiDriver.getDatabase(testDbName)
-        val dropResult = RestApiDriver.dropDatabase(testDbName)
-        val getDatabasesAfterDrop = RestApiDriver.getDatabases
-        val getResultDBAfterDrop = RestApiDriver.getDatabase(testDbName)
-
-
-        val dbRepr = getDatabases.responseBody match {
-          case jArray: JsArray => jArray.value.filter(jsv => (jsv \ "name").as[String] == testDbName).headOption
-          case _ => None
-        }
-
-
-        val dbReprAfterDrop = getDatabasesAfterDrop.responseBody match {
-          case jArray: JsArray => jArray.value.filter(jsv => (jsv \ "name").as[String] == testDbName).headOption
-          case _ => None
-        }
-
-        createResult.status must equalTo(CREATED) and
-          (dbRepr must beSome) and
-          (getResultDb.status must equalTo(OK) ) and
-          (getResultDb.responseBody must beAnInstanceOf[JsArray] ) and
-          (dropResult.status must equalTo(OK)) and
-          (dbReprAfterDrop must beNone) and
-          (getResultDBAfterDrop.status must equalTo(NOT_FOUND) )
-      }
-     }
-  }
 }

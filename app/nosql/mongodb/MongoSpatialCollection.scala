@@ -22,7 +22,7 @@ import play.api.libs.iteratee._
 import reactivemongo.api.indexes.Index
 import scala.Some
 import reactivemongo.api.collections.default.BSONCollection
-import reactivemongo.core.commands.GetLastError
+import reactivemongo.core.commands.{Count, GetLastError}
 import scala.util.{Try, Failure, Success}
 import java.util.Date
 import play.modules.reactivemongo.json.collection.JSONCollection
@@ -30,14 +30,22 @@ import nosql.json.GeometryReaders._
 import nosql.json.GeometryReaders
 
 import scala.language.reflectiveCalls
+import scala.language.implicitConversions
 
 import config.AppExecutionContexts.streamContext
 import nosql.Exceptions
+import play.modules.reactivemongo.json.collection.JSONCollection
+import scala.util.Failure
+import scala.Some
+import play.modules.reactivemongo.json.BSONFormats
+import play.modules.reactivemongo.json.collection.JSONCollection
+import scala.util.Failure
+import scala.Some
 import play.api.libs.json.JsArray
 import play.modules.reactivemongo.json.collection.JSONCollection
 import scala.util.Failure
 import scala.Some
-import play.api.libs.json.JsObject
+
 
 
 object MetadataIdentifiers {
@@ -75,6 +83,7 @@ trait MortonCodeQueryOptimizer {
 }
 
 trait SubdividingMCQueryOptimizer extends MortonCodeQueryOptimizer {
+
 
   def optimize(window: Envelope, mortoncode: MortonCode): QueryDocuments = Try{
 
@@ -127,49 +136,69 @@ object Metadata {
 
 }
 
-class MongoSpatialCollection(val collection: JSONCollection, val mortoncontext: MortonContext) {
+
+abstract class MongoSpatialCollection(collection: JSONCollection, metadata: Metadata) {
 
   //we require a MortonCodeQueryOptimizer to be mixed in on instantiation
   this: MortonCodeQueryOptimizer =>
 
-  val mortoncode = new MortonCode(mortoncontext)
+  lazy val mortonContext = new MortonContext(metadata.envelope, metadata.level)
+
+  def mortonCode = new MortonCode(mortonContext)
 
 
-  def out(): Enumerator[JsObject] = collection.find(Json.obj()).cursor[JsObject].enumerate
-
-  /**
-   *
-   * @param window the query window
-   * @return
-   * @throws IllegalArgumentException if Envelope does not fall within context of the mortoncode
-   */
-  def query(window: Envelope): Enumerator[JsObject] = {
-    val qds : Seq[JsValue] = optimize(window, mortoncode)
+  def window2query(window: Envelope) = {
+    val qds: Seq[JsValue] = optimize(window, mortonCode)
     val docArr = JsArray(qds)
-    val query = Json.obj("$or" -> docArr)
-    filteringEnumerator(collection.find(query).cursor, window)
+    Json.obj("$or" -> docArr)
+  }
+
+  def selector(sq: SpatialQuery) = {
+     val windowPart = sq.windowOpt.map( window2query(_) ).getOrElse(Json.obj())
+     val query = sq.queryOpt.getOrElse(Json.obj())
+     query ++ windowPart
+  }
+
+  def projection(sq: SpatialQuery) =  {
+    val flds = sq.projectionOpt
+      //make sure we include  bbox and geometry property so that filtering works correctly
+      .map(proj =>  (proj ++ Json.arr(SpecialMongoProperties.BBOX, "geometry", "type") ))
+      .getOrElse( Json.arr() )
+    Json.obj(flds.value.collect{case f : JsString => f.value -> Json.toJsFieldJsValueWrapper(1)}:_*)
+  }
+
+  def run(query: SpatialQuery) : Enumerator[JsObject] = {
+    val sel = selector(query)
+    val proj = projection(query)
+    Logger.debug(s"Run query with selector: ${Json.stringify(sel)}; and projection: ${Json.stringify(proj)} ")
+    val cursor = collection.find(sel, proj).cursor[JsObject]
+    query.windowOpt match {
+      case Some(w) => cursor.enumerate() through filteringEnumeratee(w)
+      case _ => cursor.enumerate()
+    }
   }
 
   // TODO this could probably be done more efficiently using a custom window-sensitive Json Validator
-  private def filteringEnumerator(cursor: Cursor[JsObject], window : Envelope): Enumerator[JsObject] = {
-    import GeometryReaders.extentFormats
-    val toExtent  = Enumeratee.map[JsObject]( obj => (obj, (obj \  SpecialMongoProperties.BBOX).asOpt[Extent]))
-    val filter = Enumeratee.filter[(JsObject, Option[Extent])]( p => p match {
-        case (obj , None) => false
-        case ( _ , Some(ex)) => window.contains(ex.toEnvelope(window.getCrsId))
-        } )
-    val toObj = Enumeratee.map[(JsObject, Option[Extent])]( p => p._1)
-    cursor.enumerate through (toExtent compose filter compose toObj)
-  }
+  private def filteringEnumeratee(window: Envelope) = {
+      import GeometryReaders.extentFormats
+      val toExtent = Enumeratee.map[JsObject](obj => (obj, (obj \ SpecialMongoProperties.BBOX).asOpt[Extent]))
+      val filter = Enumeratee.filter[(JsObject, Option[Extent])](p => p match {
+        case (obj, None) => false
+        case (_, Some(ex)) => window.intersects(ex.toEnvelope(window.getCrsId))
+      })
+      val toObj = Enumeratee.map[(JsObject, Option[Extent])](p => p._1)
+      (toExtent compose filter compose toObj)
+    }
 
 }
 
 object MongoSpatialCollection {
 
-  def apply(collection: JSONCollection, metadata: Metadata): MongoSpatialCollection =
-    new MongoSpatialCollection(collection, new MortonContext(metadata.envelope, metadata.level)) with SubdividingMCQueryOptimizer
+  def apply(collection: JSONCollection, metadata: Metadata) = new MongoSpatialCollection(collection, metadata)
+    with SubdividingMCQueryOptimizer
 
 }
+
 
 
 

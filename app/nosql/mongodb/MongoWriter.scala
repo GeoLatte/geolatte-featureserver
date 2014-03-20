@@ -3,13 +3,11 @@ package nosql.mongodb
 import play.api.Logger
 import scala.concurrent._
 import play.modules.reactivemongo.json.collection.JSONCollection
-import config.AppExecutionContexts.streamContext
 import play.api.libs.iteratee.Enumerator
 import scala.util.{Failure, Success}
-import reactivemongo.api.indexes.Index
-import reactivemongo.api.indexes.IndexType.Ascending
 import play.api.libs.json._
-import nosql.Exceptions.DatabaseNotFoundException
+import nosql.mongodb.Repository.CollectionInfo
+import utilities.JsonHelper
 
 /**
  * @author Karel Maesen, Geovise BVBA
@@ -17,9 +15,7 @@ import nosql.Exceptions.DatabaseNotFoundException
  */
 trait FeatureWriter {
 
-  def add(features: Seq[JsObject]): Unit
-
-  def updateIndex(): Unit
+  def add(features: Seq[JsObject]): Future[Int]
 
 }
 
@@ -27,34 +23,24 @@ case class MongoWriter(db: String, collection: String) extends FeatureWriter {
 
   import config.AppExecutionContexts.streamContext
 
-  type CollectionInfo = (JSONCollection, Metadata, Reads[JsObject])
+  val fCollectionInfo: Future[CollectionInfo] = Repository.getCollectionInfo(db, collection)
 
-  val fCollectionInfo: Future[CollectionInfo] = MongoRepository.getCollection(db, collection) map {
-    case (dbcoll, smd) =>
-      (dbcoll, smd, FeatureTransformers.mkFeatureIndexingTranformer(smd.envelope, smd.level))
-    case _ => throw new DatabaseNotFoundException(s"$db/$collection not found, or collection is not spatially enabled")
-  }
-
-  def add(features: Seq[JsObject]) = {
-    for ((collection, smd, transfo) <- fCollectionInfo) yield {
-
-      val docs = features.map(f => f.transform(transfo)).collect {
-        case JsSuccess(transformed, _) => transformed
-      }
-      Logger.debug(" Flushing data to mongodb (" + docs.size + " features)")
-      collection.bulkInsert(Enumerator.enumerate(docs)).onComplete {
-        case Success(num) => Logger.info(s"Successfully inserted $num features")
-        case Failure(f) => Logger.warn(s"Insert failed with error: ${f.getMessage}")
-      }
-    }
-  }
-
-  def updateIndex(): Unit = {
-
-    for ((collection, _, _) <- fCollectionInfo) {
-      val idxManager = collection.indexesManager
-      idxManager.ensure(new Index(Seq((SpecialMongoProperties.MC, Ascending)))) onFailure {
-        case ex => Logger.warn("Failure on creating mortoncode index on collection %s" format collection.name)
+  def add(features: Seq[JsObject]) =
+    if(features.isEmpty) Future.successful(0)
+    else {
+      fCollectionInfo.flatMap{ case (coll, smd, transfo) => {
+        //Logger.debug("Received as input: " + features)  //even for debug this produces way too much loggin data
+        val docs = features.map(f => f.transform(transfo)).collect {
+          case JsSuccess(transformed, _) => transformed
+        }
+        Logger.debug(" Flushing data to mongodb (" + docs.size + " features)")
+        val fInt = coll.bulkInsert(Enumerator.enumerate(docs))
+        fInt.onSuccess {
+          case num => Logger.info(s"Successfully inserted $num features")
+        }
+        fInt.recover {
+          case t : Throwable => { Logger.warn(s"Insert failed with error: ${t.getMessage}"); 0 }
+        }
       }
     }
   }
