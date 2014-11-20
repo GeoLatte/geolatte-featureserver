@@ -5,7 +5,7 @@ import play.Project._
 object GeolatteNoSqlBuild extends Build {
 
    val appName         = "geolatte-nosql"
-   val appVersion      = "1.1"
+   val appVersion      = "1.2-SNAPSHOT"
 
   //Resolvers
   lazy val commonResolvers = Seq(
@@ -13,7 +13,7 @@ object GeolatteNoSqlBuild extends Build {
     "Codahale Repo" at "http://repo.codahale.com",
     "Sonatype Repo" at "https://oss.sonatype.org/content/repositories/releases/",
     "Sonatype Snapshots" at "http://oss.sonatype.org/content/repositories/snapshots/",
-    "Typesafe Repository" at "http://repo.typesafe.com/typesafe/releases/",    
+    "Typesafe Repository" at "http://repo.typesafe.com/typesafe/releases/",
     "sbt-idea-repo" at "http://mpeltonen.github.com/maven/",
     Resolver.url("artifactory", url("http://scalasbt.artifactoryonline.com/scalasbt/sbt-plugin-releases"))(Resolver.ivyStylePatterns)
   )
