@@ -21,7 +21,7 @@ object GeolatteNoSqlBuild extends Build {
    //Dependencies
   lazy val dependencies = Seq(
     "org.specs2" %% "specs2" % "2.3.4" % "test",
-    "org.geolatte" % "geolatte-geom" %  "0.12",
+    "org.geolatte" % "geolatte-geom" %  "0.14",
     "org.reactivemongo" %% "reactivemongo" % "0.10.0",
      "org.reactivemongo" %% "play2-reactivemongo" % "0.10.2",
     "commons-codec" % "commons-codec" % "1.8",
