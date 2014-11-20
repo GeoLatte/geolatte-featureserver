@@ -1,11 +1,8 @@
 package integration
 
-import scala._
-import org.specs2._
-import play.api.libs.json._
-import play.api.test.Helpers._
 import org.specs2.specification.Step
-import play.api.test.WithApplication
+import play.api.libs.json._
+import play.api.mvc.AnyContentAsEmpty
 
 
 /**
@@ -29,8 +26,8 @@ class DatabaseAPISpec extends NoSqlSpecification {
                                                         ${Step(cleanup)}
   """
 
-  import RestApiDriver._
-  import UtilityMethods._
+  import integration.RestApiDriver._
+  import integration.UtilityMethods._
 
   def e1 =  getDatabases.applyMatcher{ it => it.status must equalTo(OK) and
         (it.responseBody must beSome(beAnInstanceOf[JsArray])) }
@@ -51,7 +48,7 @@ class DatabaseAPISpec extends NoSqlSpecification {
 
   def cleanup = { RestApiDriver.dropDatabase(testDbName); success }
 
-  def testResponseContains(dbName: String, numTimes: Int) = ( res: FakeRequestResult[JsValue, _]) => {
+  def testResponseContains(dbName: String, numTimes: Int) = ( res: FakeRequestResult[Nothing, AnyContentAsEmpty.type, JsValue]) => {
       val jsArrOpt : Option[JsArray] = res.responseBody
       val test = ( __ \ "name").read[String]
       //TODO -- test for presence of correct URL

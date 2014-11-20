@@ -36,6 +36,9 @@ class FeatureCollectionAPISpec extends InCollectionSpecification {
 
      General:
        Query parameters should be case insensitive                                $e12
+       
+     The FeatureCollection /query in  CSV format should:
+        return the objects with all attributes within JSON Object tree            $e13
 
 
   """
@@ -45,16 +48,19 @@ class FeatureCollectionAPISpec extends InCollectionSpecification {
     import RestApiDriver._
 
     //Generators for data
-    val prop = Gen.properties("foo" -> Gen.oneOf("bar1", "bar2", "bar3"), "num" -> Gen.oneOf(1, 2, 3), "something" -> Gen.oneOf("else", "bad"))
-    def geom(mc: String = "") = Gen.lineString(3)(mc)
+    val propertyObjGenerator = Gen.properties("foo" -> Gen.oneOf("bar1", "bar2", "bar3"), "num" -> Gen.oneOf(1, 2, 3), "something" -> Gen.oneOf("else", "bad"))
+    val nestedPropertyGenerator = propertyObjGenerator.map {
+      jsObj => jsObj ++ Json.obj("nestedprop" -> Json.obj("nestedfoo" -> "bar"))
+    }
+    def lineStringGenerator(mc: String = "") = Gen.lineString(3)(mc)
     val idGen = Gen.id
-    def feature(mc: String = "") = Gen.geoJsonFeature(idGen, geom(mc), prop)
-    def featureArray(mc: String = "", size: Int = 10) = Gen.geoJsonFeatureArray(feature(mc), size)
+    def geoJsonFeatureGenerator(mc: String = "") = Gen.geoJsonFeature(idGen, lineStringGenerator(mc), nestedPropertyGenerator)
+    def gjFeatureArrayGenerator(mc: String = "", size: Int = 10) = Gen.geoJsonFeatureArray(geoJsonFeatureGenerator(mc), size)
 
   def e1 = getDownload(testDbName, "nonExistingCollection").applyMatcher( _.status must equalTo(NOT_FOUND))
 
   def e2 = {
-    val features = featureArray(size = 1).sample.get
+    val features = gjFeatureArrayGenerator(size = 1).sample.get
     withFeatures(testDbName, testColName, features){
       getDownload(testDbName, testColName).applyMatcher(
         res => (res.status must equalTo(OK)) and (res.responseBody must beSomeFeatures(features))
@@ -95,7 +101,7 @@ class FeatureCollectionAPISpec extends InCollectionSpecification {
 
   def e7 = withTestFeatures(10,10) {
     (bbox: String, featuresIn01: JsArray) => {
-      getQuery(testDbName, testColName, Map("bbox"-> bbox)).applyMatcher {
+      getQuery(testDbName, testColName, Map("bbox"-> bbox))(contentAsJsonStream).applyMatcher {
         res => res.responseBody must beSomeFeatures(featuresIn01)
       }
     }
@@ -105,7 +111,7 @@ class FeatureCollectionAPISpec extends InCollectionSpecification {
     (bbox: String, featuresIn01: JsArray) => {
       val projection = "properties.foo,properties.num"
       val projectedFeatures = project(featuresIn01)
-      getQuery(testDbName, testColName, Map("bbox" -> bbox, "projection" -> projection)).applyMatcher {
+      getQuery(testDbName, testColName, Map("bbox" -> bbox, "projection" -> projection))(contentAsJsonStream).applyMatcher {
         res => res.responseBody must beSomeFeatures(projectedFeatures)
       }
     }
@@ -118,17 +124,17 @@ class FeatureCollectionAPISpec extends InCollectionSpecification {
         featuresIn01.value.filter( jsv => jsv.asOpt(picksFoo) == Some(JsString("bar1")))
       )
       val queryObj = Json.obj("properties.foo" -> "bar1")
-      getQuery(testDbName, testColName, Map("bbox" -> bbox, "query" -> queryObj)) applyMatcher {
+      getQuery(testDbName, testColName, Map("bbox" -> bbox, "query" -> queryObj))(contentAsJsonStream) applyMatcher {
         res => res.responseBody must beSomeFeatures(filteredFeatures)
       }
     }
   }
 
-  def e10 = getQuery(testDbName, testColName, Map("projection" -> "")).applyMatcher {
+  def e10 = getQuery(testDbName, testColName, Map("projection" -> ""))(contentAsJsonStream).applyMatcher {
     _.status must equalTo(BAD_REQUEST)
   }
 
-  def e11 = getQuery(testDbName, testColName, Map("query" -> """{"foo": 1""")).applyMatcher {
+  def e11 = getQuery(testDbName, testColName, Map("query" -> """{"foo": 1"""))(contentAsJsonStream).applyMatcher {
     _.status must equalTo(BAD_REQUEST)
   }
 
@@ -139,10 +145,16 @@ class FeatureCollectionAPISpec extends InCollectionSpecification {
           lcResponse must equalTo(ucResponse)
         }
       }
+  
+  def e13 = withTestFeatures(100, 200) {
+    (bbox: String, featuresIn01: JsArray) => getQuery(testDbName, testColName, Map("bbox" -> bbox))(contentAsJsonStream).applyMatcher(
+      res => (res.status must equalTo(OK)) and (res.responseBody must beSome( matchFeaturesInJson(featuresIn01)))
+    )
+  }
 
   def withTestFeatures[T](sizeInsideBbox: Int, sizeOutsideBbox: Int)( block: (String, JsArray) => T) = {
-    val (featuresIn01, allFeatures) = featureArray("01", sizeInsideBbox)
-          .flatMap(f1 => featureArray("1", sizeOutsideBbox).map(f2 => (f1, f2 ++ f1))).sample.get
+    val (featuresIn01, allFeatures) = gjFeatureArrayGenerator("01", sizeInsideBbox)
+          .flatMap(f1 => gjFeatureArrayGenerator("1", sizeOutsideBbox).map(f2 => (f1, f2 ++ f1))).sample.get
         val env: Envelope = "01"
         val bbox = s"${env.getMinX},${env.getMinY},${env.getMaxX},${env.getMaxY}"
         withFeatures(testDbName, testColName, allFeatures) {
