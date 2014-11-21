@@ -77,13 +77,6 @@ object FakeRequestResult {
       }
 
 
-  //TODO refactor so that GET_CSV can be unified into
-//  def GET(url: String, format: Future[SimpleResult] => JsValue) : FakeRequestResult[Nothing, AnyContentAsEmpty.type, JsValue]=
-//    new FakeRequestResult(url = url, format = Some(format), mkRequest = makeGetRequest(ConfigurationValues.Format.JSON))
-//
-//  def GET_CSV(url: String, format: Future[SimpleResult] => Seq[String]) : FakeRequestResult[Nothing, AnyContentAsEmpty.type, Seq[String]] =
-//    new FakeRequestResult(url = url, format = Some(format), mkRequest = makeGetRequest(ConfigurationValues.Format.CSV))
-
   def PUT(url: String, body: Option[JsValue] = None) =
     new FakeRequestResult(url = url, requestBody = body, mkRequest = makePutRequest)
 
@@ -306,7 +299,7 @@ with FutureAwaits {
   implicit def mapOfQParams2QueryStr[T](params: Map[String, T]): String = params.map { case (k, v) => s"$k=$v"} mkString "&"
 
   def makeGetRequest[B](mediatype: ConfigurationValues.Format.Value)(url: String, js: Option[B] = None) =
-    FakeRequest(GET, url).withHeaders("Accept" -> "vnd.geolatte-featureserver+json;version=\"1.0\"") //SupportedMediaTypes(mediatype))
+    FakeRequest(GET, url).withHeaders("Accept" -> SupportedMediaTypes(mediatype).toString)
 
 
   def makePutRequest(url: String, body: Option[JsValue] = None) = FakeRequest(PUT, url)

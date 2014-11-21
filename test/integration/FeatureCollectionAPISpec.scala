@@ -37,13 +37,14 @@ class FeatureCollectionAPISpec extends InCollectionSpecification {
      General:
        Query parameters should be case insensitive                                $e12
        
-     The FeatureCollection /query in  CSV format should:
-        return the objects with all attributes within JSON Object tree            $e13
 
 
   """
 
-    //import default values
+  //     The FeatureCollection /query in  CSV format should:
+  //        return the objects with all attributes within JSON Object tree            $e13
+
+  //import default values
     import UtilityMethods._
     import RestApiDriver._
 
@@ -54,7 +55,7 @@ class FeatureCollectionAPISpec extends InCollectionSpecification {
     }
     def lineStringGenerator(mc: String = "") = Gen.lineString(3)(mc)
     val idGen = Gen.id
-    def geoJsonFeatureGenerator(mc: String = "") = Gen.geoJsonFeature(idGen, lineStringGenerator(mc), propertyObjGenerator)
+    def geoJsonFeatureGenerator(mc: String = "") = Gen.geoJsonFeature(idGen, lineStringGenerator(mc), nestedPropertyGenerator)
     def gjFeatureArrayGenerator(mc: String = "", size: Int = 10) = Gen.geoJsonFeatureArray(geoJsonFeatureGenerator(mc), size)
 
   def e1 = getDownload(testDbName, "nonExistingCollection").applyMatcher( _.status must equalTo(NOT_FOUND))
@@ -166,7 +167,8 @@ class FeatureCollectionAPISpec extends InCollectionSpecification {
   def project(features: JsArray) = {
     import play.api.libs.functional.syntax._
     val pruner : Reads[JsObject] = (__ \ "id").json.prune andThen
-      ( __ \ "properties" \ "something").json.prune
+      ( __ \ "properties" \ "something").json.prune andThen
+      ( __ \ "properties" \ "nestedprop").json.prune
     JsArray(
       for (f <- features.value) yield f.transform(pruner).asOpt.get
     )
