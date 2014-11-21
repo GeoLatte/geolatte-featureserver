@@ -67,11 +67,11 @@ object FakeRequestResult {
   def GET[T : TypeTag](url: String, format: Future[SimpleResult] => T) : FakeRequestResult[Nothing, AnyContentAsEmpty.type, T]=
       format match {
         case fmt if typeOf[T]  <:< typeOf[JsValue] => {
-          val mediaType: ConfigurationValues.Format.Value = ConfigurationValues.Format.JSON
-          new FakeRequestResult(url = url, format = Some(format), mkRequest = makeGetRequest(mediaType))
+          val mediaType = ConfigurationValues.Format.JSON
+          new FakeRequestResult(url = url, format = Some(format), mkRequest = makeGetRequest(mediaType) )
         }
         case fmt if typeOf[T]  <:< typeOf[Seq[String]] => {
-          val mediaType: ConfigurationValues.Format.Value = ConfigurationValues.Format.CSV
+          val mediaType = ConfigurationValues.Format.CSV
           new FakeRequestResult(url = url, format = Some(format), mkRequest = makeGetRequest(mediaType))
         }
       }
@@ -306,7 +306,7 @@ with FutureAwaits {
   implicit def mapOfQParams2QueryStr[T](params: Map[String, T]): String = params.map { case (k, v) => s"$k=$v"} mkString "&"
 
   def makeGetRequest[B](mediatype: ConfigurationValues.Format.Value)(url: String, js: Option[B] = None) =
-    FakeRequest(GET, url).withHeaders("Accept" -> SupportedMediaTypes(mediatype))
+    FakeRequest(GET, url).withHeaders("Accept" -> "vnd.geolatte-featureserver+json;version=\"1.0\"") //SupportedMediaTypes(mediatype))
 
 
   def makePutRequest(url: String, body: Option[JsValue] = None) = FakeRequest(PUT, url)

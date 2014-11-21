@@ -54,7 +54,7 @@ class FeatureCollectionAPISpec extends InCollectionSpecification {
     }
     def lineStringGenerator(mc: String = "") = Gen.lineString(3)(mc)
     val idGen = Gen.id
-    def geoJsonFeatureGenerator(mc: String = "") = Gen.geoJsonFeature(idGen, lineStringGenerator(mc), nestedPropertyGenerator)
+    def geoJsonFeatureGenerator(mc: String = "") = Gen.geoJsonFeature(idGen, lineStringGenerator(mc), propertyObjGenerator)
     def gjFeatureArrayGenerator(mc: String = "", size: Int = 10) = Gen.geoJsonFeatureArray(geoJsonFeatureGenerator(mc), size)
 
   def e1 = getDownload(testDbName, "nonExistingCollection").applyMatcher( _.status must equalTo(NOT_FOUND))

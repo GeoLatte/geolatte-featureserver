@@ -60,6 +60,11 @@ object Global extends GlobalSettings {
     }
   }
 
+  override def onStop(app: Application) {
+    logReporter.stop()
+    jmxReporter.stop()
+  }
+
 
   override def doFilter(next: EssentialAction) : EssentialAction = {
     Filters(super.doFilter(next), loggingFilter, new GzipFilter())

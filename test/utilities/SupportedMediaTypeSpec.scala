@@ -1,7 +1,9 @@
 package utilities
 
+import config.ConfigurationValues
 import org.specs2.mutable._
 import config.ConfigurationValues.{Version, Format}
+import play.api.http.{MediaRange, MediaType}
 import play.api.test.{FakeRequest, FakeHeaders}
 
 /**
@@ -70,6 +72,15 @@ class SupportedMediaTypeSpec extends Specification {
     satisfySpec("application/*", null, Some( Format.JSON -> Version.v1_0) )
 
 
+    val mt : MediaType = SupportedMediaTypes(Format.JSON,  Version.default)
+
+
+    val test = mt match {
+      case SupportedMediaTypes(fmt, version) =>
+        fmt must_== Format.JSON
+        version must_== Version.default
+      case _ => failure
+    }
 
   }
 

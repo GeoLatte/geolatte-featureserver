@@ -40,10 +40,10 @@ trait AbstractNoSqlController extends Controller with FutureInstrumented {
     implicit def toStr(js : JsObject) : String = Json.stringify(js)
 
     (result, request) match {
-      case (r : Jsonable, SupportedMediaTypes(Format.JSON, version)) => Ok(r.toJson).as(SupportedMediaTypes(Format.JSON, version))
-      case (r : Csvable, SupportedMediaTypes(Format.CSV, version)) => Ok(r.toCsv).as(SupportedMediaTypes(Format.CSV, version))
-      case (r : JsonStreamable, SupportedMediaTypes(Format.JSON, version)) => Ok.chunked(toStream(r.toJsonStream)).as(SupportedMediaTypes(Format.JSON, version))
-      case (r : CsvStreamable, SupportedMediaTypes(Format.CSV, version)) => Ok.chunked(toStream(r.toCsvStream)).as(SupportedMediaTypes(Format.CSV, version))
+      case (r : Jsonable, SupportedMediaTypes(Format.JSON, version)) => Ok(r.toJson).as(SupportedMediaTypes(Format.JSON, version).toString)
+      case (r : Csvable, SupportedMediaTypes(Format.CSV, version)) => Ok(r.toCsv).as(SupportedMediaTypes(Format.CSV, version).toString)
+      case (r : JsonStreamable, SupportedMediaTypes(Format.JSON, version)) => Ok.chunked(toStream(r.toJsonStream)).as(SupportedMediaTypes(Format.JSON, version).toString)
+      case (r : CsvStreamable, SupportedMediaTypes(Format.CSV, version)) => Ok.chunked(toStream(r.toCsvStream)).as(SupportedMediaTypes(Format.CSV, version).toString)
       case _ => UnsupportedMediaType("No supported media type: " + request.acceptedTypes.mkString(";"))
     }
   }

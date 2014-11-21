@@ -46,7 +46,7 @@ object ViewController extends AbstractNoSqlController {
         Some(
           Repository.getViews(db, collection)
             .map(res => res.map(el => format(db, collection)(el)))
-            .map(res => Ok(JsArray(res)).as(SupportedMediaTypes(Format.JSON)))
+            .map(res => Ok(JsArray(res)).as(SupportedMediaTypes(Format.JSON).toString()))
         )
       }.get.recover(commonExceptionHandler(db, collection))
     }
@@ -83,5 +83,5 @@ object ViewController extends AbstractNoSqlController {
   }
 
   private def viewDef2Result(db: String, col: String)(viewDef: JsObject): SimpleResult =
-    Ok(format(db: String, col: String)(viewDef)).as(SupportedMediaTypes(Format.JSON))
+    Ok(format(db: String, col: String)(viewDef)).as(SupportedMediaTypes(Format.JSON).toString())
 }
