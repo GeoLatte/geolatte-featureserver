@@ -21,7 +21,7 @@ import play.api.libs.json.JsString
 import play.api.libs.json.JsBoolean
 
 import play.api.libs.json.JsNumber
-import utilities.QueryParam
+import utilities.{EnumeratorUtility, QueryParam}
 import nosql.Exceptions.InvalidQueryException
 import play.api.libs.json.JsObject
 import com.fasterxml.jackson.core.JsonParseException
@@ -150,25 +150,22 @@ object FeatureCollectionController extends AbstractNoSqlController with FutureIn
         case (k, v) => v
         case _ => "None"
       }, g => g.asText).mkString(",")
-      
+
       val toCsvHeader = (js: JsObject) => project(js)({
         case (k, v) => k
         case _ => "None"
       }, _ => "geometry-wkt").mkString(",")
 
-      // toCsv works as a state machine, on first invocation it prints a header row plus the record,
-      // on subsequent invocations, only the record
-      var toCsv: (JsObject) => String = js => {
-        this.toCsv = toCsvRecord
-        toCsvHeader(js)  + "\n" + toCsvRecord(js)
+      val toCsv : (Int, JsObject) => String = (i,js) => {
+        if (i != 0) toCsvRecord(js)
+        else toCsvHeader(js)  + "\n" + toCsvRecord(js)
       }
 
       def toJsonStream = enum
 
-      def toCsvStream = enum.map(js => toCsv(js))
+      def toCsvStream = EnumeratorUtility.withIndex(enum).map[String]( toCsv.tupled)
 
-    }
-    )
+    })
 
   private def doQuery(db: String, collection: String, smd: Metadata)
                             (implicit queryStr: Map[String, Seq[String]]) : Future[Enumerator[JsObject]] =
