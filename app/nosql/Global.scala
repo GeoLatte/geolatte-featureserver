@@ -28,16 +28,16 @@ object Global extends GlobalSettings {
     Future { NotFound(s"Request ${request.path} not found.") }
   }
 
-  val metricRegistry = new MetricRegistry()
+  lazy val metricRegistry = new MetricRegistry()
 
-  val jmxReporter = JmxReporter.forRegistry(metricRegistry).build()
+  lazy val jmxReporter = JmxReporter.forRegistry(metricRegistry).build()
 
-  val logReporter = Slf4jReporter.forRegistry(metricRegistry)
+  lazy val logReporter = Slf4jReporter.forRegistry(metricRegistry)
     .outputTo(LoggerFactory.getLogger("metrics"))
     .convertRatesTo(TimeUnit.SECONDS)
     .convertDurationsTo(TimeUnit.MILLISECONDS)
     .build()
-  
+
   def startMetrics(app: Application) : Unit = {
     if (app.mode == Mode.Prod) {
       jmxReporter.start()
