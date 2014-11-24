@@ -23,8 +23,11 @@ object JsonHelper {
    */
   def flatten(jsObject: JsObject) : Seq[(String, JsValue)]=  {
 
+    def join(path: String, key: String) : String =
+      new StringBuilder(path).append(".").append(key).toString()
+
     def prependPath(path: String, kv : (String, JsValue)) : (String, JsValue) = kv match {
-      case (k,v) => (path +"." + k, v)
+      case (k,v) => (join(path,k), v)
     }
 
     def flattenAcc(jsObject: JsObject, buffer:ListBuffer[(String, JsValue)]): ListBuffer[(String, JsValue)] = {
