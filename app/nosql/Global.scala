@@ -37,11 +37,24 @@ object Global extends GlobalSettings {
     .convertRatesTo(TimeUnit.SECONDS)
     .convertDurationsTo(TimeUnit.MILLISECONDS)
     .build()
+  
+  def startMetrics(app: Application) : Unit = {
+    if (app.mode == Mode.Prod) {
+      jmxReporter.start()
+      logReporter.start(1, TimeUnit.MINUTES)
+    }
+  }
+
+  def stopMetrics(app: Application) : Unit = {
+    if (app.mode == Mode.Prod) {
+      jmxReporter.stop()
+      logReporter.stop()
+    }
+  }
+
 
   override def onStart(app: Application) {
-// -- CURRENTLY CodaHale metrics disabled -- error when running in tests.
-//    jmxReporter.start()
-//    logReporter.start(1, TimeUnit.MINUTES)
+    startMetrics(app)
   }
 
   val requestLogger = LoggerFactory.getLogger("requests")
@@ -60,9 +73,8 @@ object Global extends GlobalSettings {
     }
   }
 
-  override def onStop(app: Application) {
-//    logReporter.stop()
-//    jmxReporter.stop()
+  override def onStop(app: Application): Unit = {
+    stopMetrics(app)
   }
 
 
