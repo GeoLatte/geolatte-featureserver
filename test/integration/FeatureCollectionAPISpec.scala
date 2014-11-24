@@ -36,13 +36,12 @@ class FeatureCollectionAPISpec extends InCollectionSpecification {
 
      General:
        Query parameters should be case insensitive                                $e12
-       
 
+
+     The FeatureCollection /query in  CSV should:
+        return the objects with all attributes within JSON Object tree            $e13
 
   """
-
-  //     The FeatureCollection /query in  CSV format should:
-  //        return the objects with all attributes within JSON Object tree            $e13
 
   //import default values
     import UtilityMethods._
@@ -147,9 +146,9 @@ class FeatureCollectionAPISpec extends InCollectionSpecification {
         }
       }
   
-  def e13 = withTestFeatures(100, 200) {
-    (bbox: String, featuresIn01: JsArray) => getQuery(testDbName, testColName, Map("bbox" -> bbox))(contentAsJsonStream).applyMatcher(
-      res => (res.status must equalTo(OK)) and (res.responseBody must beSome( matchFeaturesInJson(featuresIn01)))
+  def e13 = withTestFeatures(3, 6) {
+    (bbox: String, featuresIn01: JsArray) => getQuery(testDbName, testColName, Map("bbox" -> bbox))(contentAsStringStream).applyMatcher(
+      res => (res.status must equalTo(OK)) and (res.responseBody must beSome( matchFeaturesInCsv("_id,geometry-wkt,foo,num,something,nestedprop.nestedfoo")))
     )
   }
 

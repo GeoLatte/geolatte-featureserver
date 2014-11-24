@@ -16,18 +16,17 @@ import org.supercsv.encoder.DefaultCsvEncoder
 import org.supercsv.prefs.CsvPreference
 import scala.concurrent.Future
 import play.api.Play._
-import play.api.libs.json.JsUndefined
+
 import play.api.libs.json.JsString
 import play.api.libs.json.JsBoolean
-import scala.Some
+
 import play.api.libs.json.JsNumber
 import utilities.QueryParam
 import nosql.Exceptions.InvalidQueryException
 import play.api.libs.json.JsObject
 import com.fasterxml.jackson.core.JsonParseException
-import nosql.{FutureInstrumented, Instrumented}
-import nl.grons.metrics.scala.FutureMetrics
-import java.util.concurrent.atomic.AtomicInteger
+import nosql.FutureInstrumented
+
 
 
 object FeatureCollectionController extends AbstractNoSqlController with FutureInstrumented {
@@ -130,41 +129,43 @@ object FeatureCollectionController extends AbstractNoSqlController with FutureIn
 
       def encode(v: JsString) = "\"" + encoder.encode(v.value, null, CsvPreference.STANDARD_PREFERENCE) + "\""
 
-      //TODO -- refactor to clarify structure
-      def project(js: JsObject)(pf: PartialFunction[Option[(String, String)], String], pf2: Geometry => String) = {
+
+      def expand(v : JsObject) : Seq[(String, String)] = utilities.JsonHelper.flatten(v).map {
+        case (k, v: JsString)   => (k, encode(v) )
+        case (k, v: JsNumber)   => (k, Json.stringify(v) )
+        case (k, v: JsBoolean)  => (k, Json.stringify(v) )
+        case (k, _) => (k, "")
+      }
+
+
+      def project(js: JsObject)(selector: PartialFunction[(String, String), String], geomToString: Geometry => String) : Seq[String] = {
         val jsObj = (js \ "properties").asOpt[JsObject].getOrElse(JsObject(List()))
-        val attributes = jsObj.fields.map {
-          case (k, v: JsString) => Some((k, encode(v)))
-          case (k, v: JsNumber) => Some((k, v.value.toString))
-          case (k, v: JsBoolean) => Some((k, v.value.toString))
-          case (k, JsNull) => Some((k, ""))
-          case (k, _: JsUndefined) => Some((k, ""))
-          case _ => None
-        }.collect(pf)
-        val geom = pf2((js \ "geometry").asOpt(GeometryReads(CrsId.UNDEFINED)).getOrElse(Point.createEmpty()))
-        val idOpt = (js \ "_id" \ "$oid").asOpt[String].map(v => ("_id", v))
-        pf(idOpt) +: geom +: attributes
+        val attributes = expand(jsObj).collect(selector)
+        val geom = geomToString((js \ "geometry").asOpt(GeometryReads(CrsId.UNDEFINED)).getOrElse(Point.createEmpty()))
+        val idOpt = (js \ "_id" \ "$oid").asOpt[String].map(v => ("_id", v)).getOrElse(("_id", "null"))
+        selector(idOpt) +: geom +: attributes
       }
 
       val toCsvRecord = (js: JsObject) => project(js)({
-        case Some((k, v)) => v
+        case (k, v) => v
         case _ => "None"
       }, g => g.asText).mkString(",")
+      
       val toCsvHeader = (js: JsObject) => project(js)({
-        case Some((k, v)) => k
+        case (k, v) => k
         case _ => "None"
       }, _ => "geometry-wkt").mkString(",")
 
-      // toCsv works as a state machine, on first invocation it print header, and record,
+      // toCsv works as a state machine, on first invocation it prints a header row plus the record,
       // on subsequent invocations, only the record
-      var toCsv: (JsObject) => String = js => {
-        this.toCsv = toCsvRecord
-        toCsvHeader(js) + "\n" + toCsvRecord(js)
+      var toCsv: (JsObject) => Enumerator[String] = js => {
+        this.toCsv = js => Enumerator.enumerate(List(toCsvRecord(js)))
+        Enumerator.enumerate(List(toCsvHeader(js), toCsvRecord(js)))
       }
 
       def toJsonStream = enum
 
-      def toCsvStream = enum.map(js => toCsv(js))
+      def toCsvStream = enum.flatMap(js => toCsv(js))
 
     }
     )
@@ -175,7 +176,7 @@ object FeatureCollectionController extends AbstractNoSqlController with FutureIn
 
 
   implicit def queryString2SpatialQuery(db: String, collection: String, smd: Metadata)
-                                       (implicit queryStr: Map[String, Seq[String]]) = {
+                                       (implicit queryStr: Map[String, Seq[String]]) : Future[SpatialQuery] = {
     val windowOpt = Bbox(QueryParams.BBOX.extractOrElse(""), smd.envelope.getCrsId)
     val projectionOpt = QueryParams.PROJECTION.extract
     val queryParamOpt = QueryParams.QUERY.extract

@@ -39,9 +39,9 @@ object Global extends GlobalSettings {
     .build()
 
   override def onStart(app: Application) {
-
-    jmxReporter.start()
-    logReporter.start(1, TimeUnit.MINUTES)
+// -- CURRENTLY CodaHale metrics disabled -- error when running in tests.
+//    jmxReporter.start()
+//    logReporter.start(1, TimeUnit.MINUTES)
   }
 
   val requestLogger = LoggerFactory.getLogger("requests")
@@ -61,8 +61,8 @@ object Global extends GlobalSettings {
   }
 
   override def onStop(app: Application) {
-    logReporter.stop()
-    jmxReporter.stop()
+//    logReporter.stop()
+//    jmxReporter.stop()
   }
 
 

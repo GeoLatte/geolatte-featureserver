@@ -1,7 +1,9 @@
 package utilities
 
-import play.api.libs.json.JsPath
+import play.api.libs.json._
 import play.api.data.validation.ValidationError
+
+import scala.collection.mutable.ListBuffer
 
 /**
  * Helpers for working the Json lib 
@@ -10,6 +12,35 @@ import play.api.data.validation.ValidationError
  *         creation-date: 12/4/13
  */
 object JsonHelper {
+
+  /**
+   * Flattens a Json object to a sequence of keys, values.
+   *
+   * {'a' : 1, 'b' : { 'c' , 2}} is flattened to Seq( ('a', 1), ('b.c', 2))
+   * Arrays are filtered out
+   *
+   * @param jsObject
+   */
+  def flatten(jsObject: JsObject) : Seq[(String, JsValue)]=  {
+
+    def prependPath(path: String, kv : (String, JsValue)) : (String, JsValue) = kv match {
+      case (k,v) => (path +"." + k, v)
+    }
+
+    def flattenAcc(jsObject: JsObject, buffer:ListBuffer[(String, JsValue)]): ListBuffer[(String, JsValue)] = {
+      jsObject.fields.foreach {
+        case (k, v: JsObject) => buffer.appendAll( flattenAcc(v, ListBuffer()).map( prependPath(k, _) )  )
+        case (k, v: JsArray) => Unit
+        case (k, v: JsValue) => buffer.append((k, v))
+      }
+      buffer
+    }
+    
+    flattenAcc(jsObject, ListBuffer()).toSeq
+  }
+
+
+
 
   /**
    * Converts a Json validation error sequence for a Feature into a single error message String.

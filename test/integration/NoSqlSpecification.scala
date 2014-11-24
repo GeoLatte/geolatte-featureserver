@@ -66,6 +66,14 @@ abstract class InCollectionSpecification(app: FakeApplication = FakeApplication(
 
     }, "Featurecollection Json doesn't contain expected features")
 
+  def matchFeaturesInCsv(expectedColumnHeader: String): Matcher[Seq[String]] = (
+    (received: Seq[String]) => {
+      println("EXPECTED == '" + expectedColumnHeader +"'")
+      println("RECEIVED == '" + received(0) +"'")
+      println("COMPARE == " + received(0) == expectedColumnHeader)
+      received(0) == expectedColumnHeader
+    }, "Featurecollection CSV doesn't contain expected columns")
+
   def matchTotalInJson(expectedTotal: Int): Matcher[JsValue] = (
     (recJs: JsValue) => {
       ((recJs \ "total").asOpt[Int] must beSome(expectedTotal)).isSuccess
