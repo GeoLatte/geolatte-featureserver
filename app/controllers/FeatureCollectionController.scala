@@ -158,14 +158,14 @@ object FeatureCollectionController extends AbstractNoSqlController with FutureIn
 
       // toCsv works as a state machine, on first invocation it prints a header row plus the record,
       // on subsequent invocations, only the record
-      var toCsv: (JsObject) => Enumerator[String] = js => {
-        this.toCsv = js => Enumerator.enumerate(List(toCsvRecord(js)))
-        Enumerator.enumerate(List(toCsvHeader(js), toCsvRecord(js)))
+      var toCsv: (JsObject) => String = js => {
+        this.toCsv = toCsvRecord
+        toCsvHeader(js)  + "\n" + toCsvRecord(js)
       }
 
       def toJsonStream = enum
 
-      def toCsvStream = enum.flatMap(js => toCsv(js))
+      def toCsvStream = enum.map(js => toCsv(js))
 
     }
     )

@@ -68,10 +68,7 @@ abstract class InCollectionSpecification(app: FakeApplication = FakeApplication(
 
   def matchFeaturesInCsv(expectedColumnHeader: String): Matcher[Seq[String]] = (
     (received: Seq[String]) => {
-      println("EXPECTED == '" + expectedColumnHeader +"'")
-      println("RECEIVED == '" + received(0) +"'")
-      println("COMPARE == " + received(0) == expectedColumnHeader)
-      received(0) == expectedColumnHeader
+      received(0).split("\n")(0) == expectedColumnHeader
     }, "Featurecollection CSV doesn't contain expected columns")
 
   def matchTotalInJson(expectedTotal: Int): Matcher[JsValue] = (
