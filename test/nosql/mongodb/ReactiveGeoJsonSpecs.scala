@@ -1,5 +1,6 @@
 package nosql.mongodb
 
+import nosql.FeatureWriter
 import org.specs2.mutable.Specification
 import play.api.libs.iteratee._
 import scala.concurrent.{Future, Await}
