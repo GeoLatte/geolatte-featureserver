@@ -1,5 +1,6 @@
 package nosql.mongodb
 
+import nosql.FeatureWriter
 import play.api.mvc.{SimpleResult, BodyParser}
 import play.api.libs.json._
 import play.api.libs.iteratee.Iteratee
@@ -13,7 +14,6 @@ import play.modules.reactivemongo.json.ImplicitBSONHandlers._
 import config.ConfigurationValues
 import scala.concurrent.{Future, ExecutionContext}
 import play.api.libs.json.JsSuccess
-import play.api.data.validation.ValidationError
 import scala.util.Try
 import utilities.JsonHelper
 

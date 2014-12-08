@@ -33,7 +33,7 @@ import scala.language.reflectiveCalls
 import scala.language.implicitConversions
 
 import config.AppExecutionContexts.streamContext
-import nosql.Exceptions
+import nosql.{SpatialQuery, Metadata, MortonCodeQueryOptimizer, Exceptions}
 import play.modules.reactivemongo.json.collection.JSONCollection
 import scala.util.Failure
 import scala.Some
@@ -48,14 +48,7 @@ import scala.Some
 
 
 
-object MetadataIdentifiers {
-  val MetadataCollectionPrefix = "geolatte_nosql."
-  val MetadataCollection = "geolatte_nosql.collections"
-  val ExtentField = "extent"
-  val IndexLevelField = "index_depth"
-  val CollectionField = "collection"
-  val Fields = Set(ExtentField, CollectionField)
-}
+
 
 object SpecialMongoProperties {
 
@@ -70,20 +63,9 @@ object SpecialMongoProperties {
 
 }
 
-trait MortonCodeQueryOptimizer {
-  //the return type of the optimizer
-  type QueryDocuments = List[JsObject]
-
-  /**
-   * Optimizes the window query, given the specified MortonCode
-   * @param window
-   * @return
-   */
-  def optimize(window: Envelope, mortoncode: MortonCode): QueryDocuments
-}
-
 trait SubdividingMCQueryOptimizer extends MortonCodeQueryOptimizer {
 
+  type QueryDocuments = List[JsObject]
 
   def optimize(window: Envelope, mortoncode: MortonCode): QueryDocuments = Try{
 
@@ -119,28 +101,11 @@ trait SubdividingMCQueryOptimizer extends MortonCodeQueryOptimizer {
 
 }
 
-case class Metadata(name: String, envelope: Envelope, level : Int, count: Long = 0)
-
-object Metadata {
-
-  import MetadataIdentifiers._
-
-  //added so that MetadataReads compiles
-  def apply(name: String, envelope:Envelope, level: Int): Metadata = this(name, envelope,level, 0)
-
-  implicit val MetadataReads = (
-    (__ \ CollectionField).read[String] and
-    (__ \ ExtentField).read[Envelope](EnvelopeFormats) and
-    (__ \ IndexLevelField).read[Int]
-  )(Metadata.apply _)
-
-}
-
 
 abstract class MongoSpatialCollection(collection: JSONCollection, metadata: Metadata) {
 
   //we require a MortonCodeQueryOptimizer to be mixed in on instantiation
-  this: MortonCodeQueryOptimizer =>
+  this: SubdividingMCQueryOptimizer =>
 
   lazy val mortonContext = new MortonContext(metadata.envelope, metadata.level)
 

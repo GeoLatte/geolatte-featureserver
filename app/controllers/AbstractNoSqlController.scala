@@ -18,7 +18,7 @@ import scala.language.reflectiveCalls
 
 import config.AppExecutionContexts.streamContext
 import reactivemongo.bson.BSONInteger
-import nosql.FutureInstrumented
+import nosql.{Repository, FutureInstrumented}
 
 
 /**
@@ -26,6 +26,9 @@ import nosql.FutureInstrumented
  *         creation-date: 10/11/13
  */
 trait AbstractNoSqlController extends Controller with FutureInstrumented {
+
+  //For now hard-coded until refactoring is finished
+  val repository : Repository = MongoDBRepository
 
   def repositoryAction[T](bp : BodyParser[T])(action: Request[T] => Future[SimpleResult]) =
     Action.async(bp) { request => action(request) }

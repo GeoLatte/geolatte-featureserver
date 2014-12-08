@@ -2,11 +2,13 @@ package nosql.mongodb
 
 import org.geolatte.geom.Envelope
 import play.api.Logger
+import play.api.data.validation.ValidationError
 import reactivemongo.core.commands._
 import play.api.libs.iteratee._
 import reactivemongo.api._
 import play.api.libs.json._
 import play.api.libs.functional.syntax._
+import utilities.JsonHelper
 import scala.concurrent.Future
 import nosql.json.GeometryReaders._
 import scala.util.Failure
@@ -23,31 +25,11 @@ import config.AppExecutionContexts.streamContext
 import scala.language.implicitConversions
 import reactivemongo.api.indexes.Index
 import reactivemongo.api.indexes.IndexType.Ascending
-import nosql.{FutureInstrumented, Instrumented}
+import nosql._
 import nl.grons.metrics.scala.FutureMetrics
 
 
-case class Media(id: String, md5: Option[String])
-
-case class MediaReader(id: String,
-                       md5: Option[String],
-                       name: String,
-                       len: Int,
-                       contentType: Option[String],
-                       data: Array[Byte])
-
-case class SpatialQuery ( windowOpt: Option[Envelope], queryOpt: Option[JsObject], projectionOpt: Option[JsArray])
-
-object SpatialQuery {
-
-  def apply() : SpatialQuery = apply(None, None, None)
-
-  def apply(window: Envelope) :SpatialQuery = apply(Some(window), None, None)
-
-  def apply(window: Envelope, query: JsObject) : SpatialQuery = apply(Some(window), Some(query), None)
-}
-
-object Repository extends FutureInstrumented {
+object MongoDBRepository extends nosql.Repository with FutureInstrumented {
 
   import scala.collection.JavaConversions._
 
@@ -75,6 +57,7 @@ object Repository extends FutureInstrumented {
   }
 
   import MetadataIdentifiers._
+
   import play.api.Play.current
 
   val driver = new MongoDriver
@@ -91,7 +74,7 @@ object Repository extends FutureInstrumented {
 
   def listDatabases: Future[List[String]] = {
     val futureJsons = createdDBColl.find(Json.obj()).cursor[JsObject].collect[List]()
-    futureJsons.map( _.map(
+    futureJsons.map(_.map(
       json => (json \ CREATED_DB_PROP).as[String]))
 
   }
@@ -100,7 +83,7 @@ object Repository extends FutureInstrumented {
 
   private def isMetadata(name: String): Boolean = (name startsWith MetadataCollectionPrefix) || (name startsWith "system.")
 
-  private def isSpecialCollection(name: String) : Boolean = isMetadata(name) ||
+  private def isSpecialCollection(name: String): Boolean = isMetadata(name) ||
     name.endsWith(".files") ||
     name.endsWith(".chunks") ||
     name.endsWith(".views")
@@ -117,7 +100,10 @@ object Repository extends FutureInstrumented {
       case false => {
         val db = connection(dbname)
         val cmd = new CreateCollection(name = MetadataCollection, autoIndexId = Some(true))
-        db.command(cmd) flatMap (_ => registerDbCreation(dbname)) recover {
+        db.command(cmd)
+          .flatMap(_ => registerDbCreation(dbname))
+          .map(le => true)
+          .recover {
           case ex: BSONCommandError => throw new DatabaseCreationException(s"Failure to create $dbname: can't create metadatacollection")
           case ex: Throwable => throw new DatabaseCreationException(s"Unknown exception of type: ${ex.getClass.getCanonicalName} having message: ${ex.getMessage}")
         }
@@ -135,8 +121,8 @@ object Repository extends FutureInstrumented {
     }
 
     existsDb(dbname).flatMap {
-      case true => connection(dbname).drop().flatMap(_ => removeLog(dbname)).recover {
-        case ex : Throwable => {
+      case true => connection(dbname).drop().flatMap(_ => removeLog(dbname)).map(le => true).recover {
+        case ex: Throwable => {
           Logger.error(s"Problem deleting database $dbname", ex)
           throw new DatabaseDeleteException(s"Unknown exception of type: ${ex.getClass.getCanonicalName} having message: ${ex.getMessage}")
         }
@@ -166,7 +152,7 @@ object Repository extends FutureInstrumented {
 
     def readMetadata() = {
       val metaCollection = connection(database).collection[JSONCollection](MetadataCollection)
-      val metadataCursor = metaCollection.find( Json.obj(CollectionField -> collection)).cursor[JsObject]
+      val metadataCursor = metaCollection.find(Json.obj(CollectionField -> collection)).cursor[JsObject]
       metadataCursor.headOption.map {
         case Some(doc) => doc.asOpt[Metadata]
         case _ => None
@@ -174,17 +160,17 @@ object Repository extends FutureInstrumented {
     }
 
     def mkMetadata() = for {
-        mdOpt <- readMetadata()
-        cnt <- count(database, collection)
-      } yield mdOpt.map( md => md.copy(count = cnt)).getOrElse( Metadata(collection, Envelope.EMPTY, 0, cnt) )
+      mdOpt <- readMetadata()
+      cnt <- count(database, collection)
+    } yield mdOpt.map(md => md.copy(count = cnt)).getOrElse(Metadata(collection, Envelope.EMPTY, 0, cnt))
 
     existsDb(database).flatMap(existsDb =>
       if (existsDb) existsCollection(database, collection)
       else throw DatabaseNotFoundException()
-    ).flatMap( existsCollection =>
-      if(existsCollection) mkMetadata()
+    ).flatMap(existsCollection =>
+      if (existsCollection) mkMetadata()
       else throw CollectionNotFoundException()
-    )
+      )
   }
 
   //we check also the "hidden" names (e.g. metadata collection) so that puts will fail
@@ -206,30 +192,32 @@ object Repository extends FutureInstrumented {
         ExtentField -> spec.envelope,
         IndexLevelField -> spec.level,
         CollectionField -> colName),
-        GetLastError( j = true, w = Some(BSONInteger(1)) )
+        GetLastError(j = true, w = Some(BSONInteger(1)))
       ).andThen {
         case Success(le) => Logger.info(s"Writing metadata for $colName has result: ${le.ok}")
         case Failure(t) => Logger.error(s"Writing metadata for $colName threw exception: ${t.getMessage}")
       }.map(_ => true)
-    } getOrElse { Future.successful(true) }
+    } getOrElse {
+      Future.successful(true)
+    }
 
     def ensureIndexes = {
       val idxManager = connection(dbName).collection[JSONCollection](colName).indexesManager
-      val fSpatialIndexCreated = if(spatialSpec.isDefined) {
+      val fSpatialIndexCreated = if (spatialSpec.isDefined) {
         idxManager.ensure(new Index(Seq((SpecialMongoProperties.MC, Ascending))))
       } else Future.successful(true)
       val fIdIndex = idxManager.ensure(new Index(key = Seq((SpecialMongoProperties.ID, Ascending)), unique = true))
       fIdIndex.flatMap(_ => fSpatialIndexCreated)
     }
 
-    existsDb(dbName).flatMap( dbExists =>
-      if ( dbExists ) existsCollection(dbName, colName)
+    existsDb(dbName).flatMap(dbExists =>
+      if (dbExists) existsCollection(dbName, colName)
       else throw new DatabaseNotFoundException()
-    ).flatMap ( collectionExists =>
+    ).flatMap(collectionExists =>
       if (!collectionExists) doCreateCollection()
       else throw new CollectionAlreadyExists()
-    ).flatMap ( _ =>  saveMetadata
-    ).flatMap ( _ => ensureIndexes)
+    ).flatMap(_ => saveMetadata
+    ).flatMap(_ => ensureIndexes)
   }
 
   def deleteCollection(dbName: String, colName: String) = {
@@ -239,8 +227,10 @@ object Repository extends FutureInstrumented {
       case Failure(t) => Logger.warn(s"Delete of $dbName/$colName failed: ${t.getMessage}")
     }
 
-    def removeMetadata() = connection(dbName).collection[JSONCollection](MetadataCollection, FailoverStrategy()).remove(Json.obj(CollectionField -> colName)).andThen {
-      case Success(le) => Logger.info(s"Removing metadata for $dbName/$colName: ${le.ok}")
+    def removeMetadata() = connection(dbName).collection[JSONCollection](MetadataCollection, FailoverStrategy()).remove(Json.obj(CollectionField -> colName))
+      .map(last => true)
+      .andThen {
+      case Success(b) => Logger.info(s"Removing metadata for $dbName/$colName")
       case Failure(t) => Logger.warn(s"Removing of $dbName/$colName failed: ${t.getMessage}")
     }
 
@@ -252,7 +242,7 @@ object Repository extends FutureInstrumented {
     ).flatMap(collectionExists =>
       if (collectionExists) doDeleteCollection()
       else throw new CollectionNotFoundException()
-    ).flatMap(_ => removeMetadata())
+      ).flatMap(_ => removeMetadata())
 
   }
 
@@ -269,28 +259,29 @@ object Repository extends FutureInstrumented {
       }
     }
 
-  def getCollectionInfo(dbName: String, colName: String): Future[CollectionInfo] = Repository.getCollection(dbName, colName) map {
-      case (dbcoll, smd) if !smd.envelope.isEmpty =>
-        (dbcoll, smd, FeatureTransformers.mkFeatureIndexingTranformer(smd.envelope, smd.level))
-      case _ => throw new NoSpatialMetadataException(s"$dbName/$colName is not spatially enabled")
-    }
+
+  def getCollectionInfo(dbName: String, colName: String): Future[CollectionInfo] = MongoDBRepository.getCollection(dbName, colName) map {
+    case (dbcoll, smd) if !smd.envelope.isEmpty =>
+      (dbcoll, smd, FeatureTransformers.mkFeatureIndexingTranformer(smd.envelope, smd.level))
+    case _ => throw new NoSpatialMetadataException(s"$dbName/$colName is not spatially enabled")
+  }
 
   def getSpatialCollection(database: String, collection: String) = {
     val coll = connection(database).collection[JSONCollection](collection)
-    metadata(database, collection).map( md => MongoSpatialCollection(coll, md) )
+    metadata(database, collection).map(md => MongoSpatialCollection(coll, md))
   }
 
 
-  def query(database: String, collection: String, spatialQuery : SpatialQuery): Future[Enumerator[JsObject]] =
+  def query(database: String, collection: String, spatialQuery: SpatialQuery): Future[Enumerator[JsObject]] =
     futureTimed("query-timer") {
       getSpatialCollection(database, collection).map(sc => sc.run(spatialQuery))
     }
 
-  def getMediaStore(database: String, collection: String) : Future[MediaStore] = {
+  def getMediaStore(database: String, collection: String): Future[MediaStore] = {
     import reactivemongo.api.collections.default._
-    existsCollection(database, collection).map( exists =>
-        if (exists) new GridFS(connection(database), "fs." + collection)(BSONCollectionProducer)
-        else throw CollectionNotFoundException()
+    existsCollection(database, collection).map(exists =>
+      if (exists) new GridFS(connection(database), "fs." + collection)(BSONCollectionProducer)
+      else throw CollectionNotFoundException()
     )
   }
 
@@ -306,8 +297,8 @@ object Repository extends FutureInstrumented {
     import reactivemongo.bson._
 
     getMediaStore(database, collection).flatMap { gridFs =>
-        gridFs.save(producer, DefaultFileToSave(filename = fileName, contentType = contentType, id = BSONObjectID.generate))
-          .map( fr => Media(bson2String(fr.id), fr.md5))
+      gridFs.save(producer, DefaultFileToSave(filename = fileName, contentType = contentType, id = BSONObjectID.generate))
+        .map(fr => Media(bson2String(fr.id), fr.md5))
     }
   }
 
@@ -320,10 +311,10 @@ object Repository extends FutureInstrumented {
           .headOption
           .filter(_.isDefined)
           .flatMap(file =>
-            (gridFs.enumerate(file.get) |>>> Iteratee.fold[Array[Byte], Array[Byte]](Array[Byte]())((accu, part) =>  accu ++ part ))
+          (gridFs.enumerate(file.get) |>>> Iteratee.fold[Array[Byte], Array[Byte]](Array[Byte]())((accu, part) => accu ++ part))
             .map(binarydata => MediaReader(bson2String(file.get.id), file.get.md5, file.get.filename, file.get.length, file.get.contentType, binarydata))
-        ).recover {
-          case ex : Throwable => {
+          ).recover {
+          case ex: Throwable => {
             Logger.warn(s"Media retrieval failed with exception ${ex.getMessage} of type: ${ex.getClass.getCanonicalName}")
             throw new MediaObjectNotFoundException()
           }
@@ -348,13 +339,13 @@ object Repository extends FutureInstrumented {
    * @param viewDef the view definition
    * @return eventually true if this save resulted in the update of an existing view, false otherwise
    */
-  def saveView(database: String, collection: String, viewDef: JsObject) : Future[Boolean] = {
-    getViewDefs(database, collection).flatMap( c => {
+  def saveView(database: String, collection: String, viewDef: JsObject): Future[Boolean] = {
+    getViewDefs(database, collection).flatMap(c => {
       val lastError = c.update(Json.obj("name" -> (viewDef \ "name").as[String]), viewDef,
         awaitJournalCommit, upsert = true, multi = false)
-      lastError.map( le => (c, le))
-    }).flatMap{ case (coll, lastError) =>
-      val indexLE = coll.indexesManager.ensure( Index( Seq(("name", Ascending)), unique = true ))
+      lastError.map(le => (c, le))
+    }).flatMap { case (coll, lastError) =>
+      val indexLE = coll.indexesManager.ensure(Index(Seq(("name", Ascending)), unique = true))
       indexLE.map(_ => lastError.updatedExisting)
     }.andThen {
       case Success(le) => Logger.info(s"Writing view $viewDef for $collection succeeded")
@@ -369,18 +360,72 @@ object Repository extends FutureInstrumented {
    *
    * @param id  OID or name of the View
    */
-  private def mkViewSelector(id: String) = Json.obj("$or"  -> Json.arr( Json.obj("_id" -> id), Json.obj("name" -> id)))
+  private def mkViewSelector(id: String) = Json.obj("$or" -> Json.arr(Json.obj("_id" -> id), Json.obj("name" -> id)))
 
   def getView(database: String, collection: String, id: String): Future[JsObject] =
     getViewDefs(database, collection) flatMap (_.find(mkViewSelector(id)).cursor[JsObject].headOption.collect {
-          case Some(js) => js
-          case None => throw new ViewObjectNotFoundException()
+      case Some(js) => js
+      case None => throw new ViewObjectNotFoundException()
     })
 
-  def dropView(database: String, collection: String, id: String): Future[LastError] =
+  def dropView(database: String, collection: String, id: String): Future[Boolean] =
     getViewDefs(database, collection)
       .flatMap(_.remove(mkViewSelector(id)))
-      .map (le => if (le.n ==0 ) throw new ViewObjectNotFoundException() else le)
+      .map(le => if (le.n == 0) throw new ViewObjectNotFoundException() else true)
+
+  override def writer(database: String, collection: String): FeatureWriter = new MongoWriter(database, collection)
+
+  override def delete(database: String, collection: String, query: JsObject): Future[Boolean] =
+    getCollectionInfo(database, collection)
+      .flatMap {
+      case (coll, _, _) => coll.remove(query, awaitJournalCommit)
+    }.map(le => true)
+
+  override def update(database: String, collection: String, query: JsObject, updateSpec: JsObject): Future[Int] = {
+    getCollectionInfo(database, collection)
+      .flatMap {
+      case (coll, metadata, reads) => {
+        val updateDoc = getUpdateDoc(reads, updateSpec)
+        coll.update(query, updateDoc, awaitJournalCommit, upsert = false, multi = true)
+      }
+    }.map(le => le.updated)
+
+  }
+
+  override def insert(database: String, collection: String, json: JsObject): Future[Boolean]
+  = upsert(database, collection, json)
+
+
+  override def upsert(database: String, collection: String, json: JsObject): Future[Boolean] =
+    getCollectionInfo(database, collection)
+      .flatMap {
+      case (coll, _, featureTransformer) => {
+        val selectorDoc = Json.obj("id" -> (json \ "id").as[JsValue])
+        val updateDoc = getUpdateDoc(featureTransformer, json)
+        coll.update(selectorDoc, updateDoc, awaitJournalCommit, upsert = true, multi = false)
+      }
+    }.map(le => true)
+
+  private def isUpdateDocWithOnlyOperators(updateDoc: JsObject): Boolean =
+    updateDoc.keys.filterNot(k => k.startsWith("$")).isEmpty
+
+  private def isUpdateDocWithOnlyFields(updateDoc: JsObject): Boolean =
+    updateDoc.keys.filter(k => k.startsWith("$")).isEmpty
+
+  private def getUpdateDoc(trans: Reads[JsObject], updateDoc: JsObject): JsObject = {
+    if (isUpdateDocWithOnlyOperators(updateDoc)) updateDoc
+    else if (isUpdateDocWithOnlyFields(updateDoc)) {
+      updateDoc.transform(trans) match {
+        case s : JsSuccess[JsObject] => s.get
+        case jsError: JsError =>
+          throw InvalidParamsException(
+            s"Error in update document \n: ${JsonHelper.JsValidationErrors2String(jsError.errors)}"
+          )
+      }
+    } else
+      throw InvalidParamsException("Only fields allowed in update document when upserting.")
+  }
+
 
 }
 

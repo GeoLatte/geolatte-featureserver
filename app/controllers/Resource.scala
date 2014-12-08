@@ -1,17 +1,17 @@
 package controllers
 
+import nosql.{MediaReader, Metadata}
+
 import scala.language.implicitConversions
 
 import play.api.libs.json._
 import play.api.libs.functional.syntax._
 import play.api.libs.json.Reads._
 import nosql.json.GeometryReaders._
-import nosql.mongodb.{MediaReader, Media, Metadata}
 import org.geolatte.geom.Envelope
 import org.apache.commons.codec.binary.Base64
 import play.api.libs.functional.ContravariantFunctor
 import play.api.libs.iteratee.Enumerator
-import scala.None
 
 trait RenderableResource
 trait RenderableNonStreamingResource extends RenderableResource

@@ -25,7 +25,7 @@ import utilities.{EnumeratorUtility, QueryParam}
 import nosql.Exceptions.InvalidQueryException
 import play.api.libs.json.JsObject
 import com.fasterxml.jackson.core.JsonParseException
-import nosql.FutureInstrumented
+import nosql.{Metadata, SpatialQuery, FutureInstrumented}
 
 
 
@@ -63,7 +63,7 @@ object FeatureCollectionController extends AbstractNoSqlController with FutureIn
     repositoryAction ( implicit request => futureTimed("featurecollection-query"){
         implicit val queryStr = request.queryString
         Logger.info(s"Query string $queryStr on $db, collection $collection")
-        Repository.metadata(db, collection).flatMap(md =>
+        repository.metadata(db, collection).flatMap(md =>
           doQuery(db, collection, md).map[SimpleResult](x => x)
         ).recover {
           case ex: InvalidQueryException => BadRequest(s"${ex.getMessage}")
@@ -74,7 +74,7 @@ object FeatureCollectionController extends AbstractNoSqlController with FutureIn
   def download(db: String, collection: String) = repositoryAction {
       implicit request => {
         Logger.info(s"Downloading $db/$collection.")
-        Repository.query(db, collection, SpatialQuery()).map[SimpleResult](x => x).recover {
+        repository.query(db, collection, SpatialQuery()).map[SimpleResult](x => x).recover {
           commonExceptionHandler(db, collection)
         }
       }
@@ -101,7 +101,7 @@ object FeatureCollectionController extends AbstractNoSqlController with FutureIn
         enum &> Enumeratee.drop(start)  |>>> collectFeatures(start, limit)
       }
       Logger.info(s"Query string $queryStr on $db, collection $collection")
-      Repository.metadata(db, collection).flatMap(md =>
+      repository.metadata(db, collection).flatMap(md =>
         doQuery(db, collection, md).flatMap {
           case enum => enumerator2list(enum)
         }.map[SimpleResult]{
@@ -169,7 +169,7 @@ object FeatureCollectionController extends AbstractNoSqlController with FutureIn
 
   private def doQuery(db: String, collection: String, smd: Metadata)
                             (implicit queryStr: Map[String, Seq[String]]) : Future[Enumerator[JsObject]] =
-    queryString2SpatialQuery(db,collection,smd).flatMap( q =>  Repository.query(db, collection, q) )
+    queryString2SpatialQuery(db,collection,smd).flatMap( q =>  repository.query(db, collection, q) )
 
 
   implicit def queryString2SpatialQuery(db: String, collection: String, smd: Metadata)
@@ -177,7 +177,7 @@ object FeatureCollectionController extends AbstractNoSqlController with FutureIn
     val windowOpt = Bbox(QueryParams.BBOX.extractOrElse(""), smd.envelope.getCrsId)
     val projectionOpt = QueryParams.PROJECTION.extract
     val queryParamOpt = QueryParams.QUERY.extract
-    val viewDef = QueryParams.WITH_VIEW.extract.map(vd => Repository.getView(db, collection, vd))
+    val viewDef = QueryParams.WITH_VIEW.extract.map(vd => repository.getView(db, collection, vd))
       .getOrElse(Future {
       Json.obj()
     })
