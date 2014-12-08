@@ -215,35 +215,6 @@ object RestApiDriver {
     FakeRequestResult.DELETE(url)
   }
 
-  @deprecated
-  def onDatabase[T](db: String, app: FakeApplication = FakeApplication())(block: => T): T = {
-    running(app) {
-      try {
-        makeDatabase(db)
-        block
-      } finally {
-        dropDatabase(db)
-      }
-    }
-  }
-
-  /**
-   * Ensures that the database and collection exist, and then execute the block
-   *
-   * @param db the specified database that must exist
-   * @param col the specified collection that must exist
-   * @param app the FakeApplication to use
-   * @param block the code to execute
-   * @tparam T type of the block
-   */
-  @deprecated
-  def onCollection[T](db: String, col: String, app: FakeApplication = FakeApplication())(block: => T): T = {
-    onDatabase(db, app) {
-      makeCollection(db, col)
-      block
-    }
-  }
-
   def loadData[B](db: String, col: String, data: Array[Byte]) = {
     Logger.info("START LOADING TEST DATA")
     val url = DATABASES / db / col / TX / INSERT
