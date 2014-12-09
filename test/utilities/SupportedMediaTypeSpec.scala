@@ -72,17 +72,10 @@ class SupportedMediaTypeSpec extends Specification {
     satisfySpec("application/*", null, Some( Format.JSON -> Version.v1_0) )
 
 
-    val mt : MediaType = SupportedMediaTypes(Format.JSON,  Version.default)
-
-
-    val test = mt match {
-      case SupportedMediaTypes(fmt, version) =>
-        fmt must_== Format.JSON
-        version must_== Version.default
-      case _ => failure
-    }
+    satisfySpec("application/vnd.geolatte-featureserver+" + Format.JSON, Version.stringify(Version.default), Some(Format.JSON -> Version.default))
 
   }
+
 
 
 }

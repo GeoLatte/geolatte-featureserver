@@ -1,20 +1,13 @@
 package integration
 
 import org.specs2._
-import org.specs2.mutable.Around
-import org.specs2.specification.{Step, Fragments, Scope}
-import org.specs2.execute.{Result, AsResult}
-import play.api.test.{Helpers, WithApplication, FakeApplication}
-import play.api.Play
-import integration.RestApiDriver._
-import play.api.test.FakeApplication
-import play.api.libs.json._
-import play.api.test.FakeApplication
-import play.api.test.FakeApplication
-import play.api.libs.json.JsArray
-import play.api.test.FakeApplication
-import play.api.libs.json.JsObject
 import org.specs2.matcher.{Expectable, Matcher}
+import org.specs2.specification.TagFragments.Tag
+import org.specs2.specification.{Fragments, Step}
+import play.api.Play
+import play.api.Play._
+import play.api.libs.json.{JsArray, JsObject, _}
+import play.api.test.FakeApplication
 
 /**
  * @author Karel Maesen, Geovise BVBA
@@ -24,29 +17,40 @@ abstract class NoSqlSpecification(app: FakeApplication = FakeApplication()) exte
   val testDbName = "xfstestdb"
   val testColName = "xfstestcoll"
 
-  override def map(fs: =>Fragments) = Step(Play.start(app)) ^
-       fs ^
-       Step(Play.stop())
+  lazy val configuredDatabase  : String = app.configuration.getString("fs.db").getOrElse("mongodb")
+
+  override def map(fs: =>Fragments) =
+    sequential ^
+      args(include = configuredDatabase) ^
+      Tag(configuredDatabase) ^ Step(Play.start(app)) ^
+        fs ^
+      Tag(configuredDatabase) ^ Step(Play.stop())
 
 }
 
 abstract class InDatabaseSpecification(app: FakeApplication = FakeApplication()) extends NoSqlSpecification {
-  import RestApiDriver._
-  override def map(fs: =>Fragments) = Step(Play.start(app)) ^
-      Step(makeDatabase(testDbName)) ^
+  import integration.RestApiDriver._
+  override def map(fs: =>Fragments) =
+    sequential ^
+    args(include = configuredDatabase) ^
+      Tag(configuredDatabase) ^ Step(Play.start(app)) ^
+      Tag(configuredDatabase) ^ Step(makeDatabase(testDbName)) ^
       fs ^
-      Step(dropDatabase(testDbName)) ^
-      Step(Play.stop())
+      Tag(configuredDatabase) ^ Step(dropDatabase(testDbName)) ^
+      Tag(configuredDatabase) ^ Step(Play.stop())
 }
 
 abstract class InCollectionSpecification(app: FakeApplication = FakeApplication()) extends NoSqlSpecification {
-  import RestApiDriver._
-  override def map(fs: =>Fragments) = Step(Play.start(app)) ^
-    Step(makeDatabase(testDbName)) ^
-    Step(makeCollection(testDbName, testColName)) ^
-    fs ^
-    Step(dropDatabase(testDbName)) ^
-    Step(Play.stop())
+  import integration.RestApiDriver._
+  override def map(fs: =>Fragments) =
+    sequential ^
+    args(include = configuredDatabase) ^
+      Tag(configuredDatabase) ^ Step(Play.start(app)) ^
+      Tag(configuredDatabase) ^ Step(makeDatabase(testDbName)) ^
+      Tag(configuredDatabase) ^ Step(makeCollection(testDbName, testColName)) ^
+      fs ^
+      Tag(configuredDatabase) ^ Step(dropDatabase(testDbName)) ^
+      Tag(configuredDatabase) ^ Step(Play.stop())
 
   //utility and matcher definitions
 

@@ -11,13 +11,15 @@ import play.api.http.Status._
 class TransactionAPISpec  extends InCollectionSpecification {
 
 
-  def is = s2""" $sequential
+  def is = s2"""
 
+                                                                                  ${section("mongodb")}
      The Transaction /upsert should:
        return 404 when the collection does not exist                              $e1
        return OK when the collection does exist, and data is valid                $e2
        insert value idem-potently when object does not exist                      $e3
        update value idem-potently when object does already exist                  $e4
+                                                                                  ${section("mongodb")}
 
   """
 

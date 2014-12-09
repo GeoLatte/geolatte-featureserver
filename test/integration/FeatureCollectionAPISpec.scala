@@ -13,8 +13,8 @@ import org.geolatte.geom.Envelope
 class FeatureCollectionAPISpec extends InCollectionSpecification {
 
 
-  def is = s2""" $sequential
-
+  def is = s2"""
+                                                                                  ${section("mongodb")}
      The FeatureCollection /download should:
        return 404 when the collection does not exist                              $e1
        return all elements when the collection does exist                         $e2
@@ -40,6 +40,7 @@ class FeatureCollectionAPISpec extends InCollectionSpecification {
 
      The FeatureCollection /query in  CSV should:
         return the objects with all attributes within JSON Object tree            $e13
+                                                                                  ${section("mongodb")}
 
   """
 

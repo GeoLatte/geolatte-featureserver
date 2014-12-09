@@ -16,9 +16,9 @@ import akka.util.Timeout
 class ViewDefsAPISpec extends InCollectionSpecification {
 
 
-  def is = s2""" $sequential
+  def is = s2"""
 
-     The ViewDefs /put should:
+     The ViewDefs /put should:                                                    ${section("mongodb")}
        Return 404 when the collection does not exist                              $e1
        Return CREATED when the view did not yet exist                             $e2
         and create the view                                                       $e3
@@ -26,7 +26,7 @@ class ViewDefsAPISpec extends InCollectionSpecification {
        Return OK when the view already existed                                    $e5
         and replace the view                                                      $e6
        Allow empty projection parameters                                          $e7 
-
+                                                                                  ${section("mongodb")}
   """
 
   //import default values

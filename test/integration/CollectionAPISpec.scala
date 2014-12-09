@@ -9,13 +9,13 @@ import play.api.http.Status._
  */
 class CollectionAPISpec extends InDatabaseSpecification {
 
-  def is = s2""" $sequential
+  def is = s2"""
 
-      The Collection API should:
+      The Collection API should:                                                            ${section("mongodb")}
         return CREATED on PUT of a collection                                               $e1
         return CONFLICT on attempt to POST to same collection name                          $e2
         Out Metadata contains collection and count fields                                   $e3
-
+                                                                                            ${section("mongodb")}
     """
 
   import RestApiDriver._
