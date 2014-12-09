@@ -1,10 +1,13 @@
 package config
 
+import play.api.Play._
+
 /**
  * @author Karel Maesen, Geovise BVBA
  * creation-date: 7/23/13
  */
 object ConfigurationValues {
+
 
 
   class ConstantsEnumeration extends Enumeration {

@@ -260,7 +260,7 @@ object MongoDBRepository extends nosql.Repository with FutureInstrumented {
     }
 
 
-  def getCollectionInfo(dbName: String, colName: String): Future[CollectionInfo] = MongoDBRepository.getCollection(dbName, colName) map {
+  def getCollectionInfo(dbName: String, colName: String): Future[CollectionInfo] =getCollection(dbName, colName) map {
     case (dbcoll, smd) if !smd.envelope.isEmpty =>
       (dbcoll, smd, FeatureTransformers.mkFeatureIndexingTranformer(smd.envelope, smd.level))
     case _ => throw new NoSpatialMetadataException(s"$dbName/$colName is not spatially enabled")
