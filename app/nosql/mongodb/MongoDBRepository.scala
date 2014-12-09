@@ -31,12 +31,10 @@ import nl.grons.metrics.scala.FutureMetrics
 
 object MongoDBRepository extends nosql.Repository with FutureInstrumented {
 
-  import scala.collection.JavaConversions._
+//  No longer necessary ? import scala.collection.JavaConversions._
 
   type SpatialCollection = MongoSpatialCollection
   type MediaStore = GridFS[BSONDocument, BSONDocumentReader, BSONDocumentWriter]
-
-  val awaitJournalCommit = GetLastError(j = true, w = Some(BSONInteger(1)))
 
   /**
    * combines the JSONCollection, Metadata and transformer.
@@ -46,36 +44,29 @@ object MongoDBRepository extends nosql.Repository with FutureInstrumented {
    */
   type CollectionInfo = (JSONCollection, Metadata, Reads[JsObject])
 
+  val awaitJournalCommit = GetLastError(j = true, w = Some(BSONInteger(1)))
 
-  val CREATED_DBS_COLLECTION = "createdDatabases"
-  val CREATED_DB_PROP = "db"
-  val DEFAULT_SYS_DB = "featureServerSys"
 
-  object CONFIGURATION {
-    val MONGO_CONNECTION_STRING = "fs.mongodb"
-    val MONGO_SYSTEM_DB = "fs.system.db"
-  }
+  import config.ConfigurationValues._
+
 
   import MetadataIdentifiers._
 
-  import play.api.Play.current
-
   val driver = new MongoDriver
-  val dbconStr = current.configuration.getStringList(CONFIGURATION.MONGO_CONNECTION_STRING)
-    .getOrElse[java.util.List[String]](List("localhost"))
+  val dbconStr = MongoConnnectionString
 
   val connection = driver.connection(dbconStr)
 
-  private val systemDatabase = current.configuration.getString(CONFIGURATION.MONGO_SYSTEM_DB).orElse(Some(DEFAULT_SYS_DB)).get
+  private val systemDatabase = MongoSystemDB
 
   private val createdDBColl = {
-    connection.db(systemDatabase).collection[JSONCollection](CREATED_DBS_COLLECTION)
+    connection.db(systemDatabase).collection[JSONCollection](DEFAULT_CREATED_DBS_COLLECTION)
   }
 
   def listDatabases: Future[List[String]] = {
     val futureJsons = createdDBColl.find(Json.obj()).cursor[JsObject].collect[List]()
     futureJsons.map(_.map(
-      json => (json \ CREATED_DB_PROP).as[String]))
+      json => (json \ DEFAULT_CREATED_DB_PROP).as[String]))
 
   }
 
@@ -91,7 +82,7 @@ object MongoDBRepository extends nosql.Repository with FutureInstrumented {
   def createDb(dbname: String) = {
 
     //Logs the database creation in the "created databases" collection in the systemDatabase
-    def registerDbCreation(dbname: String) = createdDBColl.save(Json.obj(CREATED_DB_PROP -> dbname)).andThen {
+    def registerDbCreation(dbname: String) = createdDBColl.save(Json.obj(DEFAULT_CREATED_DB_PROP -> dbname)).andThen {
       case Success(le) => Logger.debug(s"Registering $dbname in created databases collections succeeded.")
       case Failure(le) => Logger.warn(s"Registering $dbname in created databases collections succeeded.")
     }
@@ -115,9 +106,9 @@ object MongoDBRepository extends nosql.Repository with FutureInstrumented {
 
   def dropDb(dbname: String) = {
 
-    def removeLog(dbname: String) = createdDBColl.remove(Json.obj(CREATED_DB_PROP -> dbname)).andThen {
+    def removeLog(dbname: String) = createdDBColl.remove(Json.obj(DEFAULT_CREATED_DB_PROP -> dbname)).andThen {
       case Success(le) => Logger.info(s"Database $dbname dropped")
-      case Failure(t) => Logger.warn(s"Database $dbname dropped, but could not register drop in $systemDatabase/$CREATED_DBS_COLLECTION. \nReason: ${t.getMessage}")
+      case Failure(t) => Logger.warn(s"Database $dbname dropped, but could not register drop in $systemDatabase/$DEFAULT_CREATED_DBS_COLLECTION. \nReason: ${t.getMessage}")
     }
 
     existsDb(dbname).flatMap {

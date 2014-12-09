@@ -28,12 +28,9 @@ trait AbstractNoSqlController extends Controller with FutureInstrumented {
 
   import play.api.Play.current
 
-  //For now hard-coded until refactoring is finished
-  val repository : Repository = current.configuration.getString("fs.db") match {
-    case Some("mongodb") => MongoDBRepository
-    case Some("postgresql") => throw new UnsupportedOperationException
-    case Some(x) => throw new Error(s"Configuration error: value $x is not mongodb or postgresql")
-    case None => MongoDBRepository //if nothing configured, then assume MongoDB
+  val repository : Repository = config.ConfigurationValues.configuredRepository match {
+    case "mongodb" => MongoDBRepository
+    case _ => sys.error("Configured with Unsupported database")
   }
 
   def repositoryAction[T](bp : BodyParser[T])(action: Request[T] => Future[SimpleResult]) =

@@ -33,6 +33,9 @@ object FeatureCollectionController extends AbstractNoSqlController with FutureIn
 
   import AppExecutionContexts.streamContext
 
+  import config.ConfigurationValues._
+  val COLLECTION_LIMIT = MaxReturnItems
+
   object QueryParams {
     //we leave bbox as a String parameter because an Envelope needs a CrsId
     val BBOX = QueryParam("bbox", (s: String) => Some(s))
@@ -57,7 +60,7 @@ object FeatureCollectionController extends AbstractNoSqlController with FutureIn
 
   }
 
-  val COLLECTION_LIMIT = current.configuration.getInt("max-collection-size").getOrElse[Int](10000)
+
 
   def query(db: String, collection: String) =
     repositoryAction ( implicit request => futureTimed("featurecollection-query"){
