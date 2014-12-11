@@ -11,3 +11,4 @@ tmp
 RUNNING_PID
 **.pyc
 *.log
+.vagrant
