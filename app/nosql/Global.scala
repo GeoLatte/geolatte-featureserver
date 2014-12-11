@@ -75,6 +75,7 @@ object Global extends GlobalSettings {
 
   override def onStop(app: Application): Unit = {
     stopMetrics(app)
+    //TODO also stop repository connection pools (e.g. postgresql-async!)
   }
 
 

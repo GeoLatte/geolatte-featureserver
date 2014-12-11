@@ -18,22 +18,38 @@ object GeolatteNoSqlBuild extends Build {
     Resolver.url("artifactory", url("http://scalasbt.artifactoryonline.com/scalasbt/sbt-plugin-releases"))(Resolver.ivyStylePatterns)
   )
 
-  //Dependencies
-  lazy val dependencies = Seq(
-    "org.specs2" %% "specs2" % "2.4.1" % "test",
+  lazy val coreDependencies = Seq(
     "org.geolatte" % "geolatte-geom" %  "0.14",
-    "org.reactivemongo" %% "reactivemongo" % "0.10.0",
-    "org.reactivemongo" %% "play2-reactivemongo" % "0.10.2",
     "commons-codec" % "commons-codec" % "1.8",
     "net.sf.supercsv" % "super-csv" % "2.1.0",
     "nl.grons" %% "metrics-scala" % "3.0.4",
     filters
   )
 
+  lazy val mongoDependencies = Seq(
+    "org.reactivemongo" %% "reactivemongo" % "0.10.0",
+    "org.reactivemongo" %% "play2-reactivemongo" % "0.10.2"
+  )
+
+  lazy val psqlDependencies = Seq(
+    "com.github.mauricio" %% "postgresql-async" % "0.2.15"
+  )
+
+  lazy val testDependencies = Seq(
+    "org.specs2" %% "specs2" % "2.4.1" % "test"
+  )
+
+
+  //Dependencies
+  lazy val dependencies = coreDependencies ++
+    mongoDependencies ++
+    psqlDependencies ++
+    testDependencies
+
   //Build Settings applied to all projects
   lazy val commonBuildSettings = Seq(
     organization := "org.geolatte.nosql",
-    scalaVersion := "2.10.2",
+    scalaVersion := "2.10.4",
     scalacOptions ++= Seq("-feature", "-language:postfixOps", "-language:implicitConversions"),
     resolvers ++= commonResolvers
   )

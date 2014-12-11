@@ -18,7 +18,7 @@ class DatabaseAPISpec extends NoSqlSpecification {
 
 
 
-    The /api/databases should return                    ${section("mongodb")}
+    The /api/databases should return                    ${section("mongodb", "postgresql")}
       an array of databases                             ${e1}
       with content-type                                 ${e2("application/vnd.geolatte-featureserver+json")}
       CREATED on PUT of a database                      ${e3}
@@ -28,7 +28,8 @@ class DatabaseAPISpec extends NoSqlSpecification {
       DELETED on deleting the database                  ${e7}
       array without name of db, after drop              ${e8}
                                                         ${Step(cleanup)}
-                                                        ${section("mongodb")}
+                                                        ${section("mongodb", "postgresql")}
+
   """
 
   import integration.RestApiDriver._

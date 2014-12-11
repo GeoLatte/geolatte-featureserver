@@ -104,7 +104,7 @@ object RestApiDriver {
 
 
   def makeDatabase(dbName: String) = {
-    Logger.info("START CREATING DATABASE")
+    Logger.info("START CREATING DATABASE OR SCHEMA")
     val url = DATABASES / dbName
     FakeRequestResult.PUT(url)
   }

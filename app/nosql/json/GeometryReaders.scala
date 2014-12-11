@@ -112,7 +112,7 @@ object GeometryReaders {
     }
   }
 
-  implicit val PositionReads: Reads[Positions] = new Reads[Positions] {
+  implicit val  PositionReads: Reads[Positions] = new Reads[Positions] {
 
     def readArray[T](values: Seq[T]): Positions = {
 

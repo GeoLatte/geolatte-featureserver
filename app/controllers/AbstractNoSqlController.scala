@@ -1,5 +1,6 @@
 package controllers
 
+import nosql.postgresql.PostgresqlRepository
 import play.api.mvc._
 import nosql.Exceptions._
 import utilities.SupportedMediaTypes
@@ -28,8 +29,10 @@ trait AbstractNoSqlController extends Controller with FutureInstrumented {
 
   import play.api.Play.current
 
+  //TODO the resolution belongs properly in ConfigurationValues, but then should be split (definitionsettings/defaults vs configured values)
   val repository : Repository = config.ConfigurationValues.configuredRepository match {
     case "mongodb" => MongoDBRepository
+    case "postgresql" => PostgresqlRepository
     case _ => sys.error("Configured with Unsupported database")
   }
 

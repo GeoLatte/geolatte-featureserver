@@ -31,8 +31,6 @@ import nl.grons.metrics.scala.FutureMetrics
 
 object MongoDBRepository extends nosql.Repository with FutureInstrumented {
 
-//  No longer necessary ? import scala.collection.JavaConversions._
-
   type SpatialCollection = MongoSpatialCollection
   type MediaStore = GridFS[BSONDocument, BSONDocumentReader, BSONDocumentWriter]
 

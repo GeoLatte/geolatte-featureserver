@@ -16,6 +16,7 @@ object ConfigurationValues {
 
   //configuration keys
   val MONGO_CONNECTION_STRING_KEY = "fs.mongodb"
+  val PG_CONNECTION_URL_KEY = "fs.postgresql"
   val MONGO_SYSTEM_DB_KEY = "fs.system.db"
   val MAXIMUM_RESULT_SIZE_KEY= "max-collection-size"
 
@@ -24,6 +25,7 @@ object ConfigurationValues {
   val DEFAULT_CREATED_DB_PROP = "db"
   val DEFAULT_SYS_DB = "featureServerSys"
   val DEFAULT_DB_HOST = "localhost"
+  val DEFAULT_PG_CONNECTION_URL = "postgresql:localhost/5432"
   val DEFAULT_MAXIMUM_RESULT_SIZE = 10000
 
   class ConstantsEnumeration extends Enumeration {
@@ -57,7 +59,14 @@ object ConfigurationValues {
     case None => List[String](DEFAULT_DB_HOST)
   }
 
+  val PgConnectionString: String = current.configuration.getString(PG_CONNECTION_URL_KEY) match {
+    case Some(url) => url
+    case None => DEFAULT_PG_CONNECTION_URL
+  }
+
   val MongoSystemDB = current.configuration.getString(MONGO_SYSTEM_DB_KEY).orElse(Some(DEFAULT_SYS_DB)).get
+
+
 
   val MaxReturnItems = current.configuration.getInt(MAXIMUM_RESULT_SIZE_KEY).getOrElse[Int](DEFAULT_MAXIMUM_RESULT_SIZE)
   /**
