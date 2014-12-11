@@ -2,7 +2,6 @@ package controllers
 
 import nosql.postgresql.PostgresqlRepository
 import play.api.mvc._
-import nosql.Exceptions._
 import utilities.SupportedMediaTypes
 import config.ConfigurationValues.Format
 
@@ -18,7 +17,7 @@ import scala.language.implicitConversions
 import scala.language.reflectiveCalls
 
 import config.AppExecutionContexts.streamContext
-import nosql.{Repository, FutureInstrumented}
+import nosql._
 
 
 /**

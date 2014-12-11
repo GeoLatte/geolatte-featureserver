@@ -2,7 +2,7 @@ package nosql.mongodb
 
 import org.geolatte.geom.Envelope
 import play.api.Logger
-import play.api.data.validation.ValidationError
+import reactivemongo.api.gridfs.{DefaultFileToSave, GridFS}
 import reactivemongo.core.commands._
 import play.api.libs.iteratee._
 import reactivemongo.api._
@@ -12,21 +12,16 @@ import utilities.JsonHelper
 import scala.concurrent.Future
 import nosql.json.GeometryReaders._
 import scala.util.Failure
-import scala.Some
 import scala.util.Success
 import play.modules.reactivemongo.json.collection.JSONCollection
 import reactivemongo.core.commands.GetLastError
 import reactivemongo.api.FailoverStrategy
-import nosql.Exceptions._
-import reactivemongo.api.gridfs._
 import reactivemongo.bson._
-
 import config.AppExecutionContexts.streamContext
 import scala.language.implicitConversions
 import reactivemongo.api.indexes.Index
 import reactivemongo.api.indexes.IndexType.Ascending
 import nosql._
-import nl.grons.metrics.scala.FutureMetrics
 
 
 object MongoDBRepository extends nosql.Repository with FutureInstrumented {

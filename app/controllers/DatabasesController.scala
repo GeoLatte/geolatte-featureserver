@@ -7,7 +7,7 @@ import play.modules.reactivemongo.json.collection.JSONCollection
 import scala.concurrent.Future
 import play.Logger
 import scala.Some
-import nosql.Exceptions._
+import nosql._
 import nosql.mongodb.MongoDBRepository
 
 

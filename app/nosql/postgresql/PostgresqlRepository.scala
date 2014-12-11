@@ -6,8 +6,7 @@ import com.github.mauricio.async.db.postgresql.messages.backend.InformationMessa
 import com.github.mauricio.async.db.postgresql.pool.PostgreSQLConnectionFactory
 import com.github.mauricio.async.db.postgresql.util.URLParser
 import config.{AppExecutionContexts, ConfigurationValues}
-import nosql.Exceptions.DatabaseAlreadyExists
-import nosql.{FeatureWriter, Metadata, SpatialQuery, Repository}
+import nosql._
 import play.api.Play
 import play.api.libs.iteratee.Enumerator
 import play.api.libs.json.JsObject

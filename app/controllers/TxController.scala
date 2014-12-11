@@ -1,9 +1,6 @@
 package controllers
 
-import controllers.DatabasesController._
-import play.Logger
 import play.api.mvc._
-import reactivemongo.core.commands.{LastError, GetLastError}
 import config.AppExecutionContexts
 import scala.concurrent.Future
 import play.api.libs.json._
@@ -11,13 +8,10 @@ import play.api.libs.functional.syntax._
 
 import scala.util.{Failure, Success, Try}
 import nosql.mongodb.ReactiveGeoJson._
-import play.api.data.validation.ValidationError
-import utilities.JsonHelper
-import nosql.Exceptions.InvalidParamsException
-import nosql.mongodb.{ReactiveGeoJson, MongoWriter, MongoDBRepository}
+import nosql.InvalidParamsException
+import nosql.mongodb.{ReactiveGeoJson, MongoWriter}
 import nosql.mongodb.MongoDBRepository._
 import reactivemongo.bson.BSONInteger
-import com.fasterxml.jackson.core.JsonParseException
 
 //TODO -- this should use repository, rather than directly perform updates
 

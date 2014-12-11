@@ -22,7 +22,7 @@ import play.api.libs.json.JsBoolean
 
 import play.api.libs.json.JsNumber
 import utilities.{EnumeratorUtility, QueryParam}
-import nosql.Exceptions.InvalidQueryException
+import nosql.InvalidQueryException
 import play.api.libs.json.JsObject
 import com.fasterxml.jackson.core.JsonParseException
 import nosql.{Metadata, SpatialQuery, FutureInstrumented}

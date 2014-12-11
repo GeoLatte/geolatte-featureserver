@@ -1,5 +1,6 @@
 package nosql.mongodb
 
+import org.geolatte.geom.Envelope
 import reactivemongo.api._
 import reactivemongo.bson._
 import reactivemongo.bson.DefaultBSONHandlers._
@@ -10,22 +11,11 @@ import play.modules.reactivemongo._
 import play.modules.reactivemongo.json.ImplicitBSONHandlers._
 
 import collection.JavaConversions._
-import org.geolatte.geom.codec.Wkb
-import org.geolatte.geom.{Geometry, Envelope, ByteBuffer, ByteOrder}
 import org.geolatte.geom.curve.{MortonContext, MortonCode}
 
 import play.Logger
-import scala.concurrent.{ExecutionContext, Future}
-import reactivemongo.api.indexes.IndexType.Ascending
-import reactivemongo.api.Cursor
 import play.api.libs.iteratee._
-import reactivemongo.api.indexes.Index
-import scala.Some
-import reactivemongo.api.collections.default.BSONCollection
-import reactivemongo.core.commands.{Count, GetLastError}
-import scala.util.{Try, Failure, Success}
-import java.util.Date
-import play.modules.reactivemongo.json.collection.JSONCollection
+import scala.util.Try
 import nosql.json.GeometryReaders._
 import nosql.json.GeometryReaders
 
@@ -33,21 +23,10 @@ import scala.language.reflectiveCalls
 import scala.language.implicitConversions
 
 import config.AppExecutionContexts.streamContext
-import nosql.{SpatialQuery, Metadata, MortonCodeQueryOptimizer, Exceptions}
-import play.modules.reactivemongo.json.collection.JSONCollection
-import scala.util.Failure
-import scala.Some
-import play.modules.reactivemongo.json.BSONFormats
-import play.modules.reactivemongo.json.collection.JSONCollection
-import scala.util.Failure
-import scala.Some
+import nosql.{InvalidQueryException, SpatialQuery, Metadata, MortonCodeQueryOptimizer}
 import play.api.libs.json.JsArray
 import play.modules.reactivemongo.json.collection.JSONCollection
 import scala.util.Failure
-import scala.Some
-
-
-
 
 
 object SpecialMongoProperties {
@@ -96,7 +75,7 @@ trait SubdividingMCQueryOptimizer extends MortonCodeQueryOptimizer {
     Logger.debug(s"num. of queries for window ${window.toString}= ${result.size}")
     result
   }.recoverWith {
-    case e: Throwable => Failure(new Exceptions.InvalidQueryException(e.getMessage))
+    case e: Throwable => Failure(new InvalidQueryException(e.getMessage))
   }.get
 
 }

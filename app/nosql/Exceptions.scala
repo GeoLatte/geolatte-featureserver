@@ -1,10 +1,8 @@
-package nosql
-
 /**
  * @author Karel Maesen, Geovise BVBA
  *         creation-date: 10/10/13
  */
-package object Exceptions {
+package object nosql {
 
   abstract class NoSqlException(msg: String) extends RuntimeException(msg)
 
