@@ -21,10 +21,22 @@ object PostgresqlRepository extends Repository {
 
   import AppExecutionContexts.streamContext
 
+  //TODO -- should we check for quotes in str?
+  private def quote(str: String) : String = "\"" + str + "\""
+
   object Sql {
+
+    import MetadataIdentifiers._
     val LIST_SCHEMA = "select schema_name from information_schema.schemata"
-    val CREATE_SCHEMA = "create schema "
-    val DROP_SCHEMA = "drop schema "
+    def CREATE_SCHEMA(dbname: String) = s"create schema ${quote(dbname)}"
+    def DROP_SCHEMA(dbname : String) : String = s"drop schema ${quote(dbname)} CASCADE"
+    def CREATE_METADATA_TABLE_IN(dbname : String) =
+      s"""CREATE TABLE ${quote(dbname)}.${quote(MetadataCollection)} (
+          | $ExtentField VARCHAR(255),
+          | $IndexLevelField INT,
+          | $CollectionField VARCHAR(255) PRIMARY KEY
+          | )
+       """.stripMargin
     val Update = "UPDATE messages SET content = ?, moment = ? WHERE id = ?"
     val Select = "SELECT id, content, moment FROM messages ORDER BY id asc"
     val SelectOne = "SELECT id, content, moment FROM messages WHERE id = ?"
@@ -35,13 +47,11 @@ object PostgresqlRepository extends Repository {
   lazy val factory = new PostgreSQLConnectionFactory( url )
   lazy val pool = new ConnectionPool(factory, PoolConfiguration.Default)
 
-  //TODO -- should we check for quotes in str?
-  private def quote(str: String) : String = "\"" + str + "\""
 
   override def createDb(dbname: String): Future[Boolean] =
-    pool.inTransaction { c =>
-        c.sendQuery(Sql.CREATE_SCHEMA + quote(dbname))
-          .map { _ => true }
+    pool.inTransaction { c => {
+      c.sendQuery(s"${Sql.CREATE_SCHEMA(dbname)}; ${Sql.CREATE_METADATA_TABLE_IN(dbname)};")
+    }.map { _ => true }
           .recover {
           case t : GenericDatabaseException => if(t.errorMessage.fields.get('C') == Some("42P06")) throw new DatabaseAlreadyExists() else throw t;
          }
@@ -57,7 +67,7 @@ object PostgresqlRepository extends Repository {
 
   override def dropDb(dbname: String): Future[Boolean] =
     pool.inTransaction { c =>
-        c.sendQuery(Sql.DROP_SCHEMA + quote(dbname))
+        c.sendQuery(Sql.DROP_SCHEMA(dbname))
           .map(_ => true )
     }
 

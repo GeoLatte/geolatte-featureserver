@@ -1,14 +1,11 @@
 package nosql
-import nosql.Exceptions._
 import nosql.json.GeometryReaders._
 import nosql.mongodb._
 import org.geolatte.geom.Envelope
 import org.geolatte.geom.curve.MortonCode
-import play.api.Logger
-import play.api.libs.iteratee.{Iteratee, Enumerator}
+import play.api.libs.iteratee.Enumerator
 import play.api.libs.json._
 import play.api.libs.functional.syntax._
-import play.modules.reactivemongo.json.collection.JSONCollection
 
 import scala.concurrent.Future
 import scala.util.{Failure, Success}
@@ -17,12 +14,11 @@ import scala.util.{Failure, Success}
 case class Metadata(name: String, envelope: Envelope, level : Int, count: Long = 0)
 
 object MetadataIdentifiers {
-  val MetadataCollectionPrefix = "geolatte_nosql."
-  val MetadataCollection = "geolatte_nosql.collections"
+  val MetadataCollectionPrefix = "geolatte_nosql_"
+  val MetadataCollection = "geolatte_nosql_collections"
   val ExtentField = "extent"
   val IndexLevelField = "index_depth"
   val CollectionField = "collection"
-  val Fields = Set(ExtentField, CollectionField)
 }
 
 object Metadata {
