@@ -11,6 +11,8 @@ import play.api.http.Status._
 class TransactionAPISpec  extends InCollectionSpecification {
 
 
+  //TODO add additional spec tests for consistency of count metadata field on insert
+
   def is = s2"""
 
                                                                                   ${section("mongodb")}
@@ -22,6 +24,7 @@ class TransactionAPISpec  extends InCollectionSpecification {
                                                                                   ${section("mongodb")}
 
   """
+
 
   //import default values
   import RestApiDriver._

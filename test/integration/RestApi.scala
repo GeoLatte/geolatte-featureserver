@@ -142,6 +142,12 @@ object RestApiDriver {
     FakeRequestResult.GET(url, contentAsJson)
   }
 
+  def deleteCollection(dbName: String, colName: String) = {
+    Logger.info("START DELETING Collection")
+    val url = DATABASES/ dbName / colName
+    FakeRequestResult.DELETE(url)
+  }
+
   def getDownload(dbName: String, colName: String) = {
     Logger.info("Start download Collection")
     val url = DATABASES / dbName / colName / DOWNLOAD

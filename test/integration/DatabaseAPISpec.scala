@@ -45,7 +45,7 @@ class DatabaseAPISpec extends NoSqlSpecification {
 
   def e5 = getDatabases.applyMatcher( testResponseContains(testDbName, 1))
 
-  def e6 = pending    //TODO - pending test
+  def e6 = pending //TODO see CollectionAPISpec#e6 (move that to here, or delete this)
 
   def e7 = dropDatabase(testDbName) applyMatcher( _.status must equalTo(OK))
 
