@@ -20,6 +20,7 @@ class CollectionAPISpec extends InDatabaseSpecification {
         return emtpy array on GET to database                                               $e8
         return 404 on attempt to GET a collection which does not exist                      $e5
         return 404 on attempt to DELETE a collection which does not exist                   $e7
+        return 404 on attempt to create a collection on a non-existing database             $e9
                                                                                             ${section("mongodb","postgresql")}
     """
 
@@ -49,6 +50,9 @@ class CollectionAPISpec extends InDatabaseSpecification {
   def e8 = getDatabase(testDbName).applyMatcher(res =>
     (res.status must equalTo(OK)) and (res.responseBody must beSome(equalTo(Json.arr())))
   )
+
+  def e9 = makeCollection("doesntexist", testColName, inMetadata)
+    .applyMatcher( _.status must equalTo(NOT_FOUND))
 
   // the inbound metadata
   val inMetadata = Json.obj(

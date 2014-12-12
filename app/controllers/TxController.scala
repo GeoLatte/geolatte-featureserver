@@ -64,7 +64,7 @@ object TxController extends AbstractNoSqlController {
   def upsert(db: String, col: String) = repositoryAction {
     implicit request => request.body.asJson match {
         case Some(obj : JsObject) => repository.upsert(db, col, obj)
-          .map( _ => Ok("Objects removed"))
+          .map( _ => Ok("Objects upserted"))
           .recover(commonExceptionHandler(db))
         case _ =>  Future.successful(BadRequest(s"No Json object in request body."))
       }

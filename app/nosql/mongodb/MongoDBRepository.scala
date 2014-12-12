@@ -125,9 +125,11 @@ object MongoDBRepository extends nosql.Repository with FutureInstrumented {
     }
 
 
-  def count(database: String, collection: String): Future[Int] = {
+  def count(database: String, collection: String): Future[Long] = {
     val cmd = new Count(collection)
-    connection.db(database).command(cmd)
+    connection.db(database)
+      .command(cmd)
+      .map(i => i.toLong)
   }
 
   def metadata(database: String, collection: String): Future[Metadata] = {

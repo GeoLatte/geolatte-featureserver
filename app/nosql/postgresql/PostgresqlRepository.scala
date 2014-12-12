@@ -9,9 +9,8 @@ import config.{AppExecutionContexts, ConfigurationValues}
 import nosql._
 import nosql.json.GeometryReaders
 import org.geolatte.geom.Envelope
-import play.api.{Logger, Play}
+import play.api.Logger
 import play.api.libs.iteratee.Enumerator
-import play.api.libs.json.JsObject
 
 import scala.concurrent.Future
 
@@ -62,6 +61,15 @@ object PostgresqlRepository extends Repository {
           | )
        """.stripMargin
 
+    def LIST_TABLE_NAMES(dbname: String) = {
+      s""" select table_name from information_schema.tables
+         | where
+         | table_schema = ${single_quote(dbname)}
+         | and table_type = 'BASE TABLE'
+         | and table_name != ${quote(MetadataCollection)}
+       """.stripMargin
+    }
+
     def INSERT_Metadata(dbname: String, tableName: String, md: Metadata) =
     s"""insert into ${quote(dbname)}.${quote(MetadataCollection)} values(
        | ${single_quote(Json.stringify(Json.toJson(md.envelope)))}::json,
@@ -96,6 +104,24 @@ object PostgresqlRepository extends Repository {
 
   }
 
+
+  object MappableException {
+    def getStatus(dbe : GenericDatabaseException) = dbe.errorMessage.fields.get('C')
+    def getMessage(dbe: GenericDatabaseException) = dbe.errorMessage.fields.getOrElse('M', "Database didn't return a message")
+    def unapply(t : Throwable): Option[RuntimeException] =  t match {
+      case t: GenericDatabaseException if getStatus(t) == Some("42P06") =>
+        Some(new DatabaseAlreadyExists(getMessage(t)))
+      case t: GenericDatabaseException if getStatus(t) == Some("42P07") =>
+        Some(new CollectionAlreadyExists(getMessage(t)))
+      case t: GenericDatabaseException if getStatus(t) == Some("3F000") =>
+        Some(new  DatabaseNotFoundException(getMessage(t)))
+      case t: GenericDatabaseException if getStatus(t) == Some("42P01") =>
+        Some(new CollectionNotFoundException(getMessage(t)))
+      case _ => None
+
+    }
+  }
+    
   lazy val url = URLParser.parse(ConfigurationValues.PgConnectionString)
   lazy val database = url.database.getOrElse(url.username)
   lazy val factory = new PostgreSQLConnectionFactory( url )
@@ -110,8 +136,7 @@ object PostgresqlRepository extends Repository {
     }.map {
       _ => true
     }.recover {  
-      case t: GenericDatabaseException if t.errorMessage.fields.get('C') == Some("42P06")  
-        => throw new DatabaseAlreadyExists()
+      case MappableException(mappedException) => throw mappedException
       case _ @ t  
         =>  throw new DatabaseCreationException(s"Unknown exception having message: ${t.getMessage}")
       }
@@ -150,8 +175,7 @@ object PostgresqlRepository extends Repository {
           case _ => Future.successful(true)
         }
       }.recover {
-        case t: GenericDatabaseException if t.errorMessage.fields.get('C') == Some("42P07")
-          => throw new CollectionAlreadyExists()
+        case MappableException(mappedException) => throw mappedException
       }
     }
 
@@ -164,11 +188,11 @@ object PostgresqlRepository extends Repository {
         case _ => List[String]()
       }
     }.recover {
-        case t: GenericDatabaseException if t.errorMessage.fields.get('C') == Some("3F000")
-          => throw new CollectionAlreadyExists()
+      case MappableException(mappedException) => throw mappedException
     }
 
   override def metadata(database: String, collection: String): Future[Metadata] = {
+
     def mkMetadata(row: RowData, cnt: Long) : Metadata = {
       val jsEnv = Json.parse(row(0).asInstanceOf[String])
       val env = Json.fromJson[Envelope](jsEnv) match {
@@ -177,26 +201,22 @@ object PostgresqlRepository extends Repository {
       }
       Metadata(collection, env, row(1).asInstanceOf[Int], cnt)
     }
-    pool.sendQuery(Sql.SELECT_COUNT(database, collection))
-      .map { qr =>
-      qr.rows match {
-        case Some(rs) if rs.size > 0 => rs.head(0).asInstanceOf[Long]
-        case _ => throw new CollectionNotFoundException()
-      }
-    }.flatMap { cnt =>
-      pool.sendQuery(Sql.SELECT_METADATA(database, collection))
-        .map { qr =>
-        qr.rows match {
-          case Some(rs) if rs.size > 0 => mkMetadata(rs.head, cnt)
-          case _ => throw new CollectionNotFoundException()
+
+    count(database, collection)
+      .flatMap { cnt =>
+        pool.sendQuery(Sql.SELECT_METADATA(database, collection))
+          .map { qr =>
+          qr.rows match {
+            case Some(rs) if rs.size > 0 => mkMetadata(rs.head, cnt)
+            case _ => throw new CollectionNotFoundException()
+          }
         }
-      }
     }.recover {
-      case t: GenericDatabaseException if t.errorMessage.fields.get('C') == Some("42P01")
-      => throw new CollectionNotFoundException()
-      case _ @ t
-      =>  throw new RuntimeException(s"Unknown exception having message: ${t.getMessage}")
+      case MappableException(mappedException) => throw mappedException
+//      case _@t
+//      => throw new RuntimeException(s"Unknown exception having message: ${t.getMessage}")
     }
+
   }
 
   override def deleteCollection(dbName: String, colName: String): Future[Boolean] =
@@ -211,15 +231,37 @@ object PostgresqlRepository extends Repository {
       }.map ( _ => true)
     }
   }.recover {
-    case t: GenericDatabaseException if t.errorMessage.fields.get('C') == Some("42P01")
-    => throw new CollectionNotFoundException()
-    case _ @ t
-    =>  throw new RuntimeException(s"Unknown exception having message: ${t.getMessage}")
+    case MappableException(mappedException) => throw mappedException
+//    case _ @ t
+//    =>  throw new RuntimeException(s"Unknown exception having message: ${t.getMessage}")
   }
 
+  override def count(database: String, collection: String): Future[Long] =
+    pool.sendQuery(Sql.SELECT_COUNT(database, collection))
+      .map { qr =>
+      qr.rows match {
+        case Some(rs) if rs.size > 0 => rs.head(0).asInstanceOf[Long]
+        case _ => throw new CollectionNotFoundException()
+      }
+    }
+
+  override def existsCollection(dbName: String, colName: String): Future[Boolean] =
+    pool.sendQuery(Sql.SELLECT_COLLECTION_NAMES(dbName))
+      .map { qr =>
+      qr.rows match {
+        case Some(rs) =>
+          rs.filter( row => row(0).asInstanceOf[String].equalsIgnoreCase(colName)).nonEmpty
+        case _ => throw new RuntimeException("Query failed to return arow set")
+      }
+    }.recover {
+      case MappableException(mappedException) => throw mappedException
+    }
+
+
+  override def query(database: String, collection: String, spatialQuery: SpatialQuery): Future[Enumerator[JsObject]] = ???
 
   /**
-   * Saves a view for the specified database and collection.
+    * Saves a view for the specified database and collection.
    *
    * @param database the database for the view
    * @param collection the collection for the view
@@ -228,7 +270,6 @@ object PostgresqlRepository extends Repository {
    */
   override def saveView(database: String, collection: String, viewDef: JsObject): Future[Boolean] = ???
 
-  override def count(database: String, collection: String): Future[Int] = ???
 
   override def dropView(database: String, collection: String, id: String): Future[Boolean] = ???
 
@@ -246,11 +287,10 @@ object PostgresqlRepository extends Repository {
 
   override def getViews(database: String, collection: String): Future[List[JsObject]] = ???
 
-  override def existsCollection(dbName: String, colName: String): Future[Boolean] = ???
 
 
 
   override def upsert(database: String, collection: String, json: JsObject): Future[Boolean] = ???
 
-  override def query(database: String, collection: String, spatialQuery: SpatialQuery): Future[Enumerator[JsObject]] = ???
+
 }

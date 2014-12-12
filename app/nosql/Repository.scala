@@ -91,7 +91,7 @@ trait Repository {
 
   def existsDb(dbname: String): Future[Boolean]
 
-  def count(database: String, collection: String): Future[Int]
+  def count(database: String, collection: String): Future[Long]
 
   def metadata(database: String, collection: String): Future[Metadata]
 
