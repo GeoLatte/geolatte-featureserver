@@ -98,6 +98,11 @@ object PostgresqlRepository extends Repository {
           | )
        """.stripMargin
 
+    def CREATE_COLLECTION_INDEX(dbname: String, tableName: String) =
+    s"""CREATE INDEX ${quote(tableName + "_spatial_index")}
+      | ON ${quote(dbname)}.${quote(tableName)} USING GIST ( geometry )
+     """.stripMargin
+
     def INSERT_DATA(dbname: String, tableName: String) =
       s"""INSERT INTO ${quote(dbname)}.${quote(tableName)}  (id, json, geometry)
          |VALUES (?, ?, ?)
@@ -221,7 +226,12 @@ object PostgresqlRepository extends Repository {
              .map(_ => true)
           case _ => Future.successful(true)
         }
-      }.recover {
+      }.flatMap { _ =>
+          c.sendQuery(Sql.CREATE_COLLECTION_INDEX(dbName, colName))
+      }.map{ _=>
+        true
+      }
+        .recover {
         case MappableException(mappedException) => throw mappedException
       }
     }
