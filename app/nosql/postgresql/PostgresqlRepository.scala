@@ -1,6 +1,6 @@
 package nosql.postgresql
 
-import com.github.mauricio.async.db.RowData
+import com.github.mauricio.async.db.{Connection, ResultSet, RowData}
 import com.github.mauricio.async.db.pool.{PoolConfiguration, ConnectionPool}
 import com.github.mauricio.async.db.postgresql.exceptions.GenericDatabaseException
 import com.github.mauricio.async.db.postgresql.pool.PostgreSQLConnectionFactory
@@ -8,9 +8,10 @@ import com.github.mauricio.async.db.postgresql.util.URLParser
 import config.{AppExecutionContexts, ConfigurationValues}
 import nosql._
 import nosql.json.GeometryReaders
-import org.geolatte.geom.Envelope
+import org.geolatte.geom.codec.Wkb
+import org.geolatte.geom.{Polygon, Envelope}
 import play.api.Logger
-import play.api.libs.iteratee.Enumerator
+import play.api.libs.iteratee.{Iteratee, Enumerator}
 
 import scala.concurrent.Future
 
@@ -34,8 +35,44 @@ object PostgresqlRepository extends Repository {
   private def single_quote(str: String) : String = "'" + str + "'"
 
 
+  private def parseSelector(optJs : Option[JsObject]) = optJs match {
+    //TODO -- this handles only equality conditions
+    case Some(js) => js.fieldSet.map {
+      case (f,JsNumber(v)) => s"$f = $v"
+      case (f, JsString(v)) => s"$f = ${single_quote(v)}"
+      case (f,JsBoolean(v)) => s"$f = $v"
+      case _ => s"TRUE"
+    }.mkString(" AND ")
+    case None => "TRUE"
+  }
   //These are the SQL statements for managing and retrieving data
   object Sql {
+    def SELECT_DATA(db: String, col: String, query: SpatialQuery, limit: Int): String = {
+
+      val windowCondition = query.windowOpt match {
+        case Some(env) => s"geometry && ${Wkb.toWkb(FeatureTransformers.toPolygon(env))}::geometry"
+        case _ => "TRUE"
+      }
+
+      val attCondition = parseSelector(query.queryOpt)
+
+      val cond = List(windowCondition, attCondition) mkString " AND "
+
+      s"""
+       |SELECT ID, json
+       |FROM ${quote(db)}.${quote(col)}
+       |WHERE $cond
+       |LIMIT $limit
+     """.stripMargin
+    }
+
+
+    def UPDATE_DATA(db: String, col: String) : String = {
+      s"""UPDATE ${quote(db)}.${quote(col)}
+         |SET json = ?, geometry = ?
+         |WHERE ID = ?
+       """.stripMargin
+    }
 
     import MetadataIdentifiers._
 
@@ -55,11 +92,21 @@ object PostgresqlRepository extends Repository {
 
     def CREATE_COLLECTION_TABLE(dbname : String, tableName : String) =
       s"""CREATE TABLE ${quote(dbname)}.${quote(tableName)} (
-          | id SERIAL PRIMARY KEY,
+          | id INT PRIMARY KEY,
           | geometry GEOMETRY,
           | json JSON
           | )
        """.stripMargin
+
+    def INSERT_DATA(dbname: String, tableName: String) =
+      s"""INSERT INTO ${quote(dbname)}.${quote(tableName)}  (id, json, geometry)
+         |VALUES (?, ?, ?)
+       """.stripMargin
+
+    def DELETE_DATA(dbname: String, tableName: String) =
+    s"""DELETE FROM ${quote(dbname)}.${quote(tableName)}
+     """.stripMargin
+
 
     def LIST_TABLE_NAMES(dbname: String) = {
       s""" select table_name from information_schema.tables
@@ -213,8 +260,6 @@ object PostgresqlRepository extends Repository {
         }
     }.recover {
       case MappableException(mappedException) => throw mappedException
-//      case _@t
-//      => throw new RuntimeException(s"Unknown exception having message: ${t.getMessage}")
     }
 
   }
@@ -222,18 +267,14 @@ object PostgresqlRepository extends Repository {
   override def deleteCollection(dbName: String, colName: String): Future[Boolean] =
   pool.inTransaction { c =>
     c.sendQuery {
-      println("DELETE METADATA :====: " + Sql.DELETE_METADATA(dbName, colName))
       Sql.DELETE_METADATA(dbName, colName)
     }.flatMap { _ =>
       c.sendQuery {
-        println("DELETE METADATA :====: " + Sql.DROP_TABLE(dbName, colName))
         Sql.DROP_TABLE(dbName, colName)
       }.map ( _ => true)
     }
   }.recover {
     case MappableException(mappedException) => throw mappedException
-//    case _ @ t
-//    =>  throw new RuntimeException(s"Unknown exception having message: ${t.getMessage}")
   }
 
   override def count(database: String, collection: String): Future[Long] =
@@ -258,7 +299,102 @@ object PostgresqlRepository extends Repository {
     }
 
 
-  override def query(database: String, collection: String, spatialQuery: SpatialQuery): Future[Enumerator[JsObject]] = ???
+
+  override def writer(database: String, collection: String): FeatureWriter = new PGWriter(database, collection)
+
+
+
+  def insert(database: String, collection: String, jsons: Seq[(JsObject,Polygon)] ): Future[Long] = {
+
+    def chain(first : Future[Long], second: => Future[Long]) : Future[Long]= first.flatMap( r => second.map(s => r + s))
+
+    def insertInner(c: Connection, obj: JsObject, env: Polygon) : Future[Long] = c.sendPreparedStatement(Sql.INSERT_DATA(database, collection),
+      Array((obj \ "id").as[Int], obj, org.geolatte.geom.codec.Wkb.toWkb(env)))
+      .map(res => res.rowsAffected)
+
+    pool.inTransaction { c =>
+      jsons.foldLeft(Future.successful(0L)) {
+        case (acc, (obj, env)) => chain(acc, insertInner(c, obj, env))
+      }
+    }
+  }
+
+  def insert(database: String, collection: String, json: JsObject, env: Polygon ): Future[Boolean] =
+    pool.inTransaction { c =>
+      //TODO -- clean-up id en envelope to wkb extraction
+       c.sendPreparedStatement(Sql.INSERT_DATA(database, collection), Array((json \ "id").as[Int], json, org.geolatte.geom.codec.Wkb.toWkb(env) ))
+          .map(_ => true)
+    }.recover {
+      case MappableException(mappedException) => throw mappedException
+    }
+
+  private def toJson(id: Int, text : String) : Option[JsObject] =
+    Json
+      .parse(text)
+      .asOpt[JsObject]
+
+
+
+  private def enumerate(rs : ResultSet) : Enumerator[JsObject] = {
+    val transformed = rs.map { rd => toJson(rd(0).asInstanceOf[Int], rd(1).asInstanceOf[String])}.collect {
+      case Some(js) => js
+    }
+    Enumerator.enumerate(transformed)
+  }
+
+  override def query(database: String, collection: String, spatialQuery: SpatialQuery): Future[Enumerator[JsObject]] =
+    pool.sendQuery(Sql.SELECT_DATA(database, collection, spatialQuery, ConfigurationValues.MaxReturnItems))
+      .map { qr =>
+      qr.rows match {
+        case Some(rs) => enumerate(rs)
+        case _ => Enumerator[JsObject]()
+      }
+    }.recover {
+      case MappableException(mappedException) => throw mappedException
+    }
+
+  override def delete(database: String, collection: String, query: JsObject): Future[Boolean] =
+    pool.sendQuery(Sql.DELETE_DATA(database, collection))
+      .map(_ => true)
+      .recover {
+      case MappableException(mappedException) => throw mappedException
+    }
+
+  override def insert(database: String, collection: String, json: JsObject): Future[Boolean] =
+    metadata(database, collection)
+      .map{ md =>
+        FeatureTransformers.envelopeTransformer(md.envelope)
+      }.flatMap { evr =>
+        insert(database, collection, json, json.as[Polygon](evr))
+    }
+
+  def update(database: String, collection: String, id: Int, newValue: JsObject, envelope: Polygon) : Future[Int] =
+    pool.sendPreparedStatement( Sql.UPDATE_DATA(database, collection), Array(newValue, Wkb.toWkb(envelope), id))
+      .map { res =>
+        res.rowsAffected.toInt
+    }
+
+  override def update(database: String, collection: String, query: JsObject, updateSpec: JsObject): Future[Int] =
+    metadata(database, collection)
+      .map { md => FeatureTransformers.envelopeTransformer(md.envelope)
+    }.flatMap { implicit evr => {
+        val ne = updateSpec.as[Polygon]
+        val id = (query \ "id").as[Int]
+        update(database, collection, id, updateSpec, ne)
+      }
+    }
+
+  override def upsert(database: String, collection: String, json: JsObject): Future[Boolean] = {
+    val idq = Json.obj("id" -> (json \ "id").as[Int])
+    val q = new SpatialQuery(None, Some(idq), None)
+    query(database, collection,q)
+      .flatMap( e => e(Iteratee.head[JsObject]))
+      .flatMap( i => i.run)
+      .flatMap{
+        case Some(v) => update(database, collection, idq, json).map( _ => true)
+        case _ => insert(database, collection, json)
+      }
+  }
 
   /**
     * Saves a view for the specified database and collection.
@@ -270,27 +406,16 @@ object PostgresqlRepository extends Repository {
    */
   override def saveView(database: String, collection: String, viewDef: JsObject): Future[Boolean] = ???
 
-
   override def dropView(database: String, collection: String, id: String): Future[Boolean] = ???
 
-  override def update(database: String, collection: String, query: JsObject, updateSpec: JsObject): Future[Int] = ???
 
-  override def writer(database: String, collection: String): FeatureWriter = ???
-
-  override def insert(database: String, collection: String, json: JsObject): Future[Boolean] = ???
 
   override def existsDb(dbname: String): Future[Boolean] = ???
 
   override def getView(database: String, collection: String, id: String): Future[JsObject] = ???
 
-  override def delete(database: String, collection: String, query: JsObject): Future[Boolean] = ???
+
 
   override def getViews(database: String, collection: String): Future[List[JsObject]] = ???
-
-
-
-
-  override def upsert(database: String, collection: String, json: JsObject): Future[Boolean] = ???
-
 
 }

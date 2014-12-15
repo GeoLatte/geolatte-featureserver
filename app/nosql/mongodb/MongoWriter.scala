@@ -19,24 +19,22 @@ case class MongoWriter(db: String, collection: String) extends FeatureWriter {
 
   val fCollectionInfo: Future[CollectionInfo] = MongoDBRepository.getCollectionInfo(db, collection)
 
-  def add(features: Seq[JsObject]) =
+  def add(features: Seq[JsObject]) : Future[Long] =
     if(features.isEmpty) Future.successful(0)
-    else {
+    else
       fCollectionInfo.flatMap{ case (coll, smd, transfo) => {
-        //Logger.debug("Received as input: " + features)  //even for debug this produces way too much loggin data
         val docs = features.map(f => f.transform(transfo)).collect {
           case JsSuccess(transformed, _) => transformed
         }
         Logger.debug(" Flushing data to mongodb (" + docs.size + " features)")
-        val fInt = coll.bulkInsert(Enumerator.enumerate(docs))
+        val fInt = coll.bulkInsert(Enumerator.enumerate(docs)).map(i => i.toLong)
         fInt.onSuccess {
           case num => Logger.info(s"Successfully inserted $num features")
         }
         fInt.recover {
-          case t : Throwable => { Logger.warn(s"Insert failed with error: ${t.getMessage}"); 0 }
+          case t : Throwable => { Logger.warn(s"Insert failed with error: ${t.getMessage}"); 0L }
         }
       }
     }
-  }
 
 }

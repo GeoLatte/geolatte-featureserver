@@ -1,5 +1,7 @@
 package nosql.mongodb
 
+import nosql.FeatureTransformers
+
 import scala.language.implicitConversions
 import org.specs2.mutable.Specification
 

@@ -1,6 +1,8 @@
 package integration
 
+import config.ConfigurationValues
 import nosql.json.Gen
+import org.specs2.matcher.MatchResult
 import play.api.libs.json._
 import play.api.http.Status._
 
@@ -12,16 +14,26 @@ class TransactionAPISpec  extends InCollectionSpecification {
 
 
   //TODO add additional spec tests for consistency of count metadata field on insert
+  //TODO --
 
   def is = s2"""
 
-                                                                                  ${section("mongodb")}
+
+                                                                                  ${section("mongodb", "postgresql")}
      The Transaction /upsert should:
        return 404 when the collection does not exist                              $e1
        return OK when the collection does exist, and data is valid                $e2
        insert value idem-potently when object does not exist                      $e3
        update value idem-potently when object does already exist                  $e4
-                                                                                  ${section("mongodb")}
+
+     The transaction /insert should:
+        return OK when the collection exists, and data is valid                   $e5
+        metadata query returns the inserted number of objects                     $e6
+
+     The transactions /delete should:
+        deleting an element and return status DELETED                             $e7
+
+                                                                                  ${section("mongodb", "postgresql")}
 
   """
 
@@ -56,8 +68,8 @@ class TransactionAPISpec  extends InCollectionSpecification {
     postUpsert(testDbName, testColName, f)
     postUpsert(testDbName, testColName, f)
     getList(testDbName, testColName, "") applyMatcher { res =>
-      res.responseBody.flatMap(js => (js \ "features").asOpt[JsArray])
-        .map(js => pruneSpecialProperties(js)) must equalTo(Some(JsArray(List(f)))) }
+      res.responseBody must beSome(matchFeaturesInJson(Json.arr(f)))
+    }
   }
 
   def e4 = {
@@ -69,8 +81,26 @@ class TransactionAPISpec  extends InCollectionSpecification {
     postUpsert(testDbName, testColName, modifiedFeature)
     postUpsert(testDbName, testColName, modifiedFeature)
     getList(testDbName, testColName, "") applyMatcher { res =>
-      res.responseBody.flatMap(js => (js \ "features").asOpt[JsArray])
-        .map(js => pruneSpecialProperties(js)) must equalTo(Some(JsArray(List(modifiedFeature)))) }
+      res.responseBody must beSome(matchFeaturesInJson(Json.arr(modifiedFeature)))
+    }
   }
+
+  def e5 = {
+    val fs = featureArray(size=100).sample.get
+    removeData(testDbName, testColName)
+    val data = fs.value map (j => Json.stringify(j)) mkString ConfigurationValues.jsonSeparator getBytes ("UTF-8")
+    val res1 = loadData(testDbName, testColName, data)
+    val res2 = getList(testDbName, testColName, "")
+
+    res1.applyMatcher{
+      _.status must equalTo(OK)
+    } and res2.applyMatcher{
+      res => res.responseBody must beSome( matchFeaturesInJson(fs))
+    }
+  }
+
+  def e6 = pending
+
+  def e7 = pending
 
 }

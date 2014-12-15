@@ -1,15 +1,12 @@
-package nosql.mongodb
+package nosql
 
-import play.api.libs.json._
-import play.api.libs.functional.syntax._
-import play.api.libs.json.Reads._
-import play.api.data.validation.ValidationError
-
-
-import org.geolatte.geom.Envelope
-import org.geolatte.geom.curve.{MortonCode, MortonContext}
-import nosql.mongodb.SpecialMongoProperties._
 import nosql.json.GeometryReaders
+import nosql.mongodb.SpecialMongoProperties._
+import org.geolatte.geom._
+import org.geolatte.geom.curve.{MortonCode, MortonContext}
+import play.api.data.validation.ValidationError
+import play.api.libs.json.Reads._
+import play.api.libs.json._
 
 /**
  * @author Karel Maesen, Geovise BVBA
@@ -17,7 +14,7 @@ import nosql.json.GeometryReaders
  */
 object FeatureTransformers {
 
-  import GeometryReaders._
+  import nosql.json.GeometryReaders._
 
   def bboxAndMortonCode(implicit extent : Envelope, level: Int) = {
 
@@ -45,5 +42,29 @@ object FeatureTransformers {
    */
   def mkFeatureIndexingTranformer(implicit extent : Envelope, level: Int) : Reads[JsObject] =
     __.json.update( bboxAndMortonCode )
+
+
+  /**
+   * Extracts the Envelope from the GeoJson
+   * @param extent
+   * @return
+   */
+  def envelopeTransformer(extent: Envelope) : Reads[Polygon] =
+    ( __ \ 'geometry \ 'coordinates ).json.pick[JsArray] andThen
+      PositionReads.map {pos =>
+        pos.boundingBox
+      }.map { bbox =>
+        toPolygon(bbox.toEnvelope(extent.getCrsId))
+      }
+
+  def toPolygon(envelope: Envelope) : Polygon = {
+    val builder = PointSequenceBuilders.fixedSized(5, DimensionalFlag.d2D,envelope.getCrsId)
+    builder.add(envelope.getMinX, envelope.getMinY)
+    builder.add(envelope.getMaxX, envelope.getMinY)
+    builder.add(envelope.getMaxX, envelope.getMaxY)
+    builder.add(envelope.getMinX, envelope.getMaxY)
+    builder.add(envelope.getMinX, envelope.getMinY)
+    new Polygon(builder.toPointSequence)
+  }
 
 }

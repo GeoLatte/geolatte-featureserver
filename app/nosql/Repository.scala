@@ -72,7 +72,7 @@ trait MortonCodeQueryOptimizer {
 
 trait FeatureWriter {
 
-  def add(features: Seq[JsObject]): Future[Int]
+  def add(features: Seq[JsObject]): Future[Long]
 
 }
 
