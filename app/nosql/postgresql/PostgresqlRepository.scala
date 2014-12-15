@@ -8,7 +8,7 @@ import com.github.mauricio.async.db.postgresql.util.URLParser
 import config.{AppExecutionContexts, ConfigurationValues}
 import nosql._
 import nosql.json.GeometryReaders
-import org.geolatte.geom.codec.Wkb
+import org.geolatte.geom.codec.{Wkt, Wkb}
 import org.geolatte.geom.{Polygon, Envelope}
 import play.api.Logger
 import play.api.libs.iteratee.{Iteratee, Enumerator}
@@ -50,7 +50,7 @@ object PostgresqlRepository extends Repository {
     def SELECT_DATA(db: String, col: String, query: SpatialQuery, limit: Int): String = {
 
       val windowCondition = query.windowOpt match {
-        case Some(env) => s"geometry && ${Wkb.toWkb(FeatureTransformers.toPolygon(env))}::geometry"
+        case Some(env) => s"geometry && ${single_quote( Wkt.toWkt(FeatureTransformers.toPolygon(env)))}::geometry"
         case _ => "TRUE"
       }
 

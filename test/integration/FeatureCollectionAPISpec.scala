@@ -23,7 +23,7 @@ class FeatureCollectionAPISpec extends InCollectionSpecification {
 
      The FeatureCollection /list should:
        return the objects contained within the specified bbox as json object      $e3
-       respond to the start query-param                                           $e4
+       respond to the start query-param                                           $e4 ${tag("postgresql")}
        respond to the limit query-param                                           $e5
        support pagination                                                         $e6
 
