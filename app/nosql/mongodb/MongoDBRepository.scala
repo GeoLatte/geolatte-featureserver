@@ -258,7 +258,7 @@ object MongoDBRepository extends nosql.Repository with FutureInstrumented {
   }
 
   def query(database: String, collection: String, spatialQuery: SpatialQuery, start: Option[Int] = None,
-            limit: Option[Int] = None): Future[Enumerator[JsObject]] =
+            limit: Option[Int] = None): Future[QueryResult] =
     futureTimed("query-timer") {
         getSpatialCollection(database, collection) map {
           sc => sc.run(spatialQuery)
@@ -266,8 +266,8 @@ object MongoDBRepository extends nosql.Repository with FutureInstrumented {
         case enum if start.isDefined => enum &> Enumeratee.drop(start.get)
         case enum => enum
       } map {
-        case enum if limit.isDefined => enum &> Enumeratee.take(limit.get)
-        case enum => enum
+        case enum if limit.isDefined => (None, enum &> Enumeratee.take(limit.get))
+        case enum => (None, enum)
       }
     }
 

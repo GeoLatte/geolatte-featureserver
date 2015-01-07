@@ -63,21 +63,31 @@ object FeatureCollectionController extends AbstractNoSqlController with FutureIn
 
 
   def query(db: String, collection: String) =
-    repositoryAction ( implicit request => futureTimed("featurecollection-query"){
+    repositoryAction ( implicit request =>
+      futureTimed("featurecollection-query"){
         implicit val queryStr = request.queryString
+
+        val start : Option[Int] = QueryParams.START.extract
+        val limit : Option[Int]= QueryParams.LIMIT.extract
+
         Logger.info(s"Query string $queryStr on $db, collection $collection")
-        repository.metadata(db, collection).flatMap(md =>
-          doQuery(db, collection, md).map[SimpleResult](x => x)
-        ).recover {
-          case ex: InvalidQueryException => BadRequest(s"${ex.getMessage}")
-        }.recover (commonExceptionHandler(db, collection))
-    })
+          repository.metadata(db, collection).flatMap(md =>
+            doQuery(db, collection, md, start, limit).map[SimpleResult]{
+              case (_, x) => x
+            }
+          ).recover {
+            case ex: InvalidQueryException => BadRequest(s"${ex.getMessage}")
+          }.recover (commonExceptionHandler(db, collection))
+      }
+    )
 
 
   def download(db: String, collection: String) = repositoryAction {
       implicit request => {
         Logger.info(s"Downloading $db/$collection.")
-        repository.query(db, collection, SpatialQuery()).map[SimpleResult](x => x).recover {
+        repository.query(db, collection, SpatialQuery()).map[SimpleResult] {
+          case (_, x) => x
+        }.recover {
           commonExceptionHandler(db, collection)
         }
       }
@@ -100,9 +110,9 @@ object FeatureCollectionController extends AbstractNoSqlController with FutureIn
 
       repository.metadata(db, collection).flatMap(md =>
         doQuery(db, collection, md, Some(start), Some(limit)).flatMap {
-          enum => enum |>>> collectFeatures
+          case ( optTotal , enum) => (enum |>>> collectFeatures) map ( l => (optTotal, l))
         }.map[SimpleResult]{
-          case features => toSimpleResult(FeaturesResource(None, features))
+          case (optTotal, features) => toSimpleResult(FeaturesResource(optTotal, features))
         }
       ).recover {
         case ex: InvalidQueryException => BadRequest(s"${ex.getMessage}")
@@ -165,7 +175,7 @@ object FeatureCollectionController extends AbstractNoSqlController with FutureIn
     })
 
   private def doQuery(db: String, collection: String, smd: Metadata, start: Option[Int] = None, limit: Option[Int] = None)
-                            (implicit queryStr: Map[String, Seq[String]]) : Future[Enumerator[JsObject]] =
+                            (implicit queryStr: Map[String, Seq[String]]) : Future[(Option[Long], Enumerator[JsObject])] =
     queryString2SpatialQuery(db,collection,smd).flatMap( q =>  repository.query(db, collection, q, start, limit) )
 
 

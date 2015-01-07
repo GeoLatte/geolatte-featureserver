@@ -62,7 +62,7 @@ case class MediaReaderResource(mediaReader: MediaReader) extends Jsonable {
   def toJson = Json.toJson(mediaReader)
 }
 
-case class FeaturesResource(total: Option[Int], features: List[JsObject]) extends Jsonable {
+case class FeaturesResource(total: Option[Long], features: List[JsObject]) extends Jsonable {
 
   def totalEl = total match {
     case Some(t) => Json.obj("total" -> t)

@@ -82,6 +82,11 @@ trait FeatureWriter {
  */
 trait Repository {
 
+  /**
+   * QueryResults are pair of and Optional total number of objects that are returned by the query (disregarding limit
+   * and start query-params), and an enumerator for the results (respecting limit and start params.
+   */
+  type QueryResult = (Option[Long], Enumerator[JsObject])
 
   def listDatabases: Future[List[String]]
 
@@ -104,7 +109,7 @@ trait Repository {
   def deleteCollection(dbName: String, colName: String) : Future[Boolean]
 
   def query(database: String, collection: String, spatialQuery: SpatialQuery, start: Option[Int] = None,
-            limit: Option[Int] = None): Future[Enumerator[JsObject]]
+            limit: Option[Int] = None): Future[QueryResult]
 
   def insert(database: String, collection: String, json: JsObject) : Future[Boolean]
 

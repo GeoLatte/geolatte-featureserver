@@ -352,12 +352,12 @@ object PostgresqlRepository extends Repository {
   }
 
   override def query(database: String, collection: String, spatialQuery: SpatialQuery, start : Option[Int] = None,
-                     limit: Option[Int] = None): Future[Enumerator[JsObject]] =
+                     limit: Option[Int] = None): Future[QueryResult] =
     pool.sendQuery(Sql.SELECT_DATA(database, collection, spatialQuery, ConfigurationValues.MaxReturnItems))
       .map { qr =>
       qr.rows match {
-        case Some(rs) => enumerate(rs)
-        case _ => Enumerator[JsObject]()
+        case Some(rs) => (None, enumerate(rs))
+        case _ => (None, Enumerator[JsObject]())
       }
     }.recover {
       case MappableException(mappedException) => throw mappedException
@@ -398,9 +398,11 @@ object PostgresqlRepository extends Repository {
     val idq = Json.obj("id" -> (json \ "id").as[Int])
     val q = new SpatialQuery(None, Some(idq), None)
     query(database, collection,q)
-      .flatMap( e => e(Iteratee.head[JsObject]))
-      .flatMap( i => i.run)
-      .flatMap{
+      .flatMap{ case ( _, e)  =>
+      e(Iteratee.head[JsObject])
+    }.flatMap{ i =>
+      i.run
+    }.flatMap{
         case Some(v) => update(database, collection, idq, json).map( _ => true)
         case _ => insert(database, collection, json)
       }
