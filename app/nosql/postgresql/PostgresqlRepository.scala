@@ -1,6 +1,6 @@
 package nosql.postgresql
 
-import com.github.mauricio.async.db.{Connection, ResultSet, RowData}
+import com.github.mauricio.async.db.{QueryResult, Connection, ResultSet, RowData}
 import com.github.mauricio.async.db.pool.{PoolConfiguration, ConnectionPool}
 import com.github.mauricio.async.db.postgresql.exceptions.GenericDatabaseException
 import com.github.mauricio.async.db.postgresql.pool.PostgreSQLConnectionFactory
@@ -47,23 +47,46 @@ object PostgresqlRepository extends Repository {
   }
   //These are the SQL statements for managing and retrieving data
   object Sql {
-    def SELECT_DATA(db: String, col: String, query: SpatialQuery, limit: Int): String = {
 
-      val windowCondition = query.windowOpt match {
-        case Some(env) => s"geometry && ${single_quote( Wkt.toWkt(FeatureTransformers.toPolygon(env)))}::geometry"
-        case _ => "TRUE"
+   def condition(query : SpatialQuery) : String = {
+     val windowCondition = query.windowOpt match {
+       case Some(env) => s"geometry && ${single_quote( Wkt.toWkt(FeatureTransformers.toPolygon(env)))}::geometry"
+       case _ => "TRUE"
+     }
+     val attCondition = parseSelector(query.queryOpt)
+     List(windowCondition, attCondition) mkString " AND "
+   }
+
+   def SELECT_TOTAL_IN_QUERY(db: String, col: String, query: SpatialQuery) : String = {
+    s"""
+       |SELECT COUNT(*)
+       |FROM ${quote(db)}.${quote(col)}
+       |where ${condition(query)}
+     """.stripMargin
+   }
+
+
+    def SELECT_DATA(db: String, col: String, query: SpatialQuery, start: Option[Int] = None, limit: Option[Int] = None): String = {
+
+      val cond = condition(query)
+
+      val limitClause = limit match {
+        case Some(l) => s"\nLIMIT $l"
+        case _ => ""
       }
 
-      val attCondition = parseSelector(query.queryOpt)
-
-      val cond = List(windowCondition, attCondition) mkString " AND "
+      val offsetClause = start match {
+        case Some(s) => s"\nOFFSET $s"
+        case _ => ""
+      }
 
       s"""
        |SELECT ID, json
        |FROM ${quote(db)}.${quote(col)}
        |WHERE $cond
-       |LIMIT $limit
-     """.stripMargin
+       |ORDER BY ID
+     """.stripMargin + offsetClause + limitClause
+
     }
 
 
@@ -173,7 +196,7 @@ object PostgresqlRepository extends Repository {
 
     }
   }
-    
+
   lazy val url = URLParser.parse(ConfigurationValues.PgConnectionString)
   lazy val database = url.database.getOrElse(url.username)
   lazy val factory = new PostgreSQLConnectionFactory( url )
@@ -186,9 +209,9 @@ object PostgresqlRepository extends Repository {
       c.sendQuery(s"${Sql.CREATE_SCHEMA(dbname)}; ${Sql.CREATE_METADATA_TABLE_IN(dbname)};")
     }.map {
       _ => true
-    }.recover {  
+    }.recover {
       case MappableException(mappedException) => throw mappedException
-      case _ @ t  
+      case _ @ t
         =>  throw new DatabaseCreationException(s"Unknown exception having message: ${t.getMessage}")
       }
     }
@@ -352,16 +375,32 @@ object PostgresqlRepository extends Repository {
   }
 
   override def query(database: String, collection: String, spatialQuery: SpatialQuery, start : Option[Int] = None,
-                     limit: Option[Int] = None): Future[QueryResult] =
-    pool.sendQuery(Sql.SELECT_DATA(database, collection, spatialQuery, ConfigurationValues.MaxReturnItems))
-      .map { qr =>
+                     limit: Option[Int] = None): Future[CountedQueryResult] = {
+
+    def extractCount(qr: QueryResult) : Long =
       qr.rows match {
-        case Some(rs) => (None, enumerate(rs))
-        case _ => (None, Enumerator[JsObject]())
+        case Some(rowSet) => rowSet.head(0).asInstanceOf[Long]
+        case _ => 0
       }
-    }.recover {
+
+    val fCnt = pool.sendQuery(Sql.SELECT_TOTAL_IN_QUERY(database, collection, spatialQuery)).map{ extractCount }
+
+    val fEnum = pool.sendQuery(Sql.SELECT_DATA(database, collection, spatialQuery, start, limit)).map {
+        qr => qr.rows match {
+          case Some(rs) => enumerate(rs)
+          case _ => Enumerator[JsObject]()
+      }
+    }
+
+    {for{
+      cnt <- fCnt
+      enum <- fEnum
+    } yield
+      (Some(cnt),enum)
+    } recover {
       case MappableException(mappedException) => throw mappedException
     }
+  }
 
   override def delete(database: String, collection: String, query: JsObject): Future[Boolean] =
     pool.sendQuery(Sql.DELETE_DATA(database, collection))

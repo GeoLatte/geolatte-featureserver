@@ -258,7 +258,7 @@ object MongoDBRepository extends nosql.Repository with FutureInstrumented {
   }
 
   def query(database: String, collection: String, spatialQuery: SpatialQuery, start: Option[Int] = None,
-            limit: Option[Int] = None): Future[QueryResult] =
+            limit: Option[Int] = None): Future[CountedQueryResult] =
     futureTimed("query-timer") {
         getSpatialCollection(database, collection) map {
           sc => sc.run(spatialQuery)
