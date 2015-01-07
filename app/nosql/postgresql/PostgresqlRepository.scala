@@ -181,7 +181,6 @@ object PostgresqlRepository extends Repository {
   //TODO make connection pool configurable
   lazy val pool = new ConnectionPool(factory, PoolConfiguration.Default)
 
-
   override def createDb(dbname: String): Future[Boolean] =
     pool.inTransaction { c => {
       c.sendQuery(s"${Sql.CREATE_SCHEMA(dbname)}; ${Sql.CREATE_METADATA_TABLE_IN(dbname)};")
@@ -352,7 +351,8 @@ object PostgresqlRepository extends Repository {
     Enumerator.enumerate(transformed)
   }
 
-  override def query(database: String, collection: String, spatialQuery: SpatialQuery): Future[Enumerator[JsObject]] =
+  override def query(database: String, collection: String, spatialQuery: SpatialQuery, start : Option[Int] = None,
+                     limit: Option[Int] = None): Future[Enumerator[JsObject]] =
     pool.sendQuery(Sql.SELECT_DATA(database, collection, spatialQuery, ConfigurationValues.MaxReturnItems))
       .map { qr =>
       qr.rows match {

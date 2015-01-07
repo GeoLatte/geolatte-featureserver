@@ -84,31 +84,25 @@ object FeatureCollectionController extends AbstractNoSqlController with FutureIn
     }
 
 
-  def collectFeatures(start: Int, max: Int) : Iteratee[JsObject, (Int, List[JsObject])] = {
-
-    case class fState(features: List[JsObject] = Nil, collected: Int = 0, total: Int = 0)
-
-    Iteratee.fold[JsObject, fState]( fState( total = start ) ) ( (state, feature) =>
-      if (state.collected >= max) state.copy( total = state.total+1)
-      else fState(feature::state.features, state.collected + 1, state.total + 1)
-    ).map(state => (state.total, state.features))
-
-  }
+  def collectFeatures : Iteratee[JsObject, List[JsObject]] =
+    Iteratee.fold[JsObject, List[JsObject]]( List[JsObject]() ) ( (state, feature) =>
+      feature::state
+    )
 
   def list(db: String, collection: String) = repositoryAction(
     implicit request => futureTimed("featurecollection-list"){
       implicit val queryStr = request.queryString
-      def enumerator2list(enum: Enumerator[JsObject]) : Future[(Int, List[JsObject])] = {
-        val limit = Math.min( QueryParams.LIMIT.extract.getOrElse(COLLECTION_LIMIT),COLLECTION_LIMIT)
-        val start = QueryParams.START.extract.getOrElse(0)
-        enum &> Enumeratee.drop(start)  |>>> collectFeatures(start, limit)
-      }
+
+      val limit = Math.min( QueryParams.LIMIT.extract.getOrElse(COLLECTION_LIMIT),COLLECTION_LIMIT)
+      val start = QueryParams.START.extract.getOrElse(0)
+
       Logger.info(s"Query string $queryStr on $db, collection $collection")
+
       repository.metadata(db, collection).flatMap(md =>
-        doQuery(db, collection, md).flatMap {
-          case enum => enumerator2list(enum)
+        doQuery(db, collection, md, Some(start), Some(limit)).flatMap {
+          enum => enum |>>> collectFeatures
         }.map[SimpleResult]{
-          case (cnt, features) => toSimpleResult(FeaturesResource(cnt, features))
+          case features => toSimpleResult(FeaturesResource(None, features))
         }
       ).recover {
         case ex: InvalidQueryException => BadRequest(s"${ex.getMessage}")
@@ -170,9 +164,9 @@ object FeatureCollectionController extends AbstractNoSqlController with FutureIn
 
     })
 
-  private def doQuery(db: String, collection: String, smd: Metadata)
+  private def doQuery(db: String, collection: String, smd: Metadata, start: Option[Int] = None, limit: Option[Int] = None)
                             (implicit queryStr: Map[String, Seq[String]]) : Future[Enumerator[JsObject]] =
-    queryString2SpatialQuery(db,collection,smd).flatMap( q =>  repository.query(db, collection, q) )
+    queryString2SpatialQuery(db,collection,smd).flatMap( q =>  repository.query(db, collection, q, start, limit) )
 
 
   implicit def queryString2SpatialQuery(db: String, collection: String, smd: Metadata)

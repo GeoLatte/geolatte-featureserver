@@ -202,8 +202,8 @@ object MongoDBRepository extends nosql.Repository with FutureInstrumented {
     ).flatMap(collectionExists =>
       if (!collectionExists) doCreateCollection()
       else throw new CollectionAlreadyExists()
-    ).flatMap(_ => saveMetadata
-    ).flatMap(_ => ensureIndexes)
+      ).flatMap(_ => saveMetadata
+      ).flatMap(_ => ensureIndexes)
   }
 
   def deleteCollection(dbName: String, colName: String) = {
@@ -246,7 +246,7 @@ object MongoDBRepository extends nosql.Repository with FutureInstrumented {
     }
 
 
-  def getCollectionInfo(dbName: String, colName: String): Future[CollectionInfo] =getCollection(dbName, colName) map {
+  def getCollectionInfo(dbName: String, colName: String): Future[CollectionInfo] = getCollection(dbName, colName) map {
     case (dbcoll, smd) if !smd.envelope.isEmpty =>
       (dbcoll, smd, FeatureTransformers.mkFeatureIndexingTranformer(smd.envelope, smd.level))
     case _ => throw new NoSpatialMetadataException(s"$dbName/$colName is not spatially enabled")
@@ -257,11 +257,20 @@ object MongoDBRepository extends nosql.Repository with FutureInstrumented {
     metadata(database, collection).map(md => MongoSpatialCollection(coll, md))
   }
 
-
-  def query(database: String, collection: String, spatialQuery: SpatialQuery): Future[Enumerator[JsObject]] =
+  def query(database: String, collection: String, spatialQuery: SpatialQuery, start: Option[Int] = None,
+            limit: Option[Int] = None): Future[Enumerator[JsObject]] =
     futureTimed("query-timer") {
-      getSpatialCollection(database, collection).map(sc => sc.run(spatialQuery))
+        getSpatialCollection(database, collection) map {
+          sc => sc.run(spatialQuery)
+      } map {
+        case enum if start.isDefined => enum &> Enumeratee.drop(start.get)
+        case enum => enum
+      } map {
+        case enum if limit.isDefined => enum &> Enumeratee.take(limit.get)
+        case enum => enum
+      }
     }
+
 
   def getMediaStore(database: String, collection: String): Future[MediaStore] = {
     import reactivemongo.api.collections.default._

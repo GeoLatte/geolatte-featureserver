@@ -16,15 +16,15 @@ class FeatureCollectionAPISpec extends InCollectionSpecification {
   def is = s2"""
                                                                                   ${section("mongodb")}
      The FeatureCollection /download should:
-       return 404 when the collection does not exist                              $e1
-       return all elements when the collection does exist                         $e2
+       return 404 when the collection does not exist                              $e1 ${tag("postgresql")}
+       return all elements when the collection does exist                         $e2 ${tag("postgresql")}
 
 
 
      The FeatureCollection /list should:
-       return the objects contained within the specified bbox as json object      $e3
+       return the objects contained within the specified bbox as json object      $e3 ${tag("postgresql")}
        respond to the start query-param                                           $e4 ${tag("postgresql")}
-       respond to the limit query-param                                           $e5
+       respond to the limit query-param                                           $e5 ${tag("postgresql")}
        support pagination                                                         $e6
 
      The FeatureCollection /query should:
@@ -79,14 +79,14 @@ class FeatureCollectionAPISpec extends InCollectionSpecification {
   def e4 = withTestFeatures(100, 10){
       (bbox: String, featuresIn01: JsArray) => getList(testDbName, testColName, Map("bbox" -> bbox, "start" -> 10)).applyMatcher(
         res => (res.status must equalTo(OK)) and (res.responseBody must beSome( (js: JsValue) =>
-          (js must matchTotalInJson(100)) and (js must matchCountInJson(90))))
+          (if (configuredDatabase.equals("mongodb")) ok else js must matchTotalInJson(100) ) and (js must matchCountInJson(90))))
       )
     }
 
   def e5 = withTestFeatures(100, 10) {
     (bbox: String, featuresIn01: JsArray) => getList(testDbName, testColName, Map("bbox" -> bbox, "limit" -> 10)).applyMatcher(
       res => (res.status must equalTo(OK)) and (res.responseBody must beSome((js: JsValue) =>
-        (js must matchTotalInJson(100)) and (js must matchCountInJson(10))))
+        (if (configuredDatabase.equals("mongodb")) ok else js must matchTotalInJson(100) ) and (js must matchCountInJson(10))))
     )
   }
 

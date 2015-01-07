@@ -103,7 +103,8 @@ trait Repository {
 
   def deleteCollection(dbName: String, colName: String) : Future[Boolean]
 
-  def query(database: String, collection: String, spatialQuery: SpatialQuery): Future[Enumerator[JsObject]]
+  def query(database: String, collection: String, spatialQuery: SpatialQuery, start: Option[Int] = None,
+            limit: Option[Int] = None): Future[Enumerator[JsObject]]
 
   def insert(database: String, collection: String, json: JsObject) : Future[Boolean]
 
