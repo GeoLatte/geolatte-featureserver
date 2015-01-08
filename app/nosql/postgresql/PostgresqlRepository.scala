@@ -46,6 +46,7 @@ object PostgresqlRepository extends Repository {
     }.mkString(" AND ")
     case None => "TRUE"
   }
+
   //These are the SQL statements for managing and retrieving data
   object Sql {
 
@@ -58,13 +59,13 @@ object PostgresqlRepository extends Repository {
      List(windowCondition, attCondition) mkString " AND "
    }
 
-   def SELECT_TOTAL_IN_QUERY(db: String, col: String, query: SpatialQuery) : String = {
+   def SELECT_TOTAL_IN_QUERY(db: String, col: String, query: SpatialQuery) : String =
     s"""
        |SELECT COUNT(*)
        |FROM ${quote(db)}.${quote(col)}
        |where ${condition(query)}
      """.stripMargin
-   }
+
 
 
     def SELECT_DATA(db: String, col: String, query: SpatialQuery, start: Option[Int] = None, limit: Option[Int] = None): String = {
@@ -72,8 +73,8 @@ object PostgresqlRepository extends Repository {
       val cond = condition(query)
 
       val limitClause = limit match {
-        case Some(l) => s"\nLIMIT $l"
-        case _ => ""
+        case Some(lim) => s"\nLIMIT $lim"
+        case _ => s"\nLIMIT ${ConfigurationValues.MaxReturnItems}"
       }
 
       val offsetClause = start match {
