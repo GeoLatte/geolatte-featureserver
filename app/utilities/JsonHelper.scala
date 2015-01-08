@@ -1,6 +1,9 @@
 package utilities
 
 import play.api.libs.json._
+import play.api.libs.json.Reads._ //note that this imports the required object reducer
+import play.api.libs.functional.syntax._ //note tha this import is required vor the functional composition of Reads
+
 import play.api.data.validation.ValidationError
 
 import scala.collection.mutable.ListBuffer
@@ -43,6 +46,11 @@ object JsonHelper {
   }
 
 
+  def mkProjection(paths : List[JsPath]) : Reads[JsObject] =
+    paths.foldLeft[Reads[JsObject]]( NoObjReads ) {
+      (r1, path) => (r1 and path.json.pickBranch) reduce
+    }
+
 
 
   /**
@@ -55,5 +63,9 @@ object JsonHelper {
       case (jspath, valerrors) => jspath + " :" + valerrors.map(ve => ve.message).mkString("; ")
     } mkString "\n"
   }
-  
+
+  object NoObjReads extends Reads[JsObject] {
+    override def reads(json: JsValue): JsResult[JsObject] = JsSuccess(Json.obj())
+  }
+
 }
