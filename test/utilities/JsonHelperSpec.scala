@@ -79,7 +79,6 @@ class JsonHelperSpec extends Specification {
        obj must_== None
 
      }
-     
 
   }
 }

@@ -12,6 +12,7 @@ import org.geolatte.geom.codec.{Wkt, Wkb}
 import org.geolatte.geom.{Polygon, Envelope}
 import play.api.Logger
 import play.api.libs.iteratee.{Iteratee, Enumerator}
+import utilities.JsonHelper
 
 import scala.concurrent.Future
 
@@ -365,29 +366,54 @@ object PostgresqlRepository extends Repository {
       .parse(text)
       .asOpt[JsObject]
 
+  private def jsArrayToJsPathList(arr: JsArray) : List[JsPath] =  arr.as[List[String]].map {
+    spath => spath.split("\\.").foldLeft[JsPath]( __ )( (jsp, pe) => jsp \ pe )
+  } ++ List(( __ \ "type"), ( __ \ "geometry"))
 
 
-  private def enumerate(rs : ResultSet) : Enumerator[JsObject] = {
-    val transformed = rs.map { rd => toJson(rd(0).asInstanceOf[Int], rd(1).asInstanceOf[String])}.collect {
+  private def enumerate(rs : ResultSet, optProj : Option[Reads[JsObject]]) : Enumerator[JsObject] = {
+
+    val jsons = rs.map {
+      rd => toJson(rd(0).asInstanceOf[Int], rd(1).asInstanceOf[String])
+    }
+
+    val projected = optProj match {
+      case Some(reads) => jsons.map{
+        jsOpt => jsOpt.flatMap( js => js.asOpt(reads))
+      }
+      case _ => jsons
+    }
+
+    val collected = projected.collect {
       case Some(js) => js
     }
-    Enumerator.enumerate(transformed)
+
+    Enumerator.enumerate(collected)
   }
 
   override def query(database: String, collection: String, spatialQuery: SpatialQuery, start : Option[Int] = None,
                      limit: Option[Int] = None): Future[CountedQueryResult] = {
 
+    //a utility to extract the count from the QueryResult
     def extractCount(qr: QueryResult) : Long =
       qr.rows match {
         case Some(rowSet) => rowSet.head(0).asInstanceOf[Long]
         case _ => 0
       }
 
+    val projectingReads : Option[Reads[JsObject]] =
+      spatialQuery.projectionOpt
+        .map {
+        arr => jsArrayToJsPathList(arr)
+      }.map {
+        pathList => JsonHelper.mkProjection(pathList)
+      }
+
     val fCnt = pool.sendQuery(Sql.SELECT_TOTAL_IN_QUERY(database, collection, spatialQuery)).map{ extractCount }
 
     val fEnum = pool.sendQuery(Sql.SELECT_DATA(database, collection, spatialQuery, start, limit)).map {
         qr => qr.rows match {
-          case Some(rs) => enumerate(rs)
+          case Some(rs) => enumerate(rs,projectingReads)
           case _ => Enumerator[JsObject]()
       }
     }
