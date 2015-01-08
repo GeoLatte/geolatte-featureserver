@@ -14,17 +14,17 @@ class FeatureCollectionAPISpec extends InCollectionSpecification {
 
 
   def is = s2"""
-                                                                                  ${section("mongodb")}
+                                                                                  ${section("mongodb", "postgresql")}
      The FeatureCollection /download should:
-       return 404 when the collection does not exist                              $e1 ${tag("postgresql")}
-       return all elements when the collection does exist                         $e2 ${tag("postgresql")}
+       return 404 when the collection does not exist                              $e1
+       return all elements when the collection does exist                         $e2
 
 
 
      The FeatureCollection /list should:
-       return the objects contained within the specified bbox as json object      $e3 ${tag("postgresql")}
-       respond to the start query-param                                           $e4 ${tag("postgresql")}
-       respond to the limit query-param                                           $e5 ${tag("postgresql")}
+       return the objects contained within the specified bbox as json object      $e3
+       respond to the start query-param                                           $e4
+       respond to the limit query-param                                           $e5
        support pagination                                                         $e6
 
      The FeatureCollection /query should:
@@ -40,7 +40,7 @@ class FeatureCollectionAPISpec extends InCollectionSpecification {
 
      The FeatureCollection /query in  CSV should:
         return the objects with all attributes within JSON Object tree            $e13
-                                                                                  ${section("mongodb")}
+                                                                                  ${section("mongodb", "postgresql")}
 
   """
 
