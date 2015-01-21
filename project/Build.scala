@@ -23,6 +23,7 @@ object GeolatteNoSqlBuild extends Build {
     "commons-codec" % "commons-codec" % "1.8",
     "net.sf.supercsv" % "super-csv" % "2.1.0",
     "nl.grons" %% "metrics-scala" % "3.0.4",
+    "org.parboiled" %% "parboiled" % "2.0.1",
     filters
   )
 
