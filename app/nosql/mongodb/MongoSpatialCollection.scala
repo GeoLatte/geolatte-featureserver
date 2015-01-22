@@ -1,6 +1,7 @@
 package nosql.mongodb
 
 import org.geolatte.geom.Envelope
+import querylang.BooleanExpr
 import reactivemongo.api._
 import reactivemongo.bson._
 import reactivemongo.bson.DefaultBSONHandlers._
@@ -15,7 +16,7 @@ import org.geolatte.geom.curve.{MortonContext, MortonCode}
 
 import play.Logger
 import play.api.libs.iteratee._
-import scala.util.Try
+import scala.util.{Success, Try, Failure}
 import nosql.json.GeometryReaders._
 import nosql.json.GeometryReaders
 
@@ -26,7 +27,6 @@ import config.AppExecutionContexts.streamContext
 import nosql.{InvalidQueryException, SpatialQuery, Metadata, MortonCodeQueryOptimizer}
 import play.api.libs.json.JsArray
 import play.modules.reactivemongo.json.collection.JSONCollection
-import scala.util.Failure
 
 
 object SpecialMongoProperties {
@@ -91,6 +91,12 @@ abstract class MongoSpatialCollection(collection: JSONCollection, metadata: Meta
   def mortonCode = new MortonCode(mortonContext)
 
 
+  private def render(expr : BooleanExpr) : JsObject = MongoDBQueryRenderer.render(expr) match {
+    case Success(jsvalue) if jsvalue.isInstanceOf[JsObject] => jsvalue.asInstanceOf[JsObject]
+    //TODO -- how better to handle exceptions
+    case _ => throw new IllegalArgumentException();
+  }
+
   def window2query(window: Envelope) = {
     val qds: Seq[JsValue] = optimize(window, mortonCode)
     val docArr = JsArray(qds)
@@ -99,7 +105,7 @@ abstract class MongoSpatialCollection(collection: JSONCollection, metadata: Meta
 
   def selector(sq: SpatialQuery) = {
      val windowPart = sq.windowOpt.map( window2query(_) ).getOrElse(Json.obj())
-     val query = sq.queryOpt.getOrElse(Json.obj())
+     val query = sq.queryOpt.map( render(_) ).getOrElse(Json.obj())
      query ++ windowPart
   }
 

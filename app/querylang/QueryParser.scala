@@ -2,8 +2,6 @@ package querylang
 
 
 import org.parboiled2._
-import shapeless.{HList, HNil}
-
 import scala.util.{Try, Success, Failure}
 
 /**
@@ -27,6 +25,7 @@ sealed trait ValueExpr extends Expr
 case class LiteralString(value: String) extends ValueExpr
 case class LiteralNumber(value: BigDecimal) extends ValueExpr
 case class PropertyName(value: String) extends ValueExpr
+case class LiteralBoolean(value: Boolean) extends ValueExpr with BooleanExpr
 
 sealed trait ComparisonOperator
 case object EQ extends ComparisonOperator
@@ -36,6 +35,7 @@ case object GT extends ComparisonOperator
 case object LTE extends ComparisonOperator
 case object GTE extends ComparisonOperator
 
+class QueryParserException(message: String = null) extends RuntimeException(message)
 
 class QueryParser (val input: ParserInput ) extends Parser {
 
@@ -50,15 +50,17 @@ class QueryParser (val input: ParserInput ) extends Parser {
 
   def BooleanPrim = rule { WS ~ ch('(') ~ WS ~ BooleanExpression ~ WS ~ ch(')') ~ WS | Predicate  }
 
-  def Predicate = rule { Comparison }
+  def Predicate = rule { Comparison | LiteralBool }
 
   def Comparison = rule { (WS ~ Expression ~ WS ~ ComparisonOp ~ Expression ~ WS )  ~> ComparisonPredicate }
 
   def ComparisonOp =  rule { ">=" ~ push(GTE) | "<=" ~ push(LTE) | "=" ~ push(EQ) | "!=" ~ push(NEQ) | "<" ~ push(LT) | ">" ~ push(GT)  }
 
-  def Expression = rule { Property | LiteralStr | LiteralNum }
+  def Expression = rule { LiteralBool | LiteralStr | LiteralNum | Property }
 
   private val toNum : String => LiteralNumber =  (s: String) =>  LiteralNumber( BigDecimal(s) )
+
+  def LiteralBool = rule { ( ignoreCase("true") ~ push(LiteralBoolean(true))) | ( ignoreCase("false") ~ push(LiteralBoolean(false))) }
 
   def LiteralNum = rule {  capture(Number)  ~> toNum  }
 
@@ -91,6 +93,12 @@ class QueryParser (val input: ParserInput ) extends Parser {
 object QueryParser {
   def parse(s: String) : Try[BooleanExpr] = {
     val parser = new QueryParser(s)
-    parser.InputLine.run()
+    //parse input, and in case of ParseErrors format a nice message
+    parser.InputLine.run() match {
+      case s @ Success(_) => s
+      case Failure(pe : ParseError)  => Failure(new QueryParserException(parser.formatError(pe, showExpected = true, showPosition = true)))
+      case f @ Failure(_)  => f
+    }
   }
+
 }

@@ -1,5 +1,7 @@
 package controllers
 
+import querylang.{BooleanAnd, QueryParser, BooleanExpr}
+
 import scala.language.reflectiveCalls
 import scala.language.implicitConversions
 
@@ -24,9 +26,9 @@ import play.api.libs.json.JsNumber
 import utilities.{EnumeratorUtility, QueryParam}
 import nosql.InvalidQueryException
 import play.api.libs.json.JsObject
-import com.fasterxml.jackson.core.JsonParseException
 import nosql.{Metadata, SpatialQuery, FutureInstrumented}
 
+import scala.util.{Failure, Success}
 
 
 object FeatureCollectionController extends AbstractNoSqlController with FutureInstrumented {
@@ -36,7 +38,13 @@ object FeatureCollectionController extends AbstractNoSqlController with FutureIn
   import config.ConfigurationValues._
   val COLLECTION_LIMIT = MaxReturnItems
 
+  def parse2Optional(s: String) : Option[BooleanExpr]= QueryParser.parse(s) match {
+    case Success(expr) => Some(expr)
+    case Failure(t) => throw InvalidQueryException(t.getMessage)
+  }
+
   object QueryParams {
+
     //we leave bbox as a String parameter because an Envelope needs a CrsId
     val BBOX = QueryParam("bbox", (s: String) => Some(s))
 
@@ -51,12 +59,7 @@ object FeatureCollectionController extends AbstractNoSqlController with FutureIn
       else Some(JsArray( s.split(',').toSeq.map(e => JsString(e)) ))
     )
 
-    val QUERY : QueryParam[JsObject] = QueryParam("query", (s:String) =>
-      try {
-        Json.parse(s).asOpt[JsObject]
-      } catch {
-        case e : JsonParseException => throw  InvalidQueryException(e.getMessage)
-      })
+    val QUERY : QueryParam[BooleanExpr] = QueryParam("query", parse2Optional )
 
   }
 
@@ -188,14 +191,28 @@ object FeatureCollectionController extends AbstractNoSqlController with FutureIn
       .getOrElse(Future {
       Json.obj()
     })
+
     viewDef.map(vd => vd.as(Formats.ViewDefExtract))
       .map {
       case (queryOpt, projOpt) =>
         SpatialQuery(
           windowOpt,
-          jsOptMerge(queryOpt, queryParamOpt)(_ ++ _),
+          selectorMerge(queryOpt, queryParamOpt),
           jsOptMerge(projOpt, projectionOpt)(_ ++ _))
     }
+
+  }
+
+  private def selectorMerge(viewQuery: Option[String], exprOpt : Option[BooleanExpr]) : Option[BooleanExpr] = {
+
+    val res = (viewQuery, exprOpt) match {
+      case (Some(str), Some(e)) => parse2Optional(str).map(expr => BooleanAnd(expr, e))
+      case (None, s @ Some(_)) => s
+      case (Some(str), _) => parse2Optional(str)
+      case _ => None
+    }
+    Logger.debug(s"Merging optional selectors of view and query to: $res")
+    res
   }
 
   private def jsOptMerge[J <: JsValue](elem: Option[J]*)(union: (J, J) => J): Option[J] =

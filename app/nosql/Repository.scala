@@ -6,6 +6,7 @@ import org.geolatte.geom.curve.MortonCode
 import play.api.libs.iteratee.Enumerator
 import play.api.libs.json._
 import play.api.libs.functional.syntax._
+import querylang.BooleanExpr
 
 import scala.concurrent.Future
 import scala.util.{Failure, Success}
@@ -45,7 +46,7 @@ case class MediaReader(id: String,
                        contentType: Option[String],
                        data: Array[Byte])
 
-case class SpatialQuery ( windowOpt: Option[Envelope], queryOpt: Option[JsObject], projectionOpt: Option[JsArray])
+case class SpatialQuery ( windowOpt: Option[Envelope], queryOpt: Option[BooleanExpr], projectionOpt: Option[JsArray])
 
 object SpatialQuery {
 
@@ -53,7 +54,7 @@ object SpatialQuery {
 
   def apply(window: Envelope) :SpatialQuery = apply(Some(window), None, None)
 
-  def apply(window: Envelope, query: JsObject) : SpatialQuery = apply(Some(window), Some(query), None)
+  def apply(window: Envelope, query: BooleanExpr) : SpatialQuery = apply(Some(window), Some(query), None)
 }
 
 
@@ -115,9 +116,9 @@ trait Repository {
 
   def upsert(database: String, collection: String, json: JsObject) : Future[Boolean]
 
-  def delete(database: String, collection: String, query: JsObject) : Future[Boolean]
+  def delete(database: String, collection: String, query: BooleanExpr) : Future[Boolean]
 
-  def update(database: String, collection: String, query: JsObject, updateSpec: JsObject) : Future[Int]
+  def update(database: String, collection: String, query: BooleanExpr, updateSpec: JsObject) : Future[Int]
 
   def writer(database: String, collection: String) : FeatureWriter
 

@@ -3,8 +3,9 @@ package integration
 import nosql.json.Gen
 import nosql.json.Gen._
 import play.api.libs.json._
-import play.api.http.Status._
 import org.geolatte.geom.Envelope
+
+import java.net.URLEncoder._
 
 /**
  * @author Karel Maesen, Geovise BVBA
@@ -31,8 +32,9 @@ class FeatureCollectionAPISpec extends InCollectionSpecification {
       return the objects contained within the specified bbox as a stream          $e7
       support the PROJECTION parameter                                            $e8
       support the QUERY parameter                                                 $e9
+      support the WITH-VIEW query-param                                           $e14
       BAD_REQUEST response code if the PROJECTION parameter is empty or invalid   $e10
-      BAD_REQUEST response code if the Query parameter is invalid JSON            $e11
+      BAD_REQUEST response code if the Query parameter is an invalid expression   $e11
 
      General:
        Query parameters should be case insensitive                                $e12
@@ -41,7 +43,6 @@ class FeatureCollectionAPISpec extends InCollectionSpecification {
      The FeatureCollection /query in  CSV should:
         return the objects with all attributes within JSON Object tree            $e13
                                                                                   ${section("mongodb", "postgresql")}
-
   """
 
   //import default values
@@ -124,18 +125,37 @@ class FeatureCollectionAPISpec extends InCollectionSpecification {
       val filteredFeatures = JsArray(
         featuresIn01.value.filter( jsv => jsv.asOpt(picksFoo) == Some(JsString("bar1")))
       )
-      val queryObj = Json.obj("properties.foo" -> "bar1")
-      getQuery(testDbName, testColName, Map("bbox" -> bbox, "query" -> queryObj))(contentAsJsonStream) applyMatcher {
+      val queryObj = "properties.foo='bar1'"
+      getQuery(testDbName, testColName, Map("bbox" -> bbox, "query" -> encode(queryObj, "UTF-8")))(contentAsJsonStream) applyMatcher {
         res => res.responseBody must beSomeFeatures(filteredFeatures)
       }
     }
   }
 
+  def e14 = withTestFeatures(100, 200) {
+    val projection = "properties.foo,properties.num"
+    val jsInViewDef = Json.obj("query" -> JsString("properties.foo = 'bar1'"), "projection" -> Json.arr("properties.foo", "properties.num"))
+    loadView(testDbName, testColName, "view-1", jsInViewDef)
+
+
+    (bbox: String, featuresIn01: JsArray) => {
+      val picksFoo = (__ \ "properties" \ "foo").json.pick
+      val filteredFeatures = JsArray(
+        featuresIn01.value.filter(jsv => jsv.asOpt(picksFoo) == Some(JsString("bar1")))
+      )
+      val projected = project(filteredFeatures)
+      getQuery(testDbName, testColName, Map("bbox" -> bbox, "with-view" -> "view-1"))(contentAsJsonStream) applyMatcher {
+        res => res.responseBody must beSomeFeatures(projected)
+      }
+    }
+  }
+
+
   def e10 = getQuery(testDbName, testColName, Map("projection" -> ""))(contentAsJsonStream).applyMatcher {
     _.status must equalTo(BAD_REQUEST)
   }
 
-  def e11 = getQuery(testDbName, testColName, Map("query" -> """{"foo": 1"""))(contentAsJsonStream).applyMatcher {
+  def e11 = getQuery(testDbName, testColName, Map("query" -> """ (foo = 1 """))(contentAsJsonStream).applyMatcher {
     _.status must equalTo(BAD_REQUEST)
   }
 

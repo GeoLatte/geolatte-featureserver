@@ -2,16 +2,16 @@ package controllers
 
 import play.api.mvc._
 import config.AppExecutionContexts
+import querylang.{QueryParser, BooleanExpr}
 import scala.concurrent.Future
 import play.api.libs.json._
 import play.api.libs.functional.syntax._
 
+import scala.reflect.ClassTag
 import scala.util.{Failure, Success, Try}
 import nosql.mongodb.ReactiveGeoJson._
 import nosql.InvalidParamsException
-import nosql.mongodb.{ReactiveGeoJson, MongoWriter}
-import nosql.mongodb.MongoDBRepository._
-import reactivemongo.bson.BSONInteger
+import nosql.mongodb.ReactiveGeoJson
 
 //TODO -- this should use repository, rather than directly perform updates
 
@@ -32,14 +32,18 @@ object TxController extends AbstractNoSqlController {
     }
   }
 
+  private def parse( js : JsValue) : Try[BooleanExpr] = js match {
+    case JsString(s)  => QueryParser.parse(s)
+    case _ => Failure(new RuntimeException("Query expression is not a string"))
+  }
 
   def remove(db: String, col: String) = repositoryAction{
     implicit request  => {
-      extract(request.body.asJson, "query") match {
+      extract[JsString](request.body.asJson, "query") flatMap ( parse(_) ) match {
         case Success(q) => repository.delete(db, col, q)
           .map( _ => Ok("Objects removed"))
           .recover(commonExceptionHandler(db))
-        case Failure(e) =>  Future.successful(BadRequest(s"Invalid parameters: ${e.getMessage}"))
+        case Failure(e) =>  Future.successful(BadRequest(s"Invalid parameters: ${e.getMessage()} "))
       }
     }
   }
@@ -47,8 +51,8 @@ object TxController extends AbstractNoSqlController {
 
   def update(db: String, col: String) = repositoryAction {
     implicit request => {
-      val tq = extract(request.body.asJson, "query")
-      val td = extract(request.body.asJson, "update")
+      val tq = extract[JsString](request.body.asJson, "query").flatMap( parse(_) )
+      val td = extract[JsObject](request.body.asJson, "update")
       (tq,td) match {
         case (Success(q),Success(d)) =>
           repository
@@ -70,13 +74,13 @@ object TxController extends AbstractNoSqlController {
       }
   }
 
-  private def extract(in : Option[JsValue], key: String) : Try[JsObject] =
+  private def extract[T <: JsValue : ClassTag ](in : Option[JsValue], key: String) : Try[T] =
     Try {
       in.map {
         js => js \ key
       } match {
-        case Some(v: JsObject) => v
-        case _ => throw new InvalidParamsException(s"Request body isn't a Json with an object-valued $key property")
+        case Some(v: T) => v
+        case _ => throw new InvalidParamsException(s"Request body isn't a Json with an  $key property of correct type")
       }
     }
 

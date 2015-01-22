@@ -34,11 +34,11 @@ class ViewDefsAPISpec extends InCollectionSpecification {
   import RestApiDriver._
 
   val viewName = "view-1"
-  val jsInViewDef = Json.obj("query" -> Json.obj("id" -> 1), "projection" -> Json.arr("foo", "bar"))
-  val jsInViewDef2 = Json.obj("query" -> Json.obj("id" -> 2), "projection" -> Json.arr("foo", "bar"))
-  val InViewDefNoProjection = Json.obj( "query" -> Json.obj("foo" -> "bar") )
-  val jsOutViewDef = Json.obj("name" -> viewName, "query" -> Json.obj("id" -> 1), "projection" -> Json.arr("foo", "bar"))
-  val jsOutViewDef2 = Json.obj("name" -> viewName, "query" -> Json.obj("id" -> 2), "projection" -> Json.arr("foo", "bar"))
+  val jsInViewDef = Json.obj("query" -> JsString("id = 1"), "projection" -> Json.arr("foo", "bar"))
+  val jsInViewDef2 = Json.obj("query" -> JsString("id = 2"), "projection" -> Json.arr("foo", "bar"))
+  val InViewDefNoProjection = Json.obj( "query" -> JsString("foo = 'bar'") )
+  val jsOutViewDef = Json.obj("name" -> viewName, "query" -> JsString("id = 1"), "projection" -> Json.arr("foo", "bar"))
+  val jsOutViewDef2 = Json.obj("name" -> viewName, "query" -> JsString("id = 2"), "projection" -> Json.arr("foo", "bar"))
   val OutViewDefNoProjection = InViewDefNoProjection ++ Json.obj("name" -> "view-2", "projection" -> Json.arr())
 
   def e1 = putView(testDbName, "NonExistingCollection", viewName, jsInViewDef) applyMatcher( _.status must equalTo(NOT_FOUND))

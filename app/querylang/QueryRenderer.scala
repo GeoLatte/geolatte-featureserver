@@ -27,11 +27,16 @@ trait RenderDelegate[T] {
 
   def renderPropertyName(p: String) : Try[T]
 
+  def renderBooleanLiteral(b: Boolean): Try[T]
+
+  def renderBooleanValueExpression(b: Boolean) : Try[T]
+
   def renderComparisonOp(op: ComparisonOperator) : Try[T]
 
   protected def sequence(left : Try[T], right: Try[T]) : Try[(T,T)] = (left, right) match {
     case (Success(l), Success(r)) => Success((l,r))
     case ( Failure(t1), _ ) => Failure(t1)
+    case ( _ , Failure(t2)) => Failure(t2)
    }
 
 }
@@ -43,12 +48,14 @@ class QueryRenderer[T](delegate: RenderDelegate[T]) {
     case BooleanOr(lhs, rhs) => delegate.renderOr(render(lhs), render(rhs))
     case BooleanAnd(rhs, lhs) => delegate.renderAnd(render(rhs), render(lhs))
     case BooleanNot(inner) => delegate.renderNeg(render(inner))
+    case LiteralBoolean(inner) => delegate.renderBooleanValueExpression(inner)
   }
 
   def renderValue(valExpr: ValueExpr) : Try[T] = valExpr match {
     case LiteralString(s) => delegate.renderLiteralString(s)
     case LiteralNumber(n) => delegate.renderLiteralNumber(n)
     case PropertyName(p) => delegate.renderPropertyName(p)
+    case LiteralBoolean(b) => delegate.renderBooleanLiteral(b)
     case _ => Failure(new IllegalArgumentException(s"Not supported expression ${valExpr.toString}"))
   }
 

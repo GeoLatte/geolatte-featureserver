@@ -30,9 +30,11 @@ class TransactionAPISpec  extends InCollectionSpecification {
         return OK when the collection exists, and data is valid                   $e5
         metadata query returns the inserted number of objects                     $e6
 
-     The transactions /delete should:
+     The transaction /delete should:
         deleting an element and return status DELETED                             $e7
 
+      The transaction /delete should:
+        return status code BAD_REQUEST when query is malformed                $e8
                                                                                   ${section("mongodb", "postgresql")}
 
   """
@@ -102,5 +104,17 @@ class TransactionAPISpec  extends InCollectionSpecification {
   def e6 = pending
 
   def e7 = pending
+
+  def e8 = {
+    removeData(testDbName, testColName)
+    val fs = featureArray(size=100).sample.get
+    val data = fs.value map (j => Json.stringify(j)) mkString ConfigurationValues.jsonSeparator getBytes ("UTF-8")
+    val res1 = postRemove(testDbName, testColName, Json.obj("query" -> "bla = ('we "))
+
+    res1.applyMatcher { res =>
+      (res.status must equalTo(BAD_REQUEST))
+    }
+
+  }
 
 }

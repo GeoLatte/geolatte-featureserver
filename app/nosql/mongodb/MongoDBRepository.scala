@@ -2,6 +2,7 @@ package nosql.mongodb
 
 import org.geolatte.geom.Envelope
 import play.api.Logger
+import querylang.BooleanExpr
 import reactivemongo.api.gridfs.{DefaultFileToSave, GridFS}
 import reactivemongo.core.commands._
 import play.api.libs.iteratee._
@@ -71,6 +72,14 @@ object MongoDBRepository extends nosql.Repository with FutureInstrumented {
     name.endsWith(".files") ||
     name.endsWith(".chunks") ||
     name.endsWith(".views")
+
+  private def expr2JsObject(expr: BooleanExpr) : JsObject = {
+    MongoDBQueryRenderer.render(expr) match {
+      case Success(js) if js.isInstanceOf[JsObject] => js.asInstanceOf[JsObject]
+      case _ => throw new IllegalStateException("Boolean expression can't be rendered to a JSON-object")
+    }
+  }
+
 
   def createDb(dbname: String) = {
 
@@ -370,18 +379,18 @@ object MongoDBRepository extends nosql.Repository with FutureInstrumented {
 
   override def writer(database: String, collection: String): FeatureWriter = new MongoWriter(database, collection)
 
-  override def delete(database: String, collection: String, query: JsObject): Future[Boolean] =
+  override def delete(database: String, collection: String, query: BooleanExpr): Future[Boolean] =
     getCollectionInfo(database, collection)
       .flatMap {
-      case (coll, _, _) => coll.remove(query, awaitJournalCommit)
+      case (coll, _, _) => coll.remove(expr2JsObject(query), awaitJournalCommit)
     }.map(le => true)
 
-  override def update(database: String, collection: String, query: JsObject, updateSpec: JsObject): Future[Int] = {
+  override def update(database: String, collection: String, query: BooleanExpr, updateSpec: JsObject): Future[Int] = {
     getCollectionInfo(database, collection)
       .flatMap {
       case (coll, metadata, reads) => {
         val updateDoc = getUpdateDoc(reads, updateSpec)
-        coll.update(query, updateDoc, awaitJournalCommit, upsert = false, multi = true)
+        coll.update(expr2JsObject(query), updateDoc, awaitJournalCommit, upsert = false, multi = true)
       }
     }.map(le => le.updated)
 

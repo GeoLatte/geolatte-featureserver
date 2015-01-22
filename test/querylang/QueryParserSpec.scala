@@ -95,6 +95,25 @@ class QueryParserSpec extends Specification {
         )
     }
 
+    "handle boolean literal values in expression" in {
+      (
+        querylang.QueryParser.parse(" not (var =  true)") must beSuccessfulTry.withValue(
+          BooleanNot(ComparisonPredicate(PropertyName("var"), EQ, LiteralBoolean(true))))
+        ) and (
+        querylang.QueryParser.parse(" not var =  false") must beSuccessfulTry.withValue(
+          BooleanNot(ComparisonPredicate(PropertyName("var"), EQ, LiteralBoolean(false))))
+        )
+    }
+
+    "treat a boolean literal as a valid expression" in {
+      (
+        querylang.QueryParser.parse("true") must beSuccessfulTry.withValue(
+          LiteralBoolean(true))
+        ) and (
+        querylang.QueryParser.parse(" not (false)") must beSuccessfulTry.withValue(
+          BooleanNot(LiteralBoolean(false)))
+        )
+    }
 
   }
 

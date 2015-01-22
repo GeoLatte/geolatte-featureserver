@@ -12,9 +12,11 @@ import org.geolatte.geom.codec.{Wkt, Wkb}
 import org.geolatte.geom.{Polygon, Envelope}
 import play.api.Logger
 import play.api.libs.iteratee.{Iteratee, Enumerator}
+import querylang.{QueryParser, BooleanExpr}
 import utilities.JsonHelper
 
 import scala.concurrent.Future
+import scala.util.{Failure, Success}
 
 /**
  * A NoSQL feature store repository for Postgresql/Postgis
@@ -36,15 +38,9 @@ object PostgresqlRepository extends Repository {
   private def single_quote(str: String) : String = "'" + str + "'"
 
 
-  private def parseSelector(optJs : Option[JsObject]) = optJs match {
-    //TODO -- this handles only equality conditions
-    case Some(js) => js.fieldSet.map {
-      case (f,JsNumber(v)) => s"$f = $v"
-      case (f, JsString(v)) => s"$f = ${single_quote(v)}"
-      case (f,JsBoolean(v)) => s"$f = $v"
-      case _ => s"TRUE"
-    }.mkString(" AND ")
-    case None => "TRUE"
+  private def parseSelector(expression : Option[BooleanExpr]) = expression match {
+    //TODO -- this is just a placeholder
+    case __ => "TRUE"
   }
 
   //These are the SQL statements for managing and retrieving data
@@ -95,7 +91,7 @@ object PostgresqlRepository extends Repository {
     def UPDATE_DATA(db: String, col: String) : String = {
       s"""UPDATE ${quote(db)}.${quote(col)}
          |SET json = ?, geometry = ?
-         |WHERE ID = ?
+         |WHERE ?
        """.stripMargin
     }
 
@@ -429,7 +425,7 @@ object PostgresqlRepository extends Repository {
     }
   }
 
-  override def delete(database: String, collection: String, query: JsObject): Future[Boolean] =
+  override def delete(database: String, collection: String, query: BooleanExpr): Future[Boolean] =
     pool.sendQuery(Sql.DELETE_DATA(database, collection))
       .map(_ => true)
       .recover {
@@ -444,32 +440,34 @@ object PostgresqlRepository extends Repository {
         insert(database, collection, json, json.as[Polygon](evr))
     }
 
-  def update(database: String, collection: String, id: Int, newValue: JsObject, envelope: Polygon) : Future[Int] =
-    pool.sendPreparedStatement( Sql.UPDATE_DATA(database, collection), Array(newValue, Wkb.toWkb(envelope), id))
+  def update(database: String, collection: String, query: BooleanExpr, newValue: JsObject, envelope: Polygon) : Future[Int] =
+    pool.sendPreparedStatement( Sql.UPDATE_DATA(database, collection), Array(newValue, Wkb.toWkb(envelope), ""))
       .map { res =>
         res.rowsAffected.toInt
     }
 
-  override def update(database: String, collection: String, query: JsObject, updateSpec: JsObject): Future[Int] =
+  override def update(database: String, collection: String, query: BooleanExpr, updateSpec: JsObject): Future[Int] =
     metadata(database, collection)
       .map { md => FeatureTransformers.envelopeTransformer(md.envelope)
     }.flatMap { implicit evr => {
         val ne = updateSpec.as[Polygon]
-        val id = (query \ "id").as[Int]
-        update(database, collection, id, updateSpec, ne)
+        update(database, collection, query, updateSpec, ne)
       }
     }
 
   override def upsert(database: String, collection: String, json: JsObject): Future[Boolean] = {
-    val idq = Json.obj("id" -> (json \ "id").as[Int])
-    val q = new SpatialQuery(None, Some(idq), None)
+    val idq = s" id = ${(json \ "id").as[Int]}"
+
+    val expr = QueryParser.parse(idq).get
+    val q = new SpatialQuery(None, Some(expr), None)
+
     query(database, collection,q)
       .flatMap{ case ( _, e)  =>
       e(Iteratee.head[JsObject])
     }.flatMap{ i =>
       i.run
     }.flatMap{
-        case Some(v) => update(database, collection, idq, json).map( _ => true)
+        case Some(v) => update(database, collection, expr, json).map( _ => true)
         case _ => insert(database, collection, json)
       }
   }

@@ -14,15 +14,12 @@ import org.geolatte.geom.crs.CrsId
 import scala.concurrent.{Await, Future}
 import scala.concurrent.duration._
 import play.api.http.{HttpProtocol, Status, HeaderNames, Writeable}
-import org.specs2._
 import org.specs2.matcher._
 import config.ConfigurationValues
 import org.geolatte.geom.curve.{MortonContext, MortonCode}
 import scala.collection.mutable.ListBuffer
 import akka.util.Timeout
 import play.api.libs.iteratee.Iteratee
-
-
 
 /**
  * Test Helper for Requests.
@@ -50,6 +47,9 @@ case class FakeRequestResult[B, T, R]( url: String,
       case None => throw new RuntimeException("Route failed to execute for req: " + req)
     }
   }
+  /**
+   * Calling status on a FakeRequest forces a wait for the result.
+   */
   val status: Int = play.api.test.Helpers.status(wrappedResult)
 
   val responseBody = format.map(f => f(wrappedResult))
@@ -155,7 +155,7 @@ object RestApiDriver {
   }
 
   def getQuery[T : TypeTag](dbName: String, colName: String, queryStr: String)(format : Future[SimpleResult] => T) = {
-    Logger.info("Start Collection Query")
+    Logger.info("Start Collection Query with QUERY parameter: " + queryStr)
     val url = DATABASES / dbName / colName / QUERY ? queryStr
     FakeRequestResult.GET(url, format)
   }
@@ -175,6 +175,12 @@ object RestApiDriver {
   def postUpdate(dbName: String, colName: String, reqBody: JsObject) = {
     Logger.info("START UPDATE COLLECTION")
     val url = DATABASES / dbName / colName / TX / UPSERT
+    FakeRequestResult.POSTJson(url, reqBody, contentAsJson)
+  }
+
+  def postRemove(db: String, col: String, reqBody: JsObject) = {
+    Logger.info(s"START REMOVING DATA WITH REQUEST ${Json.stringify(reqBody)}" )
+    val url = DATABASES / db / col / TX / REMOVE
     FakeRequestResult.POSTJson(url, reqBody, contentAsJson)
   }
 
@@ -226,13 +232,20 @@ object RestApiDriver {
     val url = DATABASES / db / col / TX / INSERT
     val res = FakeRequestResult.POSTRaw(url, data, contentAsJson)
     Logger.info("LOADED TEST DATA")
+    Logger.info("LOader status " + res.status)
     res
+  }
+
+  def loadView(dbName: String, colName: String, viewName: String, body: JsObject) = {
+    Logger.info("START LOADING TEST VIEW " + viewName)
+    val url = DATABASES / dbName / colName / VIEWS / viewName
+    FakeRequestResult.PUT(url, Some(body)).status
   }
 
   def removeData(db: String, col: String) = {
     Logger.info("START REMOVING TEST DATA")
     val url = DATABASES / db / col / TX / REMOVE
-    FakeRequestResult.POSTJson(url, Json.obj("query" -> Json.obj()), res => JsNull)
+    FakeRequestResult.POSTJson(url, Json.obj("query" -> "TRUE"), res => JsNull)
     Logger.info("REMOVED TEST DATA")
   }
 
@@ -293,13 +306,14 @@ with FutureAwaits {
 
   def makeDeleteRequest(url: String, body: Option[JsValue] = None) = FakeRequest(DELETE, url)
 
+  //when formatting the resonsebody for purposes of interpreting response bodies in test, we
+  // transform pure text strings into JsString objects.
   private def parseJson(responseText: String): JsValue =
     try {
       Json.parse(responseText)
     } catch {
       case ex: Throwable => {
-        if (!responseText.isEmpty) Logger.warn(s"Error on parsing text: $responseText \nError-message is: ${ex.getMessage}")
-        JsNull
+        JsString(responseText)
       }
     }
 

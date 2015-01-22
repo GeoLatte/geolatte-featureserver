@@ -19,6 +19,17 @@ class MongoDBQueryRendererSpec extends Specification {
         renderer.render(expr) must beSuccessfulTry.withValue(Json.obj("ab.cd" -> 12 ))
     }
 
+    "properly render comparison expressions contain boolean literal" in {
+      val expr = QueryParser.parse("ab.cd = TRUE").get
+      renderer.render(expr) must beSuccessfulTry.withValue(Json.obj("ab.cd" -> true))
+    }
+
+    "properly render simple equality expression " in {
+      val expr = QueryParser.parse("properties.foo = 'bar1'").get
+      renderer.render(expr) must beSuccessfulTry.withValue(Json.obj("properties.foo" -> "bar1"))
+    }
+
+
     "properly render boolean expressions containing comparison expresssions other than equality " in {
 
       val expr1 = QueryParser.parse("ab.cd > 12").get
@@ -53,6 +64,10 @@ class MongoDBQueryRendererSpec extends Specification {
       )
     }
 
+    "properly render a boolean literal as a boolean expression" in {
+      val expr = QueryParser.parse("TRUE").get
+      renderer.render(expr) must beSuccessfulTry.withValue(Json.obj())
+    }
 
   }
 

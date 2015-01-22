@@ -119,30 +119,30 @@ object Formats {
     )(unlift(MediaReader.unapply))
 
   // View Defs
-  def escape(key: String) = key.replace(".", "/" )
-  def unescape(key: String) = key.replace("/", ".")
-
-  def viewDefkeysReads(f: String => String) : Reads[JsObject]  =  __.read[JsObject].map( js => js.value.map{
-     case (k, v : JsObject) => (f(k), v.as(viewDefkeysReads(f)))
-     case (k,v : JsValue) => (f(k),v)
-   }).map(m => JsObject(m.toSeq))
+//  def escape(key: String) = key.replace(".", "/" )
+//  def unescape(key: String) = key.replace("/", ".")
+//
+//  def viewDefkeysReads(f: String => String) : Reads[JsObject]  =  __.read[JsObject].map( js => js.value.map{
+//     case (k, v : JsObject) => (f(k), v.as(viewDefkeysReads(f)))
+//     case (k,v : JsValue) => (f(k),v)
+//   }).map(m => JsObject(m.toSeq))
 
   val projection : Reads[JsArray] = (__ \ "projection").readNullable[JsArray].map(js=> js.getOrElse(Json.arr()))
 
   val ViewDefIn  = (
-          ( __ \ 'query).json.pickBranch(viewDefkeysReads(escape)) and
+          ( __ \ 'query).json.pickBranch(of[JsString]) and
           ( __ \ 'projection).json.copyFrom( projection  )
         ).reduce
 
   def ViewDefOut(db: String, col: String)  = (
       ( __ \ 'name).json.pickBranch(of[JsString]) and
-      ( __ \ 'query).json.pickBranch(viewDefkeysReads(unescape)) and
+      ( __ \ 'query).json.pickBranch(of[JsString]) and
       ( __ \ 'projection).json.pickBranch(of[JsArray]) and
       ( __ \ 'url).json.copyFrom( ( __ \ 'name).json.pick.map( name => JsString(controllers.routes.ViewController.get(db, col, name.as[String]).url) ) )
     ).reduce
 
   val ViewDefExtract = (
-     ( __ \ "query").readNullable(viewDefkeysReads(unescape)) and
+     ( __ \ "query").readNullable[String] and
      ( __ \ "projection").readNullable[JsArray]
     ).tupled
 

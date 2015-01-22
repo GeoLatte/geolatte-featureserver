@@ -64,6 +64,10 @@ object MongoDBRenderDelegate extends RenderDelegate[JsValue] {
     case(l,r) => Json.obj("$and" -> Json.arr(l,r))
   }
 
+  override def renderBooleanLiteral(b: Boolean): Try[JsValue] = Success(JsBoolean(b))
+
+  override def renderBooleanValueExpression(b: Boolean): Try[JsValue] = Success(Json.obj())
+
 }
 
 object MongoDBQueryRenderer extends QueryRenderer[JsValue](MongoDBRenderDelegate)
