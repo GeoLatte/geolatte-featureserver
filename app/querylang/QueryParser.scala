@@ -64,14 +64,10 @@ class QueryParser (val input: ParserInput ) extends Parser {
 
   def LiteralStr = rule {  ch(''') ~ (capture(zeroOrMore(CharPredicate.AlphaNum)) ~> LiteralString ) ~ ch(''') }
 
-    def Property = rule { capture(NameString)  ~> PropertyName ~ WS}
+  def Property = rule { capture(NameString)  ~> PropertyName ~ WS}
 
 
   //basic tokens
-
-
-//  def QuotedString = rule {  }
-
   def NameString = rule { !( ch(''') | ch('"') ) ~ FirstNameChar ~ zeroOrMore(nonFirstNameChar) }
 
   def FirstNameChar = rule { CharPredicate.Alpha | ch('_') }
@@ -93,16 +89,8 @@ class QueryParser (val input: ParserInput ) extends Parser {
 
 
 object QueryParser {
-
-  def parse(s: String) : BooleanExpr = {
-
+  def parse(s: String) : Try[BooleanExpr] = {
     val parser = new QueryParser(s)
-
-    parser.InputLine.run() match {
-      case Failure(pe: ParseError) => { println(parser.formatError(pe, showTraces = true) ); throw pe}
-      case Success(res) => res
-      case Failure(t) => throw t
-    }
+    parser.InputLine.run()
   }
-
 }

@@ -11,27 +11,34 @@ class QueryParserSpec extends Specification {
 
 
     "parse equality expressions correctly " in {
-      querylang.QueryParser.parse("var =  '123' ") mustEqual ComparisonPredicate(PropertyName("var"), EQ, LiteralString("123"))
+      querylang.QueryParser.parse("var =  '123' ") must beSuccessfulTry.withValue(
+        ComparisonPredicate(PropertyName("var"), EQ, LiteralString("123")))
     }
 
     "parse greater or equals expressions correctly " in {
-      querylang.QueryParser.parse("var >=  '123' ") mustEqual ComparisonPredicate(PropertyName("var"), GTE, LiteralString("123"))
+      querylang.QueryParser.parse("var >=  '123' ") must beSuccessfulTry.withValue(
+        ComparisonPredicate(PropertyName("var"), GTE, LiteralString("123")))
     }
 
     "handle parentesis properly" in {
-      querylang.QueryParser.parse("( var =  '123' )") mustEqual ComparisonPredicate(PropertyName("var"), EQ, LiteralString("123"))
+      querylang.QueryParser.parse("( var =  '123' )") must beSuccessfulTry.withValue(
+        ComparisonPredicate(PropertyName("var"), EQ, LiteralString("123")))
     }
 
     "Interpret literal numbers  properly" in {
 
       (
-        querylang.QueryParser.parse(" var =  -123 ") mustEqual ComparisonPredicate(PropertyName("var"), EQ, LiteralNumber(BigDecimal(-123)))
+        querylang.QueryParser.parse(" var =  -123 ") must beSuccessfulTry.withValue(
+          ComparisonPredicate(PropertyName("var"), EQ, LiteralNumber(BigDecimal(-123))))
         ) and (
-        querylang.QueryParser.parse("var =  123.54") mustEqual ComparisonPredicate(PropertyName("var"), EQ, LiteralNumber(BigDecimal(123.54)))
+        querylang.QueryParser.parse("var =  123.54") must beSuccessfulTry.withValue(
+          ComparisonPredicate(PropertyName("var"), EQ, LiteralNumber(BigDecimal(123.54))))
         ) and (
-        querylang.QueryParser.parse(" var =  123.54E3 ") mustEqual ComparisonPredicate(PropertyName("var"), EQ, LiteralNumber(BigDecimal(123.54E3)))
+        querylang.QueryParser.parse(" var =  123.54E3 ") must beSuccessfulTry.withValue(
+          ComparisonPredicate(PropertyName("var"), EQ, LiteralNumber(BigDecimal(123.54E3))))
         ) and (
-        querylang.QueryParser.parse(" var =  123.54E-3") mustEqual ComparisonPredicate(PropertyName("var"), EQ, LiteralNumber(BigDecimal(123.54E-3)))
+        querylang.QueryParser.parse(" var =  123.54E-3") must beSuccessfulTry.withValue(
+          ComparisonPredicate(PropertyName("var"), EQ, LiteralNumber(BigDecimal(123.54E-3))))
         )
 
     }
@@ -39,9 +46,11 @@ class QueryParserSpec extends Specification {
     "handle negations properly" in {
 
       (
-        querylang.QueryParser.parse(" not (var =  '123')") mustEqual BooleanNot(ComparisonPredicate(PropertyName("var"), EQ, LiteralString("123")))
+        querylang.QueryParser.parse(" not (var =  '123')") must beSuccessfulTry.withValue(
+          BooleanNot(ComparisonPredicate(PropertyName("var"), EQ, LiteralString("123"))))
         ) and (
-        querylang.QueryParser.parse(" not var =  '123'") mustEqual BooleanNot(ComparisonPredicate(PropertyName("var"), EQ, LiteralString("123")))
+        querylang.QueryParser.parse(" not var =  '123'") must beSuccessfulTry.withValue(
+          BooleanNot(ComparisonPredicate(PropertyName("var"), EQ, LiteralString("123"))))
         )
 
     }
@@ -50,36 +59,39 @@ class QueryParserSpec extends Specification {
     "handle AND combinator properly" in {
 
       (
-        querylang.QueryParser.parse("(vara > 12) and not (varb =  '123')") mustEqual BooleanAnd(ComparisonPredicate(
+        querylang.QueryParser.parse("(vara > 12) and not (varb =  '123')") must beSuccessfulTry.withValue(BooleanAnd(ComparisonPredicate(
           PropertyName("vara"), GT, LiteralNumber(BigDecimal(12))), BooleanNot(
-          ComparisonPredicate(PropertyName("varb"), EQ, LiteralString("123"))))
+          ComparisonPredicate(PropertyName("varb"), EQ, LiteralString("123")))))
         ) and (
-        querylang.QueryParser.parse("vara > 12 and varb =  '123'") mustEqual BooleanAnd(ComparisonPredicate(
+        querylang.QueryParser.parse("vara > 12 and varb =  '123'") must beSuccessfulTry.withValue( BooleanAnd(ComparisonPredicate(
           PropertyName("vara"), GT, LiteralNumber(BigDecimal(12))), ComparisonPredicate(
-          PropertyName("varb"), EQ, LiteralString("123")))
+          PropertyName("varb"), EQ, LiteralString("123"))))
         ) and (
-        querylang.QueryParser.parse("vara > 12 AND varb =  '123'") mustEqual BooleanAnd(ComparisonPredicate(
+        querylang.QueryParser.parse("vara > 12 AND varb =  '123'") must beSuccessfulTry.withValue( BooleanAnd(ComparisonPredicate(
           PropertyName("vara"), GT, LiteralNumber(BigDecimal(12))), ComparisonPredicate(
-          PropertyName("varb"), EQ, LiteralString("123")))
+          PropertyName("varb"), EQ, LiteralString("123"))))
         )
 
     }
 
     "handle OR combinator properly" in {
       (
-        querylang.QueryParser.parse("(vara > 12) or not (varb =  '123')") mustEqual BooleanOr(
+        querylang.QueryParser.parse("(vara > 12) or not (varb =  '123')") must beSuccessfulTry.withValue(
+          BooleanOr(
           ComparisonPredicate(PropertyName("vara"), GT, LiteralNumber(BigDecimal(12))),
-          BooleanNot(ComparisonPredicate(PropertyName("varb"), EQ, LiteralString("123"))))
+          BooleanNot(ComparisonPredicate(PropertyName("varb"), EQ, LiteralString("123")))))
         ) and (
-        querylang.QueryParser.parse("vara > 12 or varb =  '123'") mustEqual BooleanOr(
+        querylang.QueryParser.parse("vara > 12 or varb =  '123'") must beSuccessfulTry.withValue(
+          BooleanOr(
           ComparisonPredicate(PropertyName("vara"), GT, LiteralNumber(BigDecimal(12))),
-          ComparisonPredicate(PropertyName("varb"), EQ, LiteralString("123")))
+          ComparisonPredicate(PropertyName("varb"), EQ, LiteralString("123"))))
         ) and (
-        querylang.QueryParser.parse("vara > 12 or ( varb =  '123' and varc = 'abc' ) ") mustEqual BooleanOr(
+        querylang.QueryParser.parse("vara > 12 or ( varb =  '123' and varc = 'abc' ) ") must beSuccessfulTry.withValue(
+          BooleanOr(
           ComparisonPredicate(PropertyName("vara"),GT,LiteralNumber(BigDecimal(12))),
           BooleanAnd(
             ComparisonPredicate(PropertyName("varb"),EQ,LiteralString("123")),
-            ComparisonPredicate(PropertyName("varc"),EQ,LiteralString("abc"))))
+            ComparisonPredicate(PropertyName("varc"),EQ,LiteralString("abc")))))
         )
     }
 
