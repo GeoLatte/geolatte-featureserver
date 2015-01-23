@@ -72,6 +72,7 @@ object ViewController extends AbstractNoSqlController {
   }
 
   private def format(db: String, col: String)(viewDef: JsObject): JsObject = {
+    Logger.debug("RECEIVED: " + viewDef)
     val outFormat = ViewDefOut(db, col)
     viewDef.validate(outFormat) match {
       case JsSuccess(out, _) => out

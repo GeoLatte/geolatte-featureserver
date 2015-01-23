@@ -18,15 +18,16 @@ class ViewDefsAPISpec extends InCollectionSpecification {
 
   def is = s2"""
 
-     The ViewDefs /put should:                                                    ${section("mongodb")}
+     The ViewDefs /put should:                                                    ${section("mongodb","postgresql")}
        Return 404 when the collection does not exist                              $e1
        Return CREATED when the view did not yet exist                             $e2
         and create the view                                                       $e3
         and response has a LOCATION header                                        $e4
+
        Return OK when the view already existed                                    $e5
         and replace the view                                                      $e6
        Allow empty projection parameters                                          $e7 
-                                                                                  ${section("mongodb")}
+                                                                                  ${section("mongodb","postgresql")}
   """
 
   //import default values

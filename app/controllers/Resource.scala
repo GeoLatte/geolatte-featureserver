@@ -118,15 +118,6 @@ object Formats {
       (__ \ "data").write[String].contramap[Array[Byte]]( ar => Base64.encodeBase64String(ar))
     )(unlift(MediaReader.unapply))
 
-  // View Defs
-//  def escape(key: String) = key.replace(".", "/" )
-//  def unescape(key: String) = key.replace("/", ".")
-//
-//  def viewDefkeysReads(f: String => String) : Reads[JsObject]  =  __.read[JsObject].map( js => js.value.map{
-//     case (k, v : JsObject) => (f(k), v.as(viewDefkeysReads(f)))
-//     case (k,v : JsValue) => (f(k),v)
-//   }).map(m => JsObject(m.toSeq))
-
   val projection : Reads[JsArray] = (__ \ "projection").readNullable[JsArray].map(js=> js.getOrElse(Json.arr()))
 
   val ViewDefIn  = (

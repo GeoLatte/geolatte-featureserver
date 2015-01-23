@@ -6,6 +6,7 @@ import com.github.mauricio.async.db.postgresql.exceptions.GenericDatabaseExcepti
 import com.github.mauricio.async.db.postgresql.pool.PostgreSQLConnectionFactory
 import com.github.mauricio.async.db.postgresql.util.URLParser
 import config.{AppExecutionContexts, ConfigurationValues}
+import controllers.Formats
 import nosql._
 import nosql.json.GeometryReaders
 import org.geolatte.geom.codec.{Wkt, Wkb}
@@ -16,7 +17,6 @@ import querylang.{QueryParser, BooleanExpr}
 import utilities.JsonHelper
 
 import scala.concurrent.Future
-import scala.util.{Failure, Success}
 
 /**
  * A NoSQL feature store repository for Postgresql/Postgis
@@ -36,6 +36,8 @@ object PostgresqlRepository extends Repository {
   // alternative is to use escapeSql in the org.apache.commons.lang.StringEscapeUtils
   private def quote(str: String) : String = "\"" + str + "\""
   private def single_quote(str: String) : String = "'" + str + "'"
+  private def unescapeJson(js: JsObject):String =
+    Json.stringify(js).replaceAll("'", "''")
 
   //These are the SQL statements for managing and retrieving data
   object Sql {
@@ -73,7 +75,7 @@ object PostgresqlRepository extends Repository {
       }
 
       s"""
-       |SELECT ID, json
+       |SELECT json, ID
        |FROM ${quote(db)}.${quote(col)}
        |WHERE $cond
        |ORDER BY ID
@@ -104,6 +106,17 @@ object PostgresqlRepository extends Repository {
           | $CollectionField VARCHAR(255) PRIMARY KEY
           | )
        """.stripMargin
+    
+    def CREATE_VIEW_TABLE_IN(dbname: String) =
+      s"""CREATE TABLE ${quote(dbname)}.${quote(ViewCollection)} (
+          | COLLECTION VARCHAR,
+          | VIEW_NAME VARCHAR,
+          | VIEW_DEF JSON,
+          | UNIQUE (COLLECTION, VIEW_NAME)
+          | ) 
+          |
+       """.stripMargin
+
 
     def CREATE_COLLECTION_TABLE(dbname : String, tableName : String) =
       s"""CREATE TABLE ${quote(dbname)}.${quote(tableName)} (
@@ -170,6 +183,40 @@ object PostgresqlRepository extends Repository {
     s""" drop table ${quote(dbname)}.${quote(tablename)}
      """.stripMargin
 
+    def DELETE_VIEWS_FOR_TABLE(dbname: String, tablename: String) =
+    s"""
+       |DELETE FROM ${quote(dbname)}.${quote(ViewCollection)} 
+       |WHERE COLLECTION = ${single_quote(tablename)}
+     """.stripMargin
+    
+    def INSERT_VIEW(dbname: String, tableName: String, viewName: String, json: JsObject) =
+    s"""
+       |INSERT INTO ${quote(dbname)}.${quote(ViewCollection)} VALUES (
+       |  ${single_quote(tableName)},
+       |  ${single_quote(viewName)},
+       |  ${single_quote(unescapeJson(json))}
+       |)
+     """.stripMargin
+
+    def DELETE_VIEW(dbname: String, tableName: String, viewName: String) =
+      s"""
+       |DELETE FROM ${quote(dbname)}.${quote(ViewCollection)} 
+       |WHERE COLLECTION = ${single_quote(tableName)} and VIEW_NAME = ${single_quote(viewName)}
+     """.stripMargin
+    
+    def GET_VIEW(dbname: String) = 
+    s"""
+       |SELECT VIEW_DEF 
+       |FROM ${quote(dbname)}.${quote(ViewCollection)}
+       |WHERE COLLECTION = ? AND VIEW_NAME = ?
+     """.stripMargin
+
+    def GET_VIEWS(dbname: String) =
+      s"""
+       |SELECT VIEW_DEF
+       |FROM ${quote(dbname)}.${quote(ViewCollection)}
+       |WHERE COLLECTION = ?
+     """.stripMargin
   }
 
 
@@ -204,7 +251,7 @@ object PostgresqlRepository extends Repository {
 
   override def createDb(dbname: String): Future[Boolean] =
     pool.inTransaction { c => {
-      c.sendQuery(s"${Sql.CREATE_SCHEMA(dbname)}; ${Sql.CREATE_METADATA_TABLE_IN(dbname)};")
+      c.sendQuery(s"${Sql.CREATE_SCHEMA(dbname)}; ${Sql.CREATE_METADATA_TABLE_IN(dbname)}; ${Sql.CREATE_VIEW_TABLE_IN(dbname)}")
     }.map {
       _ => true
     }.recover {
@@ -300,6 +347,10 @@ object PostgresqlRepository extends Repository {
       Sql.DELETE_METADATA(dbName, colName)
     }.flatMap { _ =>
       c.sendQuery {
+        Sql.DELETE_VIEWS_FOR_TABLE(dbName, colName)
+      }
+    }.flatMap { _ =>
+      c.sendQuery {
         Sql.DROP_TABLE(dbName, colName)
       }.map ( _ => true)
     }
@@ -322,7 +373,7 @@ object PostgresqlRepository extends Repository {
       qr.rows match {
         case Some(rs) =>
           rs.filter( row => row(0).asInstanceOf[String].equalsIgnoreCase(colName)).nonEmpty
-        case _ => throw new RuntimeException("Query failed to return arow set")
+        case _ => throw new RuntimeException("Query failed to return a row set")
       }
     }.recover {
       case MappableException(mappedException) => throw mappedException
@@ -339,7 +390,7 @@ object PostgresqlRepository extends Repository {
     def chain(first : Future[Long], second: => Future[Long]) : Future[Long]= first.flatMap( r => second.map(s => r + s))
 
     def insertInner(c: Connection, obj: JsObject, env: Polygon) : Future[Long] = c.sendPreparedStatement(Sql.INSERT_DATA(database, collection),
-      Array((obj \ "id").as[Int], obj, org.geolatte.geom.codec.Wkb.toWkb(env)))
+      Array((obj \ "id").as[Int], unescapeJson(obj), org.geolatte.geom.codec.Wkb.toWkb(env)))
       .map(res => res.rowsAffected)
 
     pool.inTransaction { c =>
@@ -351,27 +402,26 @@ object PostgresqlRepository extends Repository {
 
   def insert(database: String, collection: String, json: JsObject, env: Polygon ): Future[Boolean] =
     pool.inTransaction { c =>
-      //TODO -- clean-up id en envelope to wkb extraction
-       c.sendPreparedStatement(Sql.INSERT_DATA(database, collection), Array((json \ "id").as[Int], json, org.geolatte.geom.codec.Wkb.toWkb(env) ))
+       c.sendPreparedStatement(Sql.INSERT_DATA(database, collection), Array((json \ "id").as[Int], unescapeJson(json), org.geolatte.geom.codec.Wkb.toWkb(env) ))
           .map(_ => true)
     }.recover {
       case MappableException(mappedException) => throw mappedException
     }
 
-  private def toJson(id: Int, text : String) : Option[JsObject] =
+  private def toJson(text : String)(implicit reads : Reads[JsObject]) : Option[JsObject] =
     Json
       .parse(text)
-      .asOpt[JsObject]
+      .asOpt[JsObject](reads)
 
   private def jsArrayToJsPathList(arr: JsArray) : List[JsPath] =  arr.as[List[String]].map {
     spath => spath.split("\\.").foldLeft[JsPath]( __ )( (jsp, pe) => jsp \ pe )
   } ++ List(( __ \ "type"), ( __ \ "geometry"))
 
 
-  private def enumerate(rs : ResultSet, optProj : Option[Reads[JsObject]]) : Enumerator[JsObject] = {
+  private def toList(rs: ResultSet, optProj : Option[Reads[JsObject]]) : List[JsObject] = {
 
     val jsons = rs.map {
-      rd => toJson(rd(0).asInstanceOf[Int], rd(1).asInstanceOf[String])
+      rd => toJson(rd(0).asInstanceOf[String])
     }
 
     val projected = optProj match {
@@ -381,11 +431,13 @@ object PostgresqlRepository extends Repository {
       case _ => jsons
     }
 
-    val collected = projected.collect {
+   projected.collect {
       case Some(js) => js
-    }
+    }.toList
+  }
 
-    Enumerator.enumerate(collected)
+  private def enumerate(rs : ResultSet, optProj : Option[Reads[JsObject]]) : Enumerator[JsObject] = {
+    Enumerator.enumerate(toList(rs, optProj))
   }
 
   override def query(database: String, collection: String, spatialQuery: SpatialQuery, start : Option[Int] = None,
@@ -479,7 +531,7 @@ object PostgresqlRepository extends Repository {
       }
   }
 
-  /**
+/**
     * Saves a view for the specified database and collection.
    *
    * @param database the database for the view
@@ -487,18 +539,70 @@ object PostgresqlRepository extends Repository {
    * @param viewDef the view definition
    * @return eventually true if this save resulted in the update of an existing view, false otherwise
    */
-  override def saveView(database: String, collection: String, viewDef: JsObject): Future[Boolean] = ???
+  override def saveView(database: String, collection: String, viewDef: JsObject): Future[Boolean] = {
+    val viewName = (viewDef \ "name").as[String]
+    getViewOpt(database, collection, viewName).flatMap {
+      case Some(_) => dropView(database, collection, viewName)
+      case _ =>  Future.successful(false)
+    } flatMap { isOverWrite =>
+      pool.inTransaction {
+        c => {
+          val sql = Sql.INSERT_VIEW(database, collection, viewName, viewDef)
+          Logger.debug("INSERTING VIEW WITH: " + sql)
+          c.sendQuery(sql)
+        }.map {
+          _ => isOverWrite
+        }
+      }
+    }
+  }
 
-  override def dropView(database: String, collection: String, id: String): Future[Boolean] = ???
+  override def dropView(database: String, collection: String, id: String): Future[Boolean] =
+    existsCollection(database, collection).flatMap { exists =>
+      if (exists) pool.inTransaction {
+        c => {
+          val sql = Sql.DELETE_VIEW(database, collection, id)
+          Logger.debug("Dropping VIEW WITH: " + sql)
+          c.sendQuery(sql)
+        }.map {
+          _ => true
+        }
+      }
+      else throw new CollectionNotFoundException()
+    }
+
+  override def getView(database: String, collection: String, id: String): Future[JsObject] =
+    getViewOpt(database,collection,id).map { opt =>
+      if (opt.isDefined) opt.get
+      else throw new ViewObjectNotFoundException()
+    }
+
+  def getViewOpt(database: String, collection: String, id: String): Future[Option[JsObject]] =
+    existsCollection(database, collection).flatMap { exists =>
+      if (exists) {
+        val stmt = Sql.GET_VIEW(database)
+        Logger.debug("Executing SQL: " + stmt + s" with values: $collection, $id")
+        pool.sendPreparedStatement(Sql.GET_VIEW(database), Seq(collection, id))
+      }
+      else throw new CollectionNotFoundException()
+    }.map {
+      //TODO -- clean up! --- view a general way to map Future[QueryResult] !!!
+      qr => qr.rows.flatMap(_.headOption).flatMap(rd => toJson(rd(0).asInstanceOf[String])(Formats.ViewDefOut(database, collection)))
+    }.recover{
+      case MappableException(mappedException) => throw mappedException
+    }
 
 
+  override def getViews(database: String, collection: String): Future[List[JsObject]] =
+    existsCollection(database, collection).flatMap { exists =>
+      if (exists) pool.sendPreparedStatement(Sql.GET_VIEWS(database), Seq(collection))
+      else throw new CollectionNotFoundException()
+    }.map{
+      qr => toList(qr.rows.get, None)
+    }.recover{
+      case MappableException(mappedException) => throw mappedException
+    }
 
   override def existsDb(dbname: String): Future[Boolean] = ???
-
-  override def getView(database: String, collection: String, id: String): Future[JsObject] = ???
-
-
-
-  override def getViews(database: String, collection: String): Future[List[JsObject]] = ???
 
 }

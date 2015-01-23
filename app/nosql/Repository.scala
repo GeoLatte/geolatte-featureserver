@@ -17,6 +17,7 @@ case class Metadata(name: String, envelope: Envelope, level : Int, count: Long =
 object MetadataIdentifiers {
   val MetadataCollectionPrefix = "geolatte_nosql_"
   val MetadataCollection = "geolatte_nosql_collections"
+  val ViewCollection = "geolatte_nosql_views"
   val ExtentField = "extent"
   val IndexLevelField = "index_depth"
   val CollectionField = "collection"
