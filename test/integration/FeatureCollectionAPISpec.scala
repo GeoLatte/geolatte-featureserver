@@ -33,6 +33,7 @@ class FeatureCollectionAPISpec extends InCollectionSpecification {
       support the PROJECTION parameter                                            $e8
       support the QUERY parameter                                                 $e9
       support the WITH-VIEW query-param                                           $e14
+      support the WITH-VIEW query-param and a view with no projection clause      $e15
       BAD_REQUEST response code if the PROJECTION parameter is empty or invalid   $e10
       BAD_REQUEST response code if the Query parameter is an invalid expression   $e11
 
@@ -150,6 +151,20 @@ class FeatureCollectionAPISpec extends InCollectionSpecification {
     }
   }
 
+  def e15 = withTestFeatures(100, 200) {
+    val jsInViewDef = Json.obj("query" -> JsString("properties.foo = 'bar1'"))
+    loadView(testDbName, testColName, "view-2", jsInViewDef)
+
+    (bbox: String, featuresIn01: JsArray) => {
+      val picksFoo = (__ \ "properties" \ "foo").json.pick
+      val filteredFeatures = JsArray(
+        featuresIn01.value.filter(jsv => jsv.asOpt(picksFoo) == Some(JsString("bar1")))
+      )
+      getQuery(testDbName, testColName, Map("bbox" -> bbox, "with-view" -> "view-2"))(contentAsJsonStream) applyMatcher {
+        res => res.responseBody must beSomeFeatures(filteredFeatures)
+      }
+    }
+  }
 
   def e10 = getQuery(testDbName, testColName, Map("projection" -> ""))(contentAsJsonStream).applyMatcher {
     _.status must equalTo(BAD_REQUEST)

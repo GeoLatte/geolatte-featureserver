@@ -198,7 +198,7 @@ object FeatureCollectionController extends AbstractNoSqlController with FutureIn
         SpatialQuery(
           windowOpt,
           selectorMerge(queryOpt, queryParamOpt),
-          jsOptMerge(projOpt, projectionOpt)(_ ++ _))
+          projectionMerge(projOpt, projectionOpt))
     }
 
   }
@@ -215,14 +215,14 @@ object FeatureCollectionController extends AbstractNoSqlController with FutureIn
     res
   }
 
-  private def jsOptMerge[J <: JsValue](elem: Option[J]*)(union: (J, J) => J): Option[J] =
-    elem.foldLeft(None: Option[J]) {
-      (s, e) => e match {
-        case None => s
-        case Some(_) if s.isDefined => e.map(js => union(s.get, js))
-        case _ => e
-      }
-    }
+  private def projectionMerge(viewProj: Option[JsArray], qProj: Option[JsArray]): Option[JsArray] = {
+    val vp1 = viewProj.getOrElse(Json.arr())
+    val vp2 = qProj.getOrElse(Json.arr())
+    val combined = vp1 ++ vp2
+    val result = if (combined.value.isEmpty) None else Some(combined)
+    Logger.debug(s"Merging optional projectors of view and query to: $result")
+    result
+  }
 
   object Bbox {
 
