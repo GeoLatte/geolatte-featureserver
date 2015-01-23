@@ -72,7 +72,7 @@ class SupportedMediaTypeSpec extends Specification {
     satisfySpec("application/*", null, Some( Format.JSON -> Version.v1_0) )
 
 
-    satisfySpec("application/vnd.geolatte-featureserver+" + Format.JSON, Version.stringify(Version.default), Some(Format.JSON -> Version.default))
+    satisfySpec("application/vnd.geolatte-featureserver+json", Version.stringify(Version.default), Some(Format.JSON -> Version.default))
 
   }
 
