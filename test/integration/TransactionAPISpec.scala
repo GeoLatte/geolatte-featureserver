@@ -14,7 +14,6 @@ class TransactionAPISpec  extends InCollectionSpecification {
 
 
   //TODO add additional spec tests for consistency of count metadata field on insert
-  //TODO --
 
   def is = s2"""
 

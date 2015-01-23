@@ -123,8 +123,9 @@ object PostgresqlRepository extends Repository {
          |VALUES (?, ?, ?)
        """.stripMargin
 
-    def DELETE_DATA(dbname: String, tableName: String) =
+    def DELETE_DATA(dbname: String, tableName: String, where: String) =
     s"""DELETE FROM ${quote(dbname)}.${quote(tableName)}
+        WHERE ${where}
      """.stripMargin
 
 
@@ -428,7 +429,7 @@ object PostgresqlRepository extends Repository {
   }
 
   override def delete(database: String, collection: String, query: BooleanExpr): Future[Boolean] =
-    pool.sendQuery(Sql.DELETE_DATA(database, collection))
+    pool.sendQuery(Sql.DELETE_DATA(database, collection, PGQueryRenderer.render(query)))
       .map(_ => true)
       .recover {
       case MappableException(mappedException) => throw mappedException
