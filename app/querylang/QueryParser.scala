@@ -14,18 +14,19 @@ import scala.util.{Try, Success, Failure}
 sealed trait Expr
 
 sealed trait BooleanExpr
-case class BooleanOr(rhs: BooleanExpr, lhs: BooleanExpr) extends BooleanExpr
-case class BooleanAnd(rhs: BooleanExpr, lhs: BooleanExpr) extends BooleanExpr
+case class BooleanOr(lhs: BooleanExpr, rhs: BooleanExpr) extends BooleanExpr
+case class BooleanAnd(lhs: BooleanExpr, rhs: BooleanExpr) extends BooleanExpr
 case class BooleanNot(expr: BooleanExpr) extends BooleanExpr
 
 sealed trait Predicate extends BooleanExpr
-case class ComparisonPredicate(rhs: ValueExpr, op: ComparisonOperator, lhs: ValueExpr) extends Predicate
+case class ComparisonPredicate(lhs: PropertyExpr, op: ComparisonOperator, rhs: ValueExpr) extends Predicate
 
 sealed trait ValueExpr extends Expr
 case class LiteralString(value: String) extends ValueExpr
 case class LiteralNumber(value: BigDecimal) extends ValueExpr
-case class PropertyName(value: String) extends ValueExpr
 case class LiteralBoolean(value: Boolean) extends ValueExpr with BooleanExpr
+
+case class PropertyExpr(path: String) extends Expr
 
 sealed trait ComparisonOperator
 case object EQ extends ComparisonOperator
@@ -52,11 +53,11 @@ class QueryParser (val input: ParserInput ) extends Parser {
 
   def Predicate = rule { Comparison | LiteralBool }
 
-  def Comparison = rule { (WS ~ Expression ~ WS ~ ComparisonOp ~ Expression ~ WS )  ~> ComparisonPredicate }
+  def Comparison = rule { (WS ~ Property ~ WS ~ ComparisonOp ~ Expression ~ WS )  ~> ComparisonPredicate }
 
   def ComparisonOp =  rule { ">=" ~ push(GTE) | "<=" ~ push(LTE) | "=" ~ push(EQ) | "!=" ~ push(NEQ) | "<" ~ push(LT) | ">" ~ push(GT)  }
 
-  def Expression = rule { LiteralBool | LiteralStr | LiteralNum | Property }
+  def Expression = rule { LiteralBool | LiteralStr | LiteralNum }
 
   private val toNum : String => LiteralNumber =  (s: String) =>  LiteralNumber( BigDecimal(s) )
 
@@ -66,7 +67,7 @@ class QueryParser (val input: ParserInput ) extends Parser {
 
   def LiteralStr = rule {  ch(''') ~ (capture(zeroOrMore(CharPredicate.AlphaNum)) ~> LiteralString ) ~ ch(''') }
 
-  def Property = rule { capture(NameString)  ~> PropertyName ~ WS}
+  def Property = rule { capture(NameString)  ~> PropertyExpr ~ WS}
 
 
   //basic tokens

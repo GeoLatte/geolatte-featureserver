@@ -5,72 +5,38 @@ import querylang._
 
 import scala.util.{Failure, Success, Try}
 
-/**
- * Renders a boolean expression to a MongoDB Query Document
- * Created by Karel Maesen, Geovise BVBA on 22/01/15.
- */
 
-object MongoDBRenderDelegate extends RenderDelegate[JsValue] {
+object MongoDBQueryRenderer extends QueryRenderer[JsValue]{
 
+  override def render(expr: BooleanExpr): Try[JsValue] = Try { renderRoot(expr) }
 
-  private def unpack(v : Try[JsValue]) : String = v match {
-    case Success(JsString(s)) => s
-    case _ => throw new QueryRenderException(s"Can't unpack ${v.toString} to String")
+  def op2String(op: ComparisonOperator) : String = op match {
+    case GT =>  "$gt"
+    case GTE => "$gte"
+    case LT =>  "$lt"
+    case LTE => "$lte"
+    case NEQ => "$ne"
+    case EQ => "$eq"
   }
 
-  override def renderComparison( lhs: Try[JsValue], op: ComparisonOperator, rhs: Try[JsValue]) : Try[JsValue] =
-    Try {
-      val args: (String, JsValue) = (lhs, rhs) match {
-        case (Success(JsString(s)), Success(rv)) => (s, rv)
-        case _ => throw new QueryRenderException("Failure to interpret arguments")
-      }
-
-
-      (op, args) match {
-        case (EQ, (p, v)) => Json.obj(p -> v)
-        case (o, (p,v))  => Json.obj(  unpack(renderComparisonOp(o)) -> Json.arr(p,v))
-        case _ => throw new QueryRenderException(s"Not supported expression ${op.toString}")
-      }
+  def renderRoot(expr: BooleanExpr) : JsValue  = expr match {
+    case BooleanOr(lhs, rhs) => Json.obj( "$or" -> Json.arr(renderRoot(lhs), renderRoot(rhs)))
+    case BooleanAnd(lhs, rhs) => Json.obj("$and" -> Json.arr(renderRoot(lhs), renderRoot(rhs)))
+    case BooleanNot(inner) => Json.obj("$not" -> renderRoot(inner))
+    case ComparisonPredicate(lhs, op, rhs) => op match {
+      case EQ => Json.obj( lhs.path -> renderValue(rhs))
+      case _ => Json.obj(op2String(op) -> Json.arr( lhs.path, renderValue(rhs)))
     }
-
-
-
-  override def renderLiteralString(s: String): Try[JsValue] = Success(JsString(s))
-
-  override def renderPropertyName(p: String): Try[JsValue] = Success(JsString(p))
-
-  override def renderLiteralNumber(n: BigDecimal): Try[JsValue] = Success(JsNumber(n))
-
-  override def renderComparisonOp(op : ComparisonOperator) : Try[JsValue] = Try {
-    op match {
-      case GT =>  JsString("$gt")
-      case GTE => JsString("$gte")
-      case LT =>  JsString("$lt")
-      case LTE => JsString("$lte")
-      case NEQ => JsString("$ne")
-      case EQ => throw new QueryRenderException(s"EQ has no MongoDB operator")
-    }
+    case LiteralBoolean(b) => Json.obj()
   }
 
-  override def renderNeg(inner: Try[JsValue]): Try[JsValue] = inner.map{
-    expr => Json.obj("$not" -> expr)
+  def renderValue(valueExpr : ValueExpr) : JsValue = valueExpr match {
+    case LiteralString(s) => JsString(s)
+    case LiteralNumber(n) => JsNumber(n)
+    case LiteralBoolean(b) => JsBoolean(b)
   }
-
-  override def renderOr(lhs: Try[JsValue], rhs: Try[JsValue]): Try[JsValue] = sequence(lhs, rhs) map {
-    case (l,r) => Json.obj("$or" -> Json.arr(l,r))
-  }
-
-  override def renderAnd(lhs: Try[JsValue], rhs: Try[JsValue]): Try[JsValue] = sequence(lhs, rhs) map {
-    case(l,r) => Json.obj("$and" -> Json.arr(l,r))
-  }
-
-  override def renderBooleanLiteral(b: Boolean): Try[JsValue] = Success(JsBoolean(b))
-
-  override def renderBooleanValueExpression(b: Boolean): Try[JsValue] = Success(Json.obj())
 
 }
-
-object MongoDBQueryRenderer extends QueryRenderer[JsValue](MongoDBRenderDelegate)
 
 
 

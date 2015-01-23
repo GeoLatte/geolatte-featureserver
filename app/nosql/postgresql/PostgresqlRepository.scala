@@ -195,7 +195,12 @@ object PostgresqlRepository extends Repository {
     }
   }
 
-  lazy val url = URLParser.parse(ConfigurationValues.PgConnectionString)
+  lazy val url = {
+    val parsed = URLParser.parse(ConfigurationValues.PgConnectionString)
+    Logger.info("Connecting to postgresql database with URL : " + parsed)
+    parsed
+  }
+
   lazy val database = url.database.getOrElse(url.username)
   lazy val factory = new PostgreSQLConnectionFactory( url )
 
