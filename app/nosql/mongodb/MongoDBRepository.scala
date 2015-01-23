@@ -75,7 +75,7 @@ object MongoDBRepository extends nosql.Repository with FutureInstrumented {
 
   private def expr2JsObject(expr: BooleanExpr) : JsObject = {
     MongoDBQueryRenderer.render(expr) match {
-      case Success(js) if js.isInstanceOf[JsObject] => js.asInstanceOf[JsObject]
+      case js if js.isInstanceOf[JsObject] => js.asInstanceOf[JsObject]
       case _ => throw new IllegalStateException("Boolean expression can't be rendered to a JSON-object")
     }
   }

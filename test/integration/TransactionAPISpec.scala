@@ -19,13 +19,11 @@ class TransactionAPISpec  extends InCollectionSpecification {
   def is = s2"""
 
 
-                                                                                  {section("mongodb", "postgresql")}
+                                                                                  ${section("mongodb", "postgresql")}
      The Transaction /upsert should:
        return 404 when the collection does not exist                              $e1
        return OK when the collection does exist, and data is valid                $e2
-    ${section("mongodb", "postgresql")}
        insert value idem-potently when object does not exist                      $e3
-       ${section("mongodb", "postgresql")}
        update value idem-potently when object does already exist                  $e4
 
      The transaction /insert should:
@@ -37,7 +35,7 @@ class TransactionAPISpec  extends InCollectionSpecification {
 
       The transaction /delete should:
         return status code BAD_REQUEST when query is malformed                    $e8
-                                                                                  {section("mongodb", "postgresql")}
+                                                                                  ${section("mongodb", "postgresql")}
 
   """
 
@@ -70,7 +68,7 @@ class TransactionAPISpec  extends InCollectionSpecification {
     val f = feature().sample.get
     removeData(testDbName, testColName)
     postUpsert(testDbName, testColName, f)
-    //postUpsert(testDbName, testColName, f)
+    postUpsert(testDbName, testColName, f)
     getList(testDbName, testColName, "") applyMatcher { res =>
       res.responseBody must beSome(matchFeaturesInJson(Json.arr(f)))
     }

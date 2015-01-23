@@ -92,7 +92,7 @@ abstract class MongoSpatialCollection(collection: JSONCollection, metadata: Meta
 
 
   private def render(expr : BooleanExpr) : JsObject = MongoDBQueryRenderer.render(expr) match {
-    case Success(jsvalue) if jsvalue.isInstanceOf[JsObject] => jsvalue.asInstanceOf[JsObject]
+    case jsvalue if jsvalue.isInstanceOf[JsObject] => jsvalue.asInstanceOf[JsObject]
     //TODO -- how better to handle exceptions
     case _ => throw new IllegalArgumentException();
   }

@@ -9,14 +9,10 @@ import scala.util.{Failure, Success, Try}
 */
 object PGQueryRenderer extends QueryRenderer[String] {
 
-  override def render(expr: BooleanExpr): Try[String] = Try {
-      rootRender(expr)
-  }
-
-  def rootRender(expr: BooleanExpr) : String = expr match {
-    case BooleanAnd(lhs, rhs) => s" ( ${rootRender(lhs)} ) AND ( ${rootRender(rhs)} )"
-    case BooleanOr(lhs, rhs) => s" ( ${rootRender(lhs)} ) OR ( ${rootRender(rhs)} )"
-    case BooleanNot(inner) => s" NOT ( ${rootRender(inner)} ) "
+  def render(expr: BooleanExpr) : String = expr match {
+    case BooleanAnd(lhs, rhs) => s" ( ${render(lhs)} ) AND ( ${render(rhs)} )"
+    case BooleanOr(lhs, rhs) => s" ( ${render(lhs)} ) OR ( ${render(rhs)} )"
+    case BooleanNot(inner) => s" NOT ( ${render(inner)} ) "
     case LiteralBoolean(b) => if (b) " true " else " false "
     case ComparisonPredicate(lhs, op, rhs ) => s" ${renderPropertyExpr(lhs,rhs)} ${sym(op)} ( ${renderValue(rhs)} )"
   }

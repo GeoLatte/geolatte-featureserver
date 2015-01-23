@@ -29,7 +29,7 @@ object PostgresqlRepository extends Repository {
   import play.api.libs.json._
   import GeometryReaders._
 
-  //Note that we cannot use preparedstatements for DDL's
+  //Note that we cannot use prepared statements for DDL's
 
 
   //TODO -- should we check for quotes, spaces etc.  in str?
@@ -37,21 +37,15 @@ object PostgresqlRepository extends Repository {
   private def quote(str: String) : String = "\"" + str + "\""
   private def single_quote(str: String) : String = "'" + str + "'"
 
-
-  private def parseSelector(expression : Option[BooleanExpr]) = expression match {
-    //TODO -- this is just a placeholder
-    case __ => "TRUE"
-  }
-
   //These are the SQL statements for managing and retrieving data
   object Sql {
 
    def condition(query : SpatialQuery) : String = {
      val windowCondition = query.windowOpt match {
        case Some(env) => s"geometry && ${single_quote( Wkt.toWkt(FeatureTransformers.toPolygon(env)))}::geometry"
-       case _ => "TRUE"
+       case _ => "true"
      }
-     val attCondition = parseSelector(query.queryOpt)
+     val attCondition = query.queryOpt.map( expr => PGQueryRenderer.render(expr)).getOrElse( " true ")
      List(windowCondition, attCondition) mkString " AND "
    }
 
@@ -88,10 +82,10 @@ object PostgresqlRepository extends Repository {
     }
 
 
-    def UPDATE_DATA(db: String, col: String) : String = {
+    def UPDATE_DATA(db: String, col: String, where: String) : String = {
       s"""UPDATE ${quote(db)}.${quote(col)}
          |SET json = ?, geometry = ?
-         |WHERE ?
+         |WHERE $where
        """.stripMargin
     }
 
@@ -411,9 +405,12 @@ object PostgresqlRepository extends Repository {
         pathList => JsonHelper.mkProjection(pathList)
       }
 
-    val fCnt = pool.sendQuery(Sql.SELECT_TOTAL_IN_QUERY(database, collection, spatialQuery)).map{ extractCount }
-
-    val fEnum = pool.sendQuery(Sql.SELECT_DATA(database, collection, spatialQuery, start, limit)).map {
+    val stmtTotal = Sql.SELECT_TOTAL_IN_QUERY(database, collection, spatialQuery)
+    Logger.debug(s"Executing SQL: $stmtTotal" )
+    val fCnt = pool.sendQuery(stmtTotal).map{ extractCount }
+    val dataStmt = Sql.SELECT_DATA(database, collection, spatialQuery, start, limit)
+    Logger.debug(s"Executing SQL: $dataStmt" )
+    val fEnum = pool.sendQuery(dataStmt).map {
         qr => qr.rows match {
           case Some(rs) => enumerate(rs,projectingReads)
           case _ => Enumerator[JsObject]()
@@ -445,11 +442,15 @@ object PostgresqlRepository extends Repository {
         insert(database, collection, json, json.as[Polygon](evr))
     }
 
-  def update(database: String, collection: String, query: BooleanExpr, newValue: JsObject, envelope: Polygon) : Future[Int] =
-    pool.sendPreparedStatement( Sql.UPDATE_DATA(database, collection), Array(newValue, Wkb.toWkb(envelope), ""))
+  def update(database: String, collection: String, query: BooleanExpr, newValue: JsObject, envelope: Polygon) : Future[Int] = {
+    val whereExpr = PGQueryRenderer.render(query)
+    val stmt = Sql.UPDATE_DATA(database, collection, whereExpr)
+    Logger.info(s"EXECUTING SQL:  $stmt ")
+    pool.sendPreparedStatement(stmt,  Array(newValue, Wkb.toWkb(envelope)))
       .map { res =>
-        res.rowsAffected.toInt
+      res.rowsAffected.toInt
     }
+  }
 
   override def update(database: String, collection: String, query: BooleanExpr, updateSpec: JsObject): Future[Int] =
     metadata(database, collection)
