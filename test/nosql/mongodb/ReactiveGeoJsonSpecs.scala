@@ -51,8 +51,6 @@ class ReactiveGeoJsonSpecs extends Specification {
 
         """
       val batched = inpJsonStr.getBytes("UTF-8").grouped(7736).toList
-      println("INPUT OPGEDEELD IN: " + batched.size)
-
       val sink = new mutable.ArrayBuffer[JsObject]()
       val fw = dummyWriter(sink)
       val enumerator = Enumerator(batched:_*)

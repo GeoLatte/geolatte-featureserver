@@ -38,7 +38,7 @@ class CollectionAPISpec extends InDatabaseSpecification {
   )
 
   def e3 = getCollection(testDbName, testColName).applyMatcher(res => {
-    (res.status must equalTo(OK)) and ({println(res.responseBody); res.responseBody} must beSome(equalTo(outMetadata)))
+    (res.status must equalTo(OK)) and (res.responseBody must beSome(equalTo(outMetadata)))
   })
 
   def e4 = deleteCollection(testDbName, testColName).applyMatcher(_.status must equalTo(OK))

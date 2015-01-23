@@ -72,7 +72,6 @@ abstract class InCollectionSpecification(app: FakeApplication = FakeApplication(
 
   def matchFeaturesInCsv(expectedColumnHeader: String): Matcher[Seq[String]] = (
     (received: Seq[String]) => {
-      println("REC:" + received(0))
       received(0).split("\n")(0) == expectedColumnHeader
     }, "Featurecollection CSV doesn't contain expected columns")
 
