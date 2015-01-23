@@ -1,6 +1,9 @@
 package config
 
+import java.io.File
+
 import nosql.mongodb.MongoDBRepository
+import play.api.{Mode, DefaultApplication}
 
 import scala.language.implicitConversions
 import play.api.Play._
@@ -9,8 +12,8 @@ import play.api.Play._
  * @author Karel Maesen, Geovise BVBA
  * creation-date: 7/23/13
  */
-object ConfigurationValues {
 
+object ConfigurationValues {
 
   import play.api.Play.current
 
@@ -46,29 +49,46 @@ object ConfigurationValues {
     override def unapply (s: String): Option[Value] = values.find(_.toString == "v" + s.replace(".","_"))
   }
 
-  val configuredRepository = current.configuration.getString("fs.db") match {
-    case Some(value) => value
-    case None => MongoDBRepository //if nothing configured, then assume MongoDB
-  }
+  /**
+   * Provides acces to the current Play application.
+   *
+   * If Play itself hasn't started, we lazily create a default application so that all
+   * configuration information is accessible here.
+   */
+  lazy val currentApp = maybeApplication.getOrElse(
+    new DefaultApplication(new File("."), this.getClass.getClassLoader, None, Mode.Dev)
+  )
 
+  def getConfigString(key: String, default: String) : String =
+    currentApp.configuration.getString(key) match {
+    case Some(value) => value
+    case None => default
+  }
 
   import scala.collection.JavaConversions._
-
-  val MongoConnnectionString : List[String]= current.configuration.getStringList(MONGO_CONNECTION_STRING_KEY) match {
-    case Some(strl) => strl.toList
-    case None => List[String](DEFAULT_DB_HOST)
+  def getConfigStringList(key: String, default: List[String]) : List[String] =
+    currentApp.configuration.getStringList(key) match {
+    case Some(value) => value.toList
+    case None => default
   }
 
-  val PgConnectionString: String = current.configuration.getString(PG_CONNECTION_URL_KEY) match {
-    case Some(url) => url
-    case None => DEFAULT_PG_CONNECTION_URL
+  def getConfigInt(key: String, default: Int) : Int =
+  currentApp.configuration.getInt(key) match {
+    case Some(value) => value
+    case None => default
   }
 
-  val MongoSystemDB = current.configuration.getString(MONGO_SYSTEM_DB_KEY).orElse(Some(DEFAULT_SYS_DB)).get
+  val configuredRepository = getConfigString("fs.db", "mongodb")
+
+  val MongoConnnectionString = getConfigStringList(MONGO_CONNECTION_STRING_KEY, List[String](DEFAULT_DB_HOST))
+
+  val PgConnectionString: String = getConfigString(PG_CONNECTION_URL_KEY, DEFAULT_PG_CONNECTION_URL)
 
 
+  val MongoSystemDB = getConfigString(MONGO_SYSTEM_DB_KEY, DEFAULT_SYS_DB)
 
-  val MaxReturnItems = current.configuration.getInt(MAXIMUM_RESULT_SIZE_KEY).getOrElse[Int](DEFAULT_MAXIMUM_RESULT_SIZE)
+  val MaxReturnItems = getConfigInt(MAXIMUM_RESULT_SIZE_KEY, DEFAULT_MAXIMUM_RESULT_SIZE)
+
   /**
    * The separator to use between any two Json strings when streaming JSON
    */

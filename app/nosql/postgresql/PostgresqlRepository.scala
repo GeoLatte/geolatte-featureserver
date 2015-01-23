@@ -29,214 +29,6 @@ object PostgresqlRepository extends Repository {
   import play.api.libs.json._
   import GeometryReaders._
 
-  //Note that we cannot use prepared statements for DDL's
-
-
-  //TODO -- should we check for quotes, spaces etc.  in str?
-  // alternative is to use escapeSql in the org.apache.commons.lang.StringEscapeUtils
-  private def quote(str: String) : String = "\"" + str + "\""
-  private def single_quote(str: String) : String = "'" + str + "'"
-  private def unescapeJson(js: JsObject):String =
-    Json.stringify(js).replaceAll("'", "''")
-
-  //These are the SQL statements for managing and retrieving data
-  object Sql {
-
-   def condition(query : SpatialQuery) : String = {
-     val windowCondition = query.windowOpt match {
-       case Some(env) => s"geometry && ${single_quote( Wkt.toWkt(FeatureTransformers.toPolygon(env)))}::geometry"
-       case _ => "true"
-     }
-     val attCondition = query.queryOpt.map( expr => PGQueryRenderer.render(expr)).getOrElse( " true ")
-     List(windowCondition, attCondition) mkString " AND "
-   }
-
-   def SELECT_TOTAL_IN_QUERY(db: String, col: String, query: SpatialQuery) : String =
-    s"""
-       |SELECT COUNT(*)
-       |FROM ${quote(db)}.${quote(col)}
-       |where ${condition(query)}
-     """.stripMargin
-
-
-
-    def SELECT_DATA(db: String, col: String, query: SpatialQuery, start: Option[Int] = None, limit: Option[Int] = None): String = {
-
-      val cond = condition(query)
-
-      val limitClause = limit match {
-        case Some(lim) => s"\nLIMIT $lim"
-        case _ => s"\nLIMIT ${ConfigurationValues.MaxReturnItems}"
-      }
-
-      val offsetClause = start match {
-        case Some(s) => s"\nOFFSET $s"
-        case _ => ""
-      }
-
-      s"""
-       |SELECT json, ID
-       |FROM ${quote(db)}.${quote(col)}
-       |WHERE $cond
-       |ORDER BY ID
-     """.stripMargin + offsetClause + limitClause
-
-    }
-
-
-    def UPDATE_DATA(db: String, col: String, where: String) : String = {
-      s"""UPDATE ${quote(db)}.${quote(col)}
-         |SET json = ?, geometry = ?
-         |WHERE $where
-       """.stripMargin
-    }
-
-    import MetadataIdentifiers._
-
-    val LIST_SCHEMA = "select schema_name from information_schema.schemata"
-
-    def CREATE_SCHEMA(dbname: String) = s"create schema ${quote(dbname)}"
-
-    def DROP_SCHEMA(dbname : String) : String = s"drop schema ${quote(dbname)} CASCADE"
-
-    def CREATE_METADATA_TABLE_IN(dbname : String) =
-      s"""CREATE TABLE ${quote(dbname)}.${quote(MetadataCollection)} (
-          | $ExtentField JSON,
-          | $IndexLevelField INT,
-          | $CollectionField VARCHAR(255) PRIMARY KEY
-          | )
-       """.stripMargin
-    
-    def CREATE_VIEW_TABLE_IN(dbname: String) =
-      s"""CREATE TABLE ${quote(dbname)}.${quote(ViewCollection)} (
-          | COLLECTION VARCHAR,
-          | VIEW_NAME VARCHAR,
-          | VIEW_DEF JSON,
-          | UNIQUE (COLLECTION, VIEW_NAME)
-          | ) 
-          |
-       """.stripMargin
-
-
-    def CREATE_COLLECTION_TABLE(dbname : String, tableName : String) =
-      s"""CREATE TABLE ${quote(dbname)}.${quote(tableName)} (
-          | id INT PRIMARY KEY,
-          | geometry GEOMETRY,
-          | json JSON
-          | )
-       """.stripMargin
-
-    def CREATE_COLLECTION_INDEX(dbname: String, tableName: String) =
-    s"""CREATE INDEX ${quote(tableName + "_spatial_index")}
-      | ON ${quote(dbname)}.${quote(tableName)} USING GIST ( geometry )
-     """.stripMargin
-
-    def INSERT_DATA(dbname: String, tableName: String) =
-      s"""INSERT INTO ${quote(dbname)}.${quote(tableName)}  (id, json, geometry)
-         |VALUES (?, ?, ?)
-       """.stripMargin
-
-    def DELETE_DATA(dbname: String, tableName: String, where: String) =
-    s"""DELETE FROM ${quote(dbname)}.${quote(tableName)}
-        WHERE ${where}
-     """.stripMargin
-
-
-    def LIST_TABLE_NAMES(dbname: String) = {
-      s""" select table_name from information_schema.tables
-         | where
-         | table_schema = ${single_quote(dbname)}
-         | and table_type = 'BASE TABLE'
-         | and table_name != ${quote(MetadataCollection)}
-       """.stripMargin
-    }
-
-    def INSERT_Metadata(dbname: String, tableName: String, md: Metadata) =
-    s"""insert into ${quote(dbname)}.${quote(MetadataCollection)} values(
-       | ${single_quote(Json.stringify(Json.toJson(md.envelope)))}::json,
-       | ${md.level},
-       | ${single_quote(tableName)}
-       | )
-     """.stripMargin
-
-    def SELLECT_COLLECTION_NAMES(dbname: String) =
-    s"""select $CollectionField
-        from  ${quote(dbname)}.${quote(MetadataCollection)}
-     """.stripMargin
-
-    def SELECT_COUNT(dbname: String, tablename: String) =
-      s"select count(*) from ${quote(dbname)}.${quote(tablename)}"
-
-    def SELECT_METADATA(dbname: String, tablename: String) =
-     s"""select *
-        |from ${quote(dbname)}.${quote(MetadataCollection)}
-        |where $CollectionField = ${single_quote(tablename)}
-      """.stripMargin
-
-    def DELETE_METADATA(dbname: String, tablename: String) =
-    s"""delete
-       |from ${quote(dbname)}.${quote(MetadataCollection)}
-       |where $CollectionField = ${single_quote(tablename)}
-     """.stripMargin
-
-    def DROP_TABLE(dbname: String, tablename: String) =
-    s""" drop table ${quote(dbname)}.${quote(tablename)}
-     """.stripMargin
-
-    def DELETE_VIEWS_FOR_TABLE(dbname: String, tablename: String) =
-    s"""
-       |DELETE FROM ${quote(dbname)}.${quote(ViewCollection)} 
-       |WHERE COLLECTION = ${single_quote(tablename)}
-     """.stripMargin
-    
-    def INSERT_VIEW(dbname: String, tableName: String, viewName: String, json: JsObject) =
-    s"""
-       |INSERT INTO ${quote(dbname)}.${quote(ViewCollection)} VALUES (
-       |  ${single_quote(tableName)},
-       |  ${single_quote(viewName)},
-       |  ${single_quote(unescapeJson(json))}
-       |)
-     """.stripMargin
-
-    def DELETE_VIEW(dbname: String, tableName: String, viewName: String) =
-      s"""
-       |DELETE FROM ${quote(dbname)}.${quote(ViewCollection)} 
-       |WHERE COLLECTION = ${single_quote(tableName)} and VIEW_NAME = ${single_quote(viewName)}
-     """.stripMargin
-    
-    def GET_VIEW(dbname: String) = 
-    s"""
-       |SELECT VIEW_DEF 
-       |FROM ${quote(dbname)}.${quote(ViewCollection)}
-       |WHERE COLLECTION = ? AND VIEW_NAME = ?
-     """.stripMargin
-
-    def GET_VIEWS(dbname: String) =
-      s"""
-       |SELECT VIEW_DEF
-       |FROM ${quote(dbname)}.${quote(ViewCollection)}
-       |WHERE COLLECTION = ?
-     """.stripMargin
-  }
-
-
-  object MappableException {
-    def getStatus(dbe : GenericDatabaseException) = dbe.errorMessage.fields.get('C')
-    def getMessage(dbe: GenericDatabaseException) = dbe.errorMessage.fields.getOrElse('M', "Database didn't return a message")
-    def unapply(t : Throwable): Option[RuntimeException] =  t match {
-      case t: GenericDatabaseException if getStatus(t) == Some("42P06") =>
-        Some(new DatabaseAlreadyExists(getMessage(t)))
-      case t: GenericDatabaseException if getStatus(t) == Some("42P07") =>
-        Some(new CollectionAlreadyExists(getMessage(t)))
-      case t: GenericDatabaseException if getStatus(t) == Some("3F000") =>
-        Some(new  DatabaseNotFoundException(getMessage(t)))
-      case t: GenericDatabaseException if getStatus(t) == Some("42P01") =>
-        Some(new CollectionNotFoundException(getMessage(t)))
-      case _ => None
-
-    }
-  }
-
   lazy val url = {
     val parsed = URLParser.parse(ConfigurationValues.PgConnectionString)
     Logger.info("Connecting to postgresql database with URL : " + parsed)
@@ -249,24 +41,14 @@ object PostgresqlRepository extends Repository {
   //TODO make connection pool configurable
   lazy val pool = new ConnectionPool(factory, PoolConfiguration.Default)
 
-  override def createDb(dbname: String): Future[Boolean] =
-    pool.inTransaction { c => {
-      c.sendQuery(s"${Sql.CREATE_SCHEMA(dbname)}; ${Sql.CREATE_METADATA_TABLE_IN(dbname)}; ${Sql.CREATE_VIEW_TABLE_IN(dbname)}")
-    }.map {
-      _ => true
-    }.recover {
-      case MappableException(mappedException) => throw mappedException
-      case _ @ t
-        =>  throw new DatabaseCreationException(s"Unknown exception having message: ${t.getMessage}")
-      }
-    }
+  override def createDb(dbname: String): Future[Boolean] = executeStmtsInTransaction(
+    s"${Sql.CREATE_SCHEMA(dbname)}; ${Sql.CREATE_METADATA_TABLE_IN(dbname)}; ${Sql.CREATE_VIEW_TABLE_IN(dbname)}"
+  ).map( _ => true)
 
-  override def listDatabases: Future[List[String]] =
-    pool.sendQuery(Sql.LIST_SCHEMA)
-      .map{ qr => {
-        qr.rows.map( rs => rs.foldLeft(List[String]())( (ac, data) => data(0).asInstanceOf[String]::ac))
-        }.getOrElse(List[String]())
-      }
+  override def listDatabases: Future[List[String]] = executeStmt(Sql.LIST_SCHEMA){
+    qr => qr.rows.map( rs => rs.foldLeft(List[String]())( (ac, data) => data(0).asInstanceOf[String]::ac))
+        .getOrElse(List[String]())
+  }
 
 
   override def dropDb(dbname: String): Future[Boolean] =
@@ -282,37 +64,18 @@ object PostgresqlRepository extends Repository {
       }
     }
 
-  override def createCollection(dbName: String, colName: String, spatialSpec: Option[Metadata]): Future[Boolean] =
-    pool.inTransaction { c =>
-      c.sendQuery(
-        Sql.CREATE_COLLECTION_TABLE(dbName, colName)
-      ).flatMap { _ =>
-        spatialSpec match {
-          case Some(md) =>
-            c.sendQuery(Sql.INSERT_Metadata(dbName, colName, md))
-             .map(_ => true)
-          case _ => Future.successful(true)
-        }
-      }.flatMap { _ =>
-          c.sendQuery(Sql.CREATE_COLLECTION_INDEX(dbName, colName))
-      }.map{ _=>
-        true
-      }
-        .recover {
-        case MappableException(mappedException) => throw mappedException
-      }
+  override def createCollection(dbName: String, colName: String, spatialSpec: Option[Metadata]): Future[Boolean] = {
+    def stmts = spatialSpec match {
+      case Some(md) => List( Sql.CREATE_COLLECTION_TABLE(dbName, colName), Sql.INSERT_METADATA(dbName, colName, md)
+        , Sql.CREATE_COLLECTION_INDEX(dbName, colName))
+      case None =>   List( Sql.CREATE_COLLECTION_TABLE(dbName, colName), Sql.CREATE_COLLECTION_INDEX(dbName, colName))
     }
-
+    executeStmtsInTransaction( stmts :_*) map ( _ => true )
+  }
 
   override def listCollections(dbname: String): Future[List[String]] =
-    pool.sendQuery( Sql.SELLECT_COLLECTION_NAMES(dbname) ).map{ qr =>
-      qr.rows match {
-        case Some(rs) =>
-          rs.foldLeft(List[String]()) ( (acc, row)  => row(0).asInstanceOf[String] :: acc )
-        case _ => List[String]()
-      }
-    }.recover {
-      case MappableException(mappedException) => throw mappedException
+    executeStmt(Sql.SELECT_COLLECTION_NAMES(dbname)){
+      toList(_)(row => Some(row(0).asInstanceOf[String]))
     }
 
   override def metadata(database: String, collection: String): Future[Metadata] = {
@@ -326,129 +89,58 @@ object PostgresqlRepository extends Repository {
       Metadata(collection, env, row(1).asInstanceOf[Int], cnt)
     }
 
+    def queryResult2Metadata(qr: QueryResult, cnt: Long) =
+      qr.rows match {
+        case Some(rs) if rs.size > 0 => mkMetadata(rs.head, cnt)
+        case _ => throw new CollectionNotFoundException()
+      }
+
     count(database, collection)
       .flatMap { cnt =>
-        pool.sendQuery(Sql.SELECT_METADATA(database, collection))
-          .map { qr =>
-          qr.rows match {
-            case Some(rs) if rs.size > 0 => mkMetadata(rs.head, cnt)
-            case _ => throw new CollectionNotFoundException()
-          }
-        }
-    }.recover {
-      case MappableException(mappedException) => throw mappedException
+        executeStmt(Sql.SELECT_METADATA(database, collection))(qr => queryResult2Metadata(qr, cnt))
     }
 
   }
 
   override def deleteCollection(dbName: String, colName: String): Future[Boolean] =
-  pool.inTransaction { c =>
-    c.sendQuery {
-      Sql.DELETE_METADATA(dbName, colName)
-    }.flatMap { _ =>
-      c.sendQuery {
-        Sql.DELETE_VIEWS_FOR_TABLE(dbName, colName)
-      }
-    }.flatMap { _ =>
-      c.sendQuery {
-        Sql.DROP_TABLE(dbName, colName)
-      }.map ( _ => true)
-    }
-  }.recover {
-    case MappableException(mappedException) => throw mappedException
-  }
+  executeStmtsInTransaction(
+    Sql.DELETE_METADATA(dbName, colName),
+    Sql.DELETE_VIEWS_FOR_TABLE(dbName, colName),
+    Sql.DROP_TABLE(dbName, colName)
+  ) map ( _ => true )
+
 
   override def count(database: String, collection: String): Future[Long] =
-    pool.sendQuery(Sql.SELECT_COUNT(database, collection))
-      .map { qr =>
-      qr.rows match {
-        case Some(rs) if rs.size > 0 => rs.head(0).asInstanceOf[Long]
-        case _ => throw new CollectionNotFoundException()
-      }
+    executeStmt(Sql.SELECT_COUNT(database, collection)) {
+      first(row => Some(row(0).asInstanceOf[Long]))(_).get
     }
 
   override def existsCollection(dbName: String, colName: String): Future[Boolean] =
-    pool.sendQuery(Sql.SELLECT_COLLECTION_NAMES(dbName))
-      .map { qr =>
+    executeStmt(Sql.SELECT_COLLECTION_NAMES(dbName)) { qr =>
       qr.rows match {
         case Some(rs) =>
           rs.filter( row => row(0).asInstanceOf[String].equalsIgnoreCase(colName)).nonEmpty
         case _ => throw new RuntimeException("Query failed to return a row set")
       }
-    }.recover {
-      case MappableException(mappedException) => throw mappedException
     }
-
-
 
   override def writer(database: String, collection: String): FeatureWriter = new PGWriter(database, collection)
 
 
 
   def insert(database: String, collection: String, jsons: Seq[(JsObject,Polygon)] ): Future[Long] = {
-
-    def chain(first : Future[Long], second: => Future[Long]) : Future[Long]= first.flatMap( r => second.map(s => r + s))
-
-    def insertInner(c: Connection, obj: JsObject, env: Polygon) : Future[Long] = c.sendPreparedStatement(Sql.INSERT_DATA(database, collection),
-      Array((obj \ "id").as[Int], unescapeJson(obj), org.geolatte.geom.codec.Wkb.toWkb(env)))
-      .map(res => res.rowsAffected)
-
-    pool.inTransaction { c =>
-      jsons.foldLeft(Future.successful(0L)) {
-        case (acc, (obj, env)) => chain(acc, insertInner(c, obj, env))
-      }
+    val sqls : Seq[Seq[Any]] = jsons.map{
+        case (json, env) =>  Seq( (json \ "id").as[Int] , unescapeJson(json), org.geolatte.geom.codec.Wkb.toWkb(env))
     }
+    val numRowsAffected : Future[List[Long]] = executePreparedStmt(Sql.INSERT_DATA(database, collection), sqls){_.rowsAffected}
+    numRowsAffected.map( cnts => cnts.foldLeft(0L)( _ + _))
   }
 
   def insert(database: String, collection: String, json: JsObject, env: Polygon ): Future[Boolean] =
-    pool.inTransaction { c =>
-       c.sendPreparedStatement(Sql.INSERT_DATA(database, collection), Array((json \ "id").as[Int], unescapeJson(json), org.geolatte.geom.codec.Wkb.toWkb(env) ))
-          .map(_ => true)
-    }.recover {
-      case MappableException(mappedException) => throw mappedException
-    }
-
-  private def toJson(text : String)(implicit reads : Reads[JsObject]) : Option[JsObject] =
-    Json
-      .parse(text)
-      .asOpt[JsObject](reads)
-
-  private def jsArrayToJsPathList(arr: JsArray) : List[JsPath] =  arr.as[List[String]].map {
-    spath => spath.split("\\.").foldLeft[JsPath]( __ )( (jsp, pe) => jsp \ pe )
-  } ++ List(( __ \ "type"), ( __ \ "geometry"))
-
-
-  private def toList(rs: ResultSet, optProj : Option[Reads[JsObject]]) : List[JsObject] = {
-
-    val jsons = rs.map {
-      rd => toJson(rd(0).asInstanceOf[String])
-    }
-
-    val projected = optProj match {
-      case Some(reads) => jsons.map{
-        jsOpt => jsOpt.flatMap( js => js.asOpt(reads))
-      }
-      case _ => jsons
-    }
-
-   projected.collect {
-      case Some(js) => js
-    }.toList
-  }
-
-  private def enumerate(rs : ResultSet, optProj : Option[Reads[JsObject]]) : Enumerator[JsObject] = {
-    Enumerator.enumerate(toList(rs, optProj))
-  }
+    insert(database, collection, Seq((json, env))).map(_ => true)
 
   override def query(database: String, collection: String, spatialQuery: SpatialQuery, start : Option[Int] = None,
                      limit: Option[Int] = None): Future[CountedQueryResult] = {
-
-    //a utility to extract the count from the QueryResult
-    def extractCount(qr: QueryResult) : Long =
-      qr.rows match {
-        case Some(rowSet) => rowSet.head(0).asInstanceOf[Long]
-        case _ => 0
-      }
 
     val projectingReads : Option[Reads[JsObject]] =
       spatialQuery.projectionOpt
@@ -458,60 +150,48 @@ object PostgresqlRepository extends Repository {
         pathList => JsonHelper.mkProjection(pathList)
       }
 
+    //get the count
     val stmtTotal = Sql.SELECT_TOTAL_IN_QUERY(database, collection, spatialQuery)
-    Logger.debug(s"Executing SQL: $stmtTotal" )
-    val fCnt = pool.sendQuery(stmtTotal).map{ extractCount }
+    val fCnt = executeStmt(stmtTotal){ first(rd => Some(rd(0).asInstanceOf[Long]))(_).get }
+
+    //get the data
     val dataStmt = Sql.SELECT_DATA(database, collection, spatialQuery, start, limit)
-    Logger.debug(s"Executing SQL: $dataStmt" )
-    val fEnum = pool.sendQuery(dataStmt).map {
-        qr => qr.rows match {
-          case Some(rs) => enumerate(rs,projectingReads)
-          case _ => Enumerator[JsObject]()
-      }
-    }
+    val fEnum = executeStmt(dataStmt){ enumerate(_,projectingReads) }
 
     {for{
       cnt <- fCnt
       enum <- fEnum
     } yield
       (Some(cnt),enum)
-    } recover {
-      case MappableException(mappedException) => throw mappedException
     }
+
   }
 
   override def delete(database: String, collection: String, query: BooleanExpr): Future[Boolean] =
-    pool.sendQuery(Sql.DELETE_DATA(database, collection, PGQueryRenderer.render(query)))
-      .map(_ => true)
-      .recover {
-      case MappableException(mappedException) => throw mappedException
-    }
+    executeStmt(Sql.DELETE_DATA(database, collection, PGQueryRenderer.render(query))){ _ => true}
+
 
   override def insert(database: String, collection: String, json: JsObject): Future[Boolean] =
     metadata(database, collection)
       .map{ md =>
-        FeatureTransformers.envelopeTransformer(md.envelope)
-      }.flatMap { evr =>
-        insert(database, collection, json, json.as[Polygon](evr))
+      FeatureTransformers.envelopeTransformer(md.envelope)
+    }.flatMap { evr =>
+      insert(database, collection, json, json.as[Polygon](evr))
     }
 
   def update(database: String, collection: String, query: BooleanExpr, newValue: JsObject, envelope: Polygon) : Future[Int] = {
     val whereExpr = PGQueryRenderer.render(query)
     val stmt = Sql.UPDATE_DATA(database, collection, whereExpr)
-    Logger.info(s"EXECUTING SQL:  $stmt ")
-    pool.sendPreparedStatement(stmt,  Array(newValue, Wkb.toWkb(envelope)))
-      .map { res =>
-      res.rowsAffected.toInt
-    }
+    executePreparedStmt(stmt, Seq(Seq(newValue, Wkb.toWkb(envelope)))){ _.rowsAffected.toInt }.map{ _.head }
   }
 
   override def update(database: String, collection: String, query: BooleanExpr, updateSpec: JsObject): Future[Int] =
     metadata(database, collection)
       .map { md => FeatureTransformers.envelopeTransformer(md.envelope)
     }.flatMap { implicit evr => {
-        val ne = updateSpec.as[Polygon]
-        update(database, collection, query, updateSpec, ne)
-      }
+      val ne = updateSpec.as[Polygon] //extract new envelope
+      update(database, collection, query, updateSpec, ne)
+    }
     }
 
   override def upsert(database: String, collection: String, json: JsObject): Future[Boolean] = {
@@ -526,13 +206,13 @@ object PostgresqlRepository extends Repository {
     }.flatMap{ i =>
       i.run
     }.flatMap{
-        case Some(v) => update(database, collection, expr, json).map( _ => true)
-        case _ => insert(database, collection, json)
-      }
+      case Some(v) => update(database, collection, expr, json).map( _ => true)
+      case _ => insert(database, collection, json)
+    }
   }
 
-/**
-    * Saves a view for the specified database and collection.
+  /**
+   * Saves a view for the specified database and collection.
    *
    * @param database the database for the view
    * @param collection the collection for the view
@@ -598,11 +278,307 @@ object PostgresqlRepository extends Repository {
       if (exists) pool.sendPreparedStatement(Sql.GET_VIEWS(database), Seq(collection))
       else throw new CollectionNotFoundException()
     }.map{
-      qr => toList(qr.rows.get, None)
+      qr => toProjectedJsonList(qr, None)
     }.recover{
       case MappableException(mappedException) => throw mappedException
     }
 
-  override def existsDb(dbname: String): Future[Boolean] = ???
+  // if resultHandler is not specified, the identity function is used by implicits of Predef
+  private def executeStmtsInTransaction[T](sql: String*)(implicit resultHandler: QueryResult => T) : Future[List[T]] = {
+
+    def addResultToList(qr: QueryResult, l : List[T]) : List[T] = resultHandler(qr)::l
+
+    def  sendstmt(stmt: String, results: List[T])(implicit c: Connection) : Future[List[T]]= {
+      Logger.debug("SQL IN TRANSACTION: " + sql)
+      c.sendQuery(stmt).map(qr => addResultToList(qr, results))
+    }
+
+    pool.inTransaction { implicit c =>
+      sql.foldLeft ( Future.successful( List[T]() ) )
+      {
+        (futurelist: Future[List[T]], stmt: String) => futurelist.flatMap (l => sendstmt(stmt,l))
+      }
+    }.recover {
+      case MappableException(mappedException) => throw mappedException
+    }
+  }
+
+  private def executePreparedStmt[T](sql: String, values: Seq[Seq[Any]])(implicit resultHandler: QueryResult => T) : Future[List[T]] = {
+
+    def sendprepared(sql: String, vals: Seq[Any], acc : List[T])(implicit c : Connection) = {
+      Logger.debug( s"\t\t Executing Prepared statement $sql in transactions with values ${vals mkString ", "}" )
+      c.sendPreparedStatement(sql, vals).map { qr => resultHandler(qr) :: acc}
+    }
+
+    pool.inTransaction { implicit c =>
+      values.foldLeft( Future.successful( List[T]() )) {
+      (flist: Future[List[T]], vals: Seq[Any]) => flist.flatMap( l => sendprepared(sql, vals, l))}
+    }.recover {
+      case MappableException(mappedException) => throw mappedException
+    }
+  }
+
+  private def executeStmt[T](sql: String)(resultHandler: QueryResult => T): Future[T] = {
+    Logger.debug("SQL : " + sql)
+    pool.sendQuery(sql)
+      .map {
+      resultHandler
+    }.recover {
+      case MappableException(mappedException) => throw mappedException
+    }
+  }
+
+  private def toJson(text : String)(implicit reads : Reads[JsObject]) : Option[JsObject] =
+    Json
+      .parse(text)
+      .asOpt[JsObject](reads)
+
+  private def jsArrayToJsPathList(arr: JsArray) : List[JsPath] =  arr.as[List[String]].map {
+    spath => spath.split("\\.").foldLeft[JsPath]( __ )( (jsp, pe) => jsp \ pe )
+  } ++ List(( __ \ "type"), ( __ \ "geometry"))
+
+  private def first[T](rowF : RowData => Option[T])(qr: QueryResult) : Option[T] = qr.rows match {
+    case Some(rs) if rs.size > 0 => rowF(rs.head)
+    case _ => None  
+  }
+
+
+  private def toList[T](qr: QueryResult)(rowF : RowData => Option[T]): List[T] = qr.rows match {
+    case Some(rs) =>
+      rs.map(rowF).collect{case Some(v) => v}.toList
+    case _ => List[T]()
+  }
+
+  private def toProjectedJsonList(qr: QueryResult, optProj : Option[Reads[JsObject]]) : List[JsObject] = {
+
+    def json(row : RowData) : Option[JsObject] = toJson(row(0).asInstanceOf[String])
+
+    def project(reads : Reads[JsObject])(jsOpt : Option[JsObject]) : Option[JsObject] = jsOpt flatMap (_.asOpt(reads))
+
+    val transformFunc = optProj match {
+      case Some(reads) => json _ andThen project(reads)
+      case _ => json _
+    }
+    toList(qr)(transformFunc)
+  }
+
+  private def enumerate(qr: QueryResult, optProj : Option[Reads[JsObject]]) : Enumerator[JsObject] = {
+    Enumerator.enumerate(toProjectedJsonList(qr, optProj))
+  }
+
+//
+//    SQL Statements and utility functions.
+//
+//    Note that we cannot use prepared statements for DDL's
+
+  //TODO -- should we check for quotes, spaces etc.  in str?
+  // alternative is to use escapeSql in the org.apache.commons.lang.StringEscapeUtils
+  private def quote(str: String) : String = "\"" + str + "\""
+  private def single_quote(str: String) : String = "'" + str + "'"
+  private def unescapeJson(js: JsObject):String = Json.stringify(js).replaceAll("'", "''")
+
+  //These are the SQL statements for managing and retrieving data
+  object Sql {
+
+    import MetadataIdentifiers._
+
+    val LIST_SCHEMA = "select schema_name from information_schema.schemata"
+
+    def condition(query : SpatialQuery) : String = {
+      val windowOpt = query.windowOpt.map( env => Wkt.toWkt(FeatureTransformers.toPolygon(env)))
+      val attOpt = query.queryOpt.map( PGQueryRenderer.render )
+      (windowOpt, attOpt) match {
+        case (Some(w),Some(q)) => s"geometry && ${single_quote(w)}::geometry and $q"
+        case (Some(w), _ ) => s"geometry && ${single_quote(w)}::geometry"
+        case (_, Some(q)) => q
+        case _ => "true"
+      }
+    }
+
+    def SELECT_TOTAL_IN_QUERY(db: String, col: String, query: SpatialQuery) : String =
+      s"""
+       |SELECT COUNT(*)
+       |FROM ${quote(db)}.${quote(col)}
+       |where ${condition(query)}
+     """.stripMargin
+
+
+
+    def SELECT_DATA(db: String, col: String, query: SpatialQuery, start: Option[Int] = None, limit: Option[Int] = None): String = {
+
+      val cond = condition(query)
+
+      val limitClause = limit match {
+        case Some(lim) => s"\nLIMIT $lim"
+        case _ => s"\nLIMIT ${ConfigurationValues.MaxReturnItems}"
+      }
+
+      val offsetClause = start match {
+        case Some(s) => s"\nOFFSET $s"
+        case _ => ""
+      }
+
+      s"""
+       |SELECT json, ID
+       |FROM ${quote(db)}.${quote(col)}
+       |WHERE $cond
+       |ORDER BY ID
+     """.stripMargin + offsetClause + limitClause
+
+    }
+
+
+    def UPDATE_DATA(db: String, col: String, where: String) : String = {
+      s"""UPDATE ${quote(db)}.${quote(col)}
+         |SET json = ?, geometry = ?
+         |WHERE $where
+       """.stripMargin
+    }
+
+    def CREATE_SCHEMA(dbname: String) = s"create schema ${quote(dbname)}"
+
+    def DROP_SCHEMA(dbname : String) : String = s"drop schema ${quote(dbname)} CASCADE"
+
+    def CREATE_METADATA_TABLE_IN(dbname : String) =
+      s"""CREATE TABLE ${quote(dbname)}.${quote(MetadataCollection)} (
+          | $ExtentField JSON,
+          | $IndexLevelField INT,
+          | $CollectionField VARCHAR(255) PRIMARY KEY
+          | )
+       """.stripMargin
+
+    def CREATE_VIEW_TABLE_IN(dbname: String) =
+      s"""CREATE TABLE ${quote(dbname)}.${quote(ViewCollection)} (
+          | COLLECTION VARCHAR,
+          | VIEW_NAME VARCHAR,
+          | VIEW_DEF JSON,
+          | UNIQUE (COLLECTION, VIEW_NAME)
+          | )
+          |
+       """.stripMargin
+
+
+    def CREATE_COLLECTION_TABLE(dbname : String, tableName : String) =
+      s"""CREATE TABLE ${quote(dbname)}.${quote(tableName)} (
+          | id INT PRIMARY KEY,
+          | geometry GEOMETRY,
+          | json JSON
+          | )
+       """.stripMargin
+
+    def CREATE_COLLECTION_INDEX(dbname: String, tableName: String) =
+      s"""CREATE INDEX ${quote(tableName + "_spatial_index")}
+      | ON ${quote(dbname)}.${quote(tableName)} USING GIST ( geometry )
+     """.stripMargin
+
+    def INSERT_DATA(dbname: String, tableName: String) =
+      s"""INSERT INTO ${quote(dbname)}.${quote(tableName)}  (id, json, geometry)
+         |VALUES (?, ?, ?)
+       """.stripMargin
+
+    def DELETE_DATA(dbname: String, tableName: String, where: String) =
+      s"""DELETE FROM ${quote(dbname)}.${quote(tableName)}
+        WHERE ${where}
+     """.stripMargin
+
+
+    def LIST_TABLE_NAMES(dbname: String) = {
+      s""" select table_name from information_schema.tables
+         | where
+         | table_schema = ${single_quote(dbname)}
+         | and table_type = 'BASE TABLE'
+         | and table_name != ${quote(MetadataCollection)}
+       """.stripMargin
+    }
+
+    def INSERT_METADATA(dbname: String, tableName: String, md: Metadata) =
+      s"""insert into ${quote(dbname)}.${quote(MetadataCollection)} values(
+       | ${single_quote(Json.stringify(Json.toJson(md.envelope)))}::json,
+       | ${md.level},
+       | ${single_quote(tableName)}
+       | )
+     """.stripMargin
+
+    def SELECT_COLLECTION_NAMES(dbname: String) =
+      s"""select $CollectionField
+        from  ${quote(dbname)}.${quote(MetadataCollection)}
+     """.stripMargin
+
+    def SELECT_COUNT(dbname: String, tablename: String) =
+      s"select count(*) from ${quote(dbname)}.${quote(tablename)}"
+
+    def SELECT_METADATA(dbname: String, tablename: String) =
+      s"""select *
+        |from ${quote(dbname)}.${quote(MetadataCollection)}
+        |where $CollectionField = ${single_quote(tablename)}
+      """.stripMargin
+
+    def DELETE_METADATA(dbname: String, tablename: String) =
+      s"""delete
+       |from ${quote(dbname)}.${quote(MetadataCollection)}
+       |where $CollectionField = ${single_quote(tablename)}
+     """.stripMargin
+
+    def DROP_TABLE(dbname: String, tablename: String) =
+      s""" drop table ${quote(dbname)}.${quote(tablename)}
+     """.stripMargin
+
+    def DELETE_VIEWS_FOR_TABLE(dbname: String, tablename: String) =
+      s"""
+       |DELETE FROM ${quote(dbname)}.${quote(ViewCollection)}
+       |WHERE COLLECTION = ${single_quote(tablename)}
+     """.stripMargin
+
+    def INSERT_VIEW(dbname: String, tableName: String, viewName: String, json: JsObject) =
+      s"""
+       |INSERT INTO ${quote(dbname)}.${quote(ViewCollection)} VALUES (
+       |  ${single_quote(tableName)},
+       |  ${single_quote(viewName)},
+       |  ${single_quote(unescapeJson(json))}
+       |)
+     """.stripMargin
+
+    def DELETE_VIEW(dbname: String, tableName: String, viewName: String) =
+      s"""
+       |DELETE FROM ${quote(dbname)}.${quote(ViewCollection)}
+       |WHERE COLLECTION = ${single_quote(tableName)} and VIEW_NAME = ${single_quote(viewName)}
+     """.stripMargin
+
+    def GET_VIEW(dbname: String) =
+      s"""
+       |SELECT VIEW_DEF
+       |FROM ${quote(dbname)}.${quote(ViewCollection)}
+       |WHERE COLLECTION = ? AND VIEW_NAME = ?
+     """.stripMargin
+
+    def GET_VIEWS(dbname: String) =
+      s"""
+       |SELECT VIEW_DEF
+       |FROM ${quote(dbname)}.${quote(ViewCollection)}
+       |WHERE COLLECTION = ?
+     """.stripMargin
+  }
+
+
+  /**
+   * And Extractor that translates a GenericDataseException into the appropratie database Exception
+   */
+  object MappableException {
+    def getStatus(dbe : GenericDatabaseException) = dbe.errorMessage.fields.get('C')
+    def getMessage(dbe: GenericDatabaseException) = dbe.errorMessage.fields.getOrElse('M', "Database didn't return a message")
+    def unapply(t : Throwable): Option[RuntimeException] =  t match {
+      case t: GenericDatabaseException if getStatus(t) == Some("42P06") =>
+        Some(new DatabaseAlreadyExists(getMessage(t)))
+      case t: GenericDatabaseException if getStatus(t) == Some("42P07") =>
+        Some(new CollectionAlreadyExists(getMessage(t)))
+      case t: GenericDatabaseException if getStatus(t) == Some("3F000") =>
+        Some(new  DatabaseNotFoundException(getMessage(t)))
+      case t: GenericDatabaseException if getStatus(t) == Some("42P01") =>
+        Some(new CollectionNotFoundException(getMessage(t)))
+      case _ => None
+
+    }
+  }
+
 
 }
