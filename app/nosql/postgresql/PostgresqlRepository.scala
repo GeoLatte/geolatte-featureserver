@@ -129,10 +129,10 @@ object PostgresqlRepository extends Repository {
 
 
   def insert(database: String, collection: String, jsons: Seq[(JsObject,Polygon)] ): Future[Long] = {
-    val sqls : Seq[Seq[Any]] = jsons.map{
+    val paramValues : Seq[Seq[Any]] = jsons.map{
         case (json, env) =>  Seq( (json \ "id").as[Int] , unescapeJson(json), org.geolatte.geom.codec.Wkb.toWkb(env))
     }
-    val numRowsAffected : Future[List[Long]] = executePreparedStmt(Sql.INSERT_DATA(database, collection), sqls){_.rowsAffected}
+    val numRowsAffected : Future[List[Long]] = executePreparedStmts(Sql.INSERT_DATA(database, collection), paramValues){_.rowsAffected}
     numRowsAffected.map( cnts => cnts.foldLeft(0L)( _ + _))
   }
 
@@ -182,7 +182,7 @@ object PostgresqlRepository extends Repository {
   def update(database: String, collection: String, query: BooleanExpr, newValue: JsObject, envelope: Polygon) : Future[Int] = {
     val whereExpr = PGQueryRenderer.render(query)
     val stmt = Sql.UPDATE_DATA(database, collection, whereExpr)
-    executePreparedStmt(stmt, Seq(Seq(newValue, Wkb.toWkb(envelope)))){ _.rowsAffected.toInt }.map{ _.head }
+    executePreparedStmt(stmt, Seq(newValue, Wkb.toWkb(envelope))){ _.rowsAffected.toInt }
   }
 
   override def update(database: String, collection: String, query: BooleanExpr, updateSpec: JsObject): Future[Int] =
@@ -221,35 +221,28 @@ object PostgresqlRepository extends Repository {
    */
   override def saveView(database: String, collection: String, viewDef: JsObject): Future[Boolean] = {
     val viewName = (viewDef \ "name").as[String]
+
     getViewOpt(database, collection, viewName).flatMap {
       case Some(_) => dropView(database, collection, viewName)
       case _ =>  Future.successful(false)
     } flatMap { isOverWrite =>
-      pool.inTransaction {
-        c => {
-          val sql = Sql.INSERT_VIEW(database, collection, viewName, viewDef)
-          Logger.debug("INSERTING VIEW WITH: " + sql)
-          c.sendQuery(sql)
-        }.map {
+       executeStmtsInTransaction(Sql.INSERT_VIEW(database, collection, viewName, viewDef)){
           _ => isOverWrite
-        }
+        }.map {
+         _.head
+       }
       }
     }
-  }
 
   override def dropView(database: String, collection: String, id: String): Future[Boolean] =
     existsCollection(database, collection).flatMap { exists =>
-      if (exists) pool.inTransaction {
-        c => {
-          val sql = Sql.DELETE_VIEW(database, collection, id)
-          Logger.debug("Dropping VIEW WITH: " + sql)
-          c.sendQuery(sql)
-        }.map {
+      if (exists) executeStmtsInTransaction(Sql.DELETE_VIEW(database, collection, id)){
           _ => true
+        }.map{
+          _.head
         }
-      }
       else throw new CollectionNotFoundException()
-    }
+      }
 
   override def getView(database: String, collection: String, id: String): Future[JsObject] =
     getViewOpt(database,collection,id).map { opt =>
@@ -260,28 +253,21 @@ object PostgresqlRepository extends Repository {
   def getViewOpt(database: String, collection: String, id: String): Future[Option[JsObject]] =
     existsCollection(database, collection).flatMap { exists =>
       if (exists) {
-        val stmt = Sql.GET_VIEW(database)
-        Logger.debug("Executing SQL: " + stmt + s" with values: $collection, $id")
-        pool.sendPreparedStatement(Sql.GET_VIEW(database), Seq(collection, id))
+        executePreparedStmt(Sql.GET_VIEW(database), Seq(collection,id)) {
+          first( rd => toJson(rd(0).asInstanceOf[String])(Formats.ViewDefOut(database, collection)))(_)
+        }
       }
       else throw new CollectionNotFoundException()
-    }.map {
-      //TODO -- clean up! --- view a general way to map Future[QueryResult] !!!
-      qr => qr.rows.flatMap(_.headOption).flatMap(rd => toJson(rd(0).asInstanceOf[String])(Formats.ViewDefOut(database, collection)))
-    }.recover{
-      case MappableException(mappedException) => throw mappedException
     }
-
 
   override def getViews(database: String, collection: String): Future[List[JsObject]] =
     existsCollection(database, collection).flatMap { exists =>
-      if (exists) pool.sendPreparedStatement(Sql.GET_VIEWS(database), Seq(collection))
+      if (exists) executePreparedStmt(Sql.GET_VIEWS(database), Seq(collection)) { qr => toProjectedJsonList(qr, None) }
       else throw new CollectionNotFoundException()
-    }.map{
-      qr => toProjectedJsonList(qr, None)
-    }.recover{
-      case MappableException(mappedException) => throw mappedException
     }
+
+
+  //Private Utility methods
 
   // if resultHandler is not specified, the identity function is used by implicits of Predef
   private def executeStmtsInTransaction[T](sql: String*)(implicit resultHandler: QueryResult => T) : Future[List[T]] = {
@@ -303,20 +289,33 @@ object PostgresqlRepository extends Repository {
     }
   }
 
-  private def executePreparedStmt[T](sql: String, values: Seq[Seq[Any]])(implicit resultHandler: QueryResult => T) : Future[List[T]] = {
+  private def sendprepared[T](sql: String, vals: Seq[Any])(implicit c : Connection) : Future[QueryResult] = {
+    Logger.debug( s"\t\t Executing Prepared statement $sql in transactions with values ${vals mkString ", "}" )
+    c.sendPreparedStatement(sql, vals)
+  }
 
-    def sendprepared(sql: String, vals: Seq[Any], acc : List[T])(implicit c : Connection) = {
-      Logger.debug( s"\t\t Executing Prepared statement $sql in transactions with values ${vals mkString ", "}" )
-      c.sendPreparedStatement(sql, vals).map { qr => resultHandler(qr) :: acc}
-    }
-
+  private def executePreparedStmts[T](sql: String, values: Seq[Seq[Any]])(implicit resultHandler: QueryResult => T) : Future[List[T]] =
     pool.inTransaction { implicit c =>
       values.foldLeft( Future.successful( List[T]() )) {
-      (flist: Future[List[T]], vals: Seq[Any]) => flist.flatMap( l => sendprepared(sql, vals, l))}
+        (flist: Future[List[T]], vals: Seq[Any]) =>
+          flist.flatMap{ l =>
+            sendprepared(sql, vals)
+              .map( resultHandler )
+              .map(t => t::l)
+          }
+      }
     }.recover {
       case MappableException(mappedException) => throw mappedException
     }
-  }
+
+
+  private def executePreparedStmt[T](sql: String, values: Seq[Any])(implicit resultHandler: QueryResult => T) : Future[T] =
+    pool.inTransaction { implicit c =>
+      sendprepared(sql, values).map( resultHandler)
+    }.recover {
+      case MappableException(mappedException) => throw mappedException
+    }
+
 
   private def executeStmt[T](sql: String)(resultHandler: QueryResult => T): Future[T] = {
     Logger.debug("SQL : " + sql)
@@ -576,7 +575,6 @@ object PostgresqlRepository extends Repository {
       case t: GenericDatabaseException if getStatus(t) == Some("42P01") =>
         Some(new CollectionNotFoundException(getMessage(t)))
       case _ => None
-
     }
   }
 
