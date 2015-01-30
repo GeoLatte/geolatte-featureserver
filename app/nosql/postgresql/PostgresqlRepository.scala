@@ -459,7 +459,7 @@ object PostgresqlRepository extends Repository {
 
     def CREATE_COLLECTION_TABLE(dbname : String, tableName : String) =
       s"""CREATE TABLE ${quote(dbname)}.${quote(tableName)} (
-          | id INT PRIMARY KEY,
+          | id VARCHAR(255) PRIMARY KEY,
           | geometry GEOMETRY,
           | json JSON
           | )
