@@ -130,7 +130,7 @@ object PostgresqlRepository extends Repository {
 
   def insert(database: String, collection: String, jsons: Seq[(JsObject,Polygon)] ): Future[Long] = {
     val paramValues : Seq[Seq[Any]] = jsons.map{
-        case (json, env) =>  Seq( (json \ "id").as[Int] , unescapeJson(json), org.geolatte.geom.codec.Wkb.toWkb(env))
+        case (json, env) =>  Seq( (json \ "id").toString , unescapeJson(json), org.geolatte.geom.codec.Wkb.toWkb(env))
     }
     val numRowsAffected : Future[List[Long]] = executePreparedStmts(Sql.INSERT_DATA(database, collection), paramValues){_.rowsAffected}
     numRowsAffected.map( cnts => cnts.foldLeft(0L)( _ + _))
@@ -195,7 +195,13 @@ object PostgresqlRepository extends Repository {
     }
 
   override def upsert(database: String, collection: String, json: JsObject): Future[Boolean] = {
-    val idq = s" id = ${(json \ "id").as[Int]}"
+
+
+    val idq = json \ "id" match {
+      case JsNumber(i) => s" id = ${i}"
+      case JsString(i) => s" id = '${i}'"
+      case _           => throw new IllegalArgumentException("Id neither string nor number in json.")
+     }
 
     val expr = QueryParser.parse(idq).get
     val q = new SpatialQuery(None, Some(expr), None)

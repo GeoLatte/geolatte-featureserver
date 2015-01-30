@@ -24,10 +24,12 @@ class TransactionAPISpec  extends InCollectionSpecification {
        return OK when the collection does exist, and data is valid                $e2
        insert value idem-potently when object does not exist                      $e3
        update value idem-potently when object does already exist                  $e4
+       update value idem-potently when object does already exist and id is string $e42
 
      The transaction /insert should:
         return OK when the collection exists, and data is valid                   $e5
         metadata query returns the inserted number of objects                     $e6
+        accept Json values with string-value ID props                             $e62
 
      The transaction /delete should:
         deleting an element and return status DELETED                             $e7
@@ -49,6 +51,7 @@ class TransactionAPISpec  extends InCollectionSpecification {
   def geom(mc: String = "") = Gen.lineString(3)(mc)
   val idGen = Gen.id
   def feature(mc: String = "") = Gen.geoJsonFeature(idGen, geom(mc), prop)
+  def featureWithStringId(mc : String = "") = Gen.geoJsonFeature(idString, geom(mc), prop)
   def featureArray(mc: String = "", size: Int = 10) = Gen.geoJsonFeatureArray(feature(mc), size)
 
   def e1 = {
@@ -86,6 +89,20 @@ class TransactionAPISpec  extends InCollectionSpecification {
     }
   }
 
+  def e42 = {
+    val f = featureWithStringId().sample.get
+    removeData(testDbName, testColName)
+    postUpsert(testDbName, testColName, f)
+    val modifier = __.json.update(( __ \ "properties" \ "num").json.put(JsNumber(4)))
+    val modifiedFeature = f.transform(modifier).asOpt.get
+    postUpsert(testDbName, testColName, modifiedFeature)
+    postUpsert(testDbName, testColName, modifiedFeature)
+    getList(testDbName, testColName, "") applyMatcher { res =>
+      res.responseBody must beSome(matchFeaturesInJson(Json.arr(modifiedFeature)))
+    }
+  }
+
+
   def e5 = {
     val fs = featureArray(size=100).sample.get
     removeData(testDbName, testColName)
@@ -101,6 +118,11 @@ class TransactionAPISpec  extends InCollectionSpecification {
   }
 
   def e6 = pending
+
+  def e62 = {
+    val f = featureWithStringId().sample.get
+    postUpsert(testDbName, testColName, f).status must equalTo(OK)
+  }
 
   def e7 = pending
 

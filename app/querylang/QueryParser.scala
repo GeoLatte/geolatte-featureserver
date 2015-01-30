@@ -1,6 +1,7 @@
 package querylang
 
 
+import org.parboiled2.RuleFrame.NoneOf
 import org.parboiled2._
 import scala.util.{Try, Success, Failure}
 
@@ -65,7 +66,7 @@ class QueryParser (val input: ParserInput ) extends Parser {
 
   def LiteralNum = rule {  capture(Number)  ~> toNum  }
 
-  def LiteralStr = rule {  ch(''') ~ (capture(zeroOrMore(CharPredicate.AlphaNum)) ~> LiteralString ) ~ ch(''') }
+  def LiteralStr = rule {  ch(''') ~ (capture(zeroOrMore( noneOf("'") )) ~> LiteralString ) ~ ch(''') }
 
   def Property = rule { capture(NameString)  ~> PropertyExpr ~ WS}
 

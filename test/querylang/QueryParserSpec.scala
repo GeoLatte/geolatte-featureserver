@@ -43,6 +43,25 @@ class QueryParserSpec extends Specification {
 
     }
 
+    "Interpret literal strings  properly" in {
+
+      (
+        querylang.QueryParser.parse(" var =  'abc.d' ") must beSuccessfulTry.withValue(
+          ComparisonPredicate(PropertyExpr("var"), EQ, LiteralString("abc.d")))
+        ) and (
+        querylang.QueryParser.parse("var =  '!abc._-$%^&*()@#$%%^_+00==\"'") must beSuccessfulTry.withValue(
+          ComparisonPredicate(PropertyExpr("var"), EQ, LiteralString("!abc._-$%^&*()@#$%%^_+00==\"")))
+        ) and (
+        querylang.QueryParser.parse(" var =  123.54E3 ") must beSuccessfulTry.withValue(
+          ComparisonPredicate(PropertyExpr("var"), EQ, LiteralNumber(BigDecimal(123.54E3))))
+        ) and (
+        querylang.QueryParser.parse(" var =  123.54E-3") must beSuccessfulTry.withValue(
+          ComparisonPredicate(PropertyExpr("var"), EQ, LiteralNumber(BigDecimal(123.54E-3))))
+        )
+
+    }
+
+
     "handle negations properly" in {
 
       (

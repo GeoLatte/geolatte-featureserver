@@ -1,11 +1,14 @@
 package nosql.json
 
 
+import java.util.UUID
+
 import org.geolatte.geom._
 import play.api.libs.json._
 import play.api.libs.json.Json.JsValueWrapper
 import nosql.json.GeometryReaders._
 import org.geolatte.geom.curve.MortonCode
+import scala.reflect.ClassTag
 import scala.util.Random
 import scala.Predef._
 import scala.Some
@@ -66,6 +69,10 @@ object Gen {
 
   def id : Gen[Int] = gen {
     { val i : AtomicInteger = new AtomicInteger(1); () => Some(i.getAndIncrement) }
+  }
+
+  def idString : Gen[String] = gen {
+    { () => Some(UUID.randomUUID().toString) }
   }
 
   /**
@@ -148,13 +155,17 @@ object Gen {
     genListOfPolys.map( lp => new MultiPolygon(lp.toArray))
   }
 
-  def geoJsonFeature[G <: Geometry](id: Gen[Int], geom: Gen[G], prop: Gen[JsObject]) : Gen[JsObject] =
+  def geoJsonFeature[T : ClassTag, G <: Geometry](id: Gen[T], geom: Gen[G], prop: Gen[JsObject]) : Gen[JsObject] =
     for {
       g <- geom
       p <- prop
       i <- id
     } yield {
-      Json.obj( "id" -> JsNumber(i), "type" -> "Feature", "geometry" -> Json.toJson(g)(GeometryWithoutCrsWrites), "properties" -> p)
+      i match {
+        case i: String => Json.obj ("id" -> i, "type" -> "Feature", "geometry" -> Json.toJson (g) (GeometryWithoutCrsWrites), "properties" -> p)
+        case i: Int => Json.obj ("id" -> i, "type" -> "Feature", "geometry" -> Json.toJson (g) (GeometryWithoutCrsWrites), "properties" -> p)
+        case _ =>   Json.obj ("id" -> i.toString, "type" -> "Feature", "geometry" -> Json.toJson (g) (GeometryWithoutCrsWrites), "properties" -> p)
+      }
     }
 
   def geoJsonFeatureArray( jsonGen: Gen[JsObject], size: Int) : Gen[JsArray] = sequence(List.fill(size)(jsonGen)).map(js => JsArray(js))
