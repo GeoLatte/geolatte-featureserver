@@ -90,17 +90,29 @@ object Gen {
   }
 
   def pointSequence(size: Int, dimFlag: DimensionalFlag = d2D, closed: Boolean = false)
-            (implicit extent: Envelope): Gen[PointSequence] =
-    new Gen[PointSequence] {
+            (implicit extent: Envelope): Gen[PointSequence] = new Gen[PointSequence] {
+
+      def createPnt  ={
+        val x = extent.getMinX + Math.random() * extent.getWidth
+        val y = extent.getMinY + Math.random() * extent.getHeight
+        val z = 1 + 100 * Math.random()
+        val m = 1 + 100* Math.random()
+        dimFlag match {
+          case DimensionalFlag.d2D => Points.create2D(x, y, extent.getCrsId)
+          case DimensionalFlag.d3D => Points.create3D(x,y,z, extent.getCrsId)
+          case DimensionalFlag.d2DM => Points.create2DM(x,y,m, extent.getCrsId)
+          case DimensionalFlag.d3DM => Points.create3DM(x,y,z,m, extent.getCrsId)
+        }
+      }
+
       def sample = Some(
         Range(0, size).foldLeft((Point.createEmpty(), PointSequenceBuilders.fixedSized(size, dimFlag, extent.getCrsId)))(
           (state, i) => {
             val (startPnt, ps) = state
-            val x = extent.getMinX + Math.random() * extent.getWidth
-            val y = extent.getMinY + Math.random() * extent.getHeight
-            if (i == 0) (Points.create2D(x, y, extent.getCrsId), ps.add(x, y))
-            else if (i == size && closed) (startPnt, ps.add(startPnt.getX, startPnt.getY))
-            else (startPnt, ps.add(x, y))
+            val pnt = createPnt
+            if (i == 0) (createPnt, ps.add(pnt))
+            else if (i == size && closed) (startPnt, ps.add(startPnt))
+            else (startPnt, ps.add(pnt))
           })._2.toPointSequence
       )
     }

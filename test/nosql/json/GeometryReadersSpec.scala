@@ -46,6 +46,19 @@ class GeometryReadersSpec extends Specification {
         result must_== new Position(84.5, 23.3)
     }
 
+    "read a valid 3D point Position" in {
+      val json = Json.parse("[84.5,23.3, 1.0]")
+      val result = json.validate[Positions].asOpt.get
+      result must_== new Position(84.5, 23.3, 1.0)
+    }
+
+    "read a valid 3DM point Position" in {
+      val json = Json.parse("[84.5,23.3, 1.0]")
+      val result = json.validate[Positions].asOpt.get
+      result must_== new Position(84.5, 23.3, 1.0)
+    }
+
+
     "read a valid array of point positions" in {
       val json = Json.parse("[[80.0, 20.3], [90.0, 30.0]]")
       val result = json.validate[Positions].asOpt.get
@@ -67,17 +80,27 @@ class GeometryReadersSpec extends Specification {
 
     "read a valid POINT GeoJson" in {
       val geom = geomJsonPnt.validate[Geometry].asOpt.get
-      geom.getGeometryType == GeometryType.POINT && geom.getPointN(0).getX == -87.067872
+      (geom.getGeometryType must_== GeometryType.POINT) && (geom.getPointN(0).getX must_== -87.067872)
     }
 
     "read a valid LineString GeoJson" in {
       val result = geomJsonLineString.validate[Geometry].asOpt.get
-      result.equals(linestring(4326, c(-87.067872, 33.093221), c(90.2, 40.0)))
+      result must_== linestring(4326, c(-87.067872, 33.093221), c(90.2, 40.0))
+    }
+
+    "read a valid LineString GeoJson with Z values" in {
+      val result = geomJsonLineStringZ.validate[Geometry].asOpt.get
+      result must_== linestring(4326, c(-87.067872, 33.093221, 1.0), c(90.2, 40.0, 3.0))
+    }
+
+    "read a valid LineString GeoJson with ZM values" in {
+      val result = geomJsonLineStringZM.validate[Geometry].asOpt.get
+      result must_== linestring(4326, cM(-87.067872, 33.093221, 0, 1.0), cM(90.2, 40.0, 0, 3.0))
     }
 
     "read a valid MultiLineString GeoJson " in {
       val result = geomJsonMultiLineString.validate[Geometry].asOpt.get
-      result.equals(multilinestring(4326, linestring(c(-87.067872, 33.093221), c(90.2, 40.0)), linestring(c(-87.067872, 33.093221), c(90.2, 40.0))))
+      result must_== multilinestring(4326, linestring(c(-87.067872, 33.093221), c(90.2, 40.0)), linestring(c(-87.067872, 33.093221), c(90.2, 40.0)))
     }
 
     "use the default crs defined in the readers as an implicit parameter when the Geometry has no CRS field" in {
@@ -85,10 +108,16 @@ class GeometryReadersSpec extends Specification {
       geom.getCrsId must_== CrsId.valueOf(4326)
     }
 
-    "use the crs field when present" in {
+    "use the crs field when present in a point" in {
       val geom = geomJsonPntWithCrs.validate[Geometry].asOpt.get
       geom.getCrsId must_== CrsId.valueOf(31370)
     }
+
+    "use the crs field when present ina linestring" in {
+      val geom = geomJsonLineStringZWithCrs.validate[Geometry].asOpt.get
+      geom.getCrsId must_== CrsId.valueOf(31370)
+    }
+
 
     "return a JsError when the coordinates array is invalid" in {
          val json = Json.parse("""{"type" : "MultiLineString", "coordinates" : [[[80.0, 20.3], 99999], [[80.0, 20.3], [90.0, 30.0]]]}""")
@@ -105,7 +134,7 @@ class GeometryReadersSpec extends Specification {
     "Use the CrsId  declared when creating the GeometryReads" in {
       implicit val geometryReaders = GeometryReads(CrsId.valueOf(31370))
       val result = geomJsonLineString.validate[Geometry].asOpt.get
-      result.getCrsId.equals(CrsId.valueOf(31370))
+      result.getCrsId must_== CrsId.valueOf(31370)
     }
   }
 
@@ -123,6 +152,17 @@ class GeometryReadersSpec extends Specification {
 
   val geomJsonLineString = Json.obj("type" -> "LineString",
     "coordinates" -> Json.arr(Json.arr(-87.067872, 33.093221), Json.arr(90.2, 40.0)))
+
+  val geomJsonLineStringZ = Json.obj("type" -> "LineString",
+    "coordinates" -> Json.arr(Json.arr(-87.067872, 33.093221, 1.0), Json.arr(90.2, 40.0, 3.0)))
+
+  val geomJsonLineStringZWithCrs = Json.obj("type" -> "LineString", "crs" -> crsJson,
+    "coordinates" -> Json.arr(Json.arr(-87.067872, 33.093221, 1.0), Json.arr(90.2, 40.0, 3.0)))
+
+
+  val geomJsonLineStringZM = Json.obj("type" -> "LineString",
+    "coordinates" -> Json.arr(Json.arr(-87.067872, 33.093221, 0, 1.0), Json.arr(90.2, 40.0, 0, 3.0)))
+
 
   val geomJsonMultiLineString = Json.obj("type" -> "MultiLineString",
     "coordinates" -> Json.arr(
