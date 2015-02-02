@@ -38,8 +38,15 @@ object PostgresqlRepository extends Repository {
   lazy val database = url.database.getOrElse(url.username)
   lazy val factory = new PostgreSQLConnectionFactory( url )
 
-  //TODO make connection pool configurable
-  lazy val pool = new ConnectionPool(factory, PoolConfiguration.Default)
+  val poolConfig = PoolConfiguration(
+        maxObjects = ConfigurationValues.PgMaxObjects,
+        maxIdle = ConfigurationValues.PgMaxIdle,
+        maxQueueSize = ConfigurationValues.PgMaxQueueSize,
+        validationInterval = ConfigurationValues.PgMaxValidationinterval)
+
+  Logger.info(s"Postgresql Repo initialized with ConnectionPool: $poolConfig")
+
+  lazy val pool = new ConnectionPool(factory, poolConfig)
 
   override def createDb(dbname: String): Future[Boolean] = executeStmtsInTransaction(
     s"${Sql.CREATE_SCHEMA(dbname)}; ${Sql.CREATE_METADATA_TABLE_IN(dbname)}; ${Sql.CREATE_VIEW_TABLE_IN(dbname)}"
@@ -52,17 +59,8 @@ object PostgresqlRepository extends Repository {
 
 
   override def dropDb(dbname: String): Future[Boolean] =
-    pool.inTransaction { c =>
-      c.sendQuery(Sql.DROP_SCHEMA(dbname))
-        .map{
-        _ => true
-      }.recover {
-        case ex: Throwable => {
-          Logger.error(s"Problem deleting database $dbname", ex)
-          throw new DatabaseDeleteException(s"Unknown exception of type: ${ex.getClass.getCanonicalName} having message: ${ex.getMessage}")
-        }
-      }
-    }
+    executeStmtsInTransaction(Sql.DROP_SCHEMA(dbname)){ _ => true }.map(_.head)
+
 
   override def createCollection(dbName: String, colName: String, spatialSpec: Option[Metadata]): Future[Boolean] = {
     def stmts = spatialSpec match {

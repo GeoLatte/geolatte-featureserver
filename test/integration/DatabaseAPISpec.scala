@@ -58,7 +58,7 @@ class DatabaseAPISpec extends NoSqlSpecification {
       val test = ( __ \ "name").read[String]
       //TODO -- test for presence of correct URL
       val filtered = jsArrOpt.map( js => js.value.filter( value => value.validate(test).asOpt.getOrElse("") == testDbName) )
-      filtered must beSome( (sq:Seq[JsValue]) => sq must have size numTimes )
+      (filtered must beSome( (sq:Seq[JsValue]) => sq must have size numTimes )) and ( res.status must equalTo(OK) )
     }
 
 }

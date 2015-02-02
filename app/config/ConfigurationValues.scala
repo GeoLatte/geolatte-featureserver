@@ -18,18 +18,27 @@ object ConfigurationValues {
   import play.api.Play.current
 
   //configuration keys
-  val MONGO_CONNECTION_STRING_KEY = "fs.mongodb"
-  val PG_CONNECTION_URL_KEY = "fs.postgresql"
-  val MONGO_SYSTEM_DB_KEY = "fs.system.db"
-  val MAXIMUM_RESULT_SIZE_KEY= "max-collection-size"
+  private val MONGO_CONNECTION_STRING_KEY = "fs.mongodb.url"
+  private val PG_CONNECTION_URL_KEY = "fs.postgresql.url"
+  private val MONGO_SYSTEM_DB_KEY = "fs.system.db"
+  private val MAXIMUM_RESULT_SIZE_KEY= "max-collection-size"
+  private val PG_MAXOBJECTS_KEY = "fs.postgresql.max_objects"
+  private val PG_MAXIDLE_KEY = "fs.postgresql.max-idle"
+  private val PG_MAXQUEUESIZE_KEY= "fs.postgresql.max-queuesize"
+  private val PG_VALIDATION_INTERVAL_KEY = "fs.postgresql.validation_interval"
 
   // Default values
-  val DEFAULT_CREATED_DBS_COLLECTION = "createdDatabases"
+  val DEFAULT_CREATED_DBS_COLLECTION = "createdDatabases" //TODO -- should be private
   val DEFAULT_CREATED_DB_PROP = "db"
-  val DEFAULT_SYS_DB = "featureServerSys"
-  val DEFAULT_DB_HOST = "localhost"
-  val DEFAULT_PG_CONNECTION_URL = "postgresql:localhost/5432"
-  val DEFAULT_MAXIMUM_RESULT_SIZE = 10000
+  private val DEFAULT_SYS_DB = "featureServerSys"
+  private val DEFAULT_DB_HOST = "localhost"
+  private val DEFAULT_PG_CONNECTION_URL = "postgresql:localhost/5432"
+  private val DEFAULT_MAXIMUM_RESULT_SIZE = 10000
+  //PGSQL connection pool configuration
+  private val DEFAULT_PG_MAXOBJECTS = 10
+  private val DEFAULT_PG_MAXIDLE = 4
+  private val DEFAULT_PG_MAXQUEUESIZE= 10
+  private val DEFAULT_PG_VALIDATION_INTERVAL = 5000
 
   class ConstantsEnumeration extends Enumeration {
     def unapply (s: String): Option[Value] = values.find(_.toString.toUpperCase == s.toUpperCase)
@@ -84,6 +93,13 @@ object ConfigurationValues {
 
   val PgConnectionString: String = getConfigString(PG_CONNECTION_URL_KEY, DEFAULT_PG_CONNECTION_URL)
 
+  val PgMaxIdle = getConfigInt(PG_MAXIDLE_KEY, DEFAULT_PG_MAXIDLE)
+
+  val PgMaxObjects = getConfigInt(PG_MAXOBJECTS_KEY, DEFAULT_PG_MAXOBJECTS)
+
+  val PgMaxQueueSize = getConfigInt(PG_MAXQUEUESIZE_KEY, DEFAULT_PG_MAXQUEUESIZE)
+
+  val PgMaxValidationinterval = getConfigInt(PG_VALIDATION_INTERVAL_KEY, DEFAULT_PG_VALIDATION_INTERVAL)
 
   val MongoSystemDB = getConfigString(MONGO_SYSTEM_DB_KEY, DEFAULT_SYS_DB)
 
