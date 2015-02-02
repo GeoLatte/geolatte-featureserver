@@ -25,7 +25,8 @@ class DatabaseAPISpec extends NoSqlSpecification {
       CONFLICT on attempt to create twice               ${e4}
       array containing the name of db after create      ${e5}
       the db metadata on GET of db                      ${e6}
-      DELETED on deleting the database                  ${e7}
+      OK on deleting the database                       ${e7}
+      OK when deleting again (DELETE is Idempotent)     ${e7}
       array without name of db, after drop              ${e8}
                                                         ${Step(cleanup)}
                                                         ${section("mongodb", "postgresql")}

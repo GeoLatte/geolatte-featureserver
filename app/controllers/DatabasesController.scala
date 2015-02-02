@@ -52,6 +52,7 @@ object DatabasesController extends AbstractNoSqlController {
 
   def deleteDb(db: String) = repositoryAction ( implicit request =>
     repository.dropDb(db).map( _ => Ok(s"database $db dropped") )
+          .recover{case DatabaseNotFoundException(_) =>  Ok(s"database $db doesn't exist") }
           .recover (commonExceptionHandler(db))
   )
 
@@ -91,6 +92,7 @@ object DatabasesController extends AbstractNoSqlController {
 
   def deleteCollection(db: String, col: String) = repositoryAction (implicit request =>
     repository.deleteCollection(db, col).map(_ => Ok(s"Collection $db/$col deleted."))
+          .recover{case CollectionNotFoundException(_) =>  Ok(s"Collection $db doesn't exist") }
           .recover(commonExceptionHandler(db,col)))
 
 }

@@ -19,7 +19,7 @@ class CollectionAPISpec extends InDatabaseSpecification {
         return OK on attempt to delete the collection                                       $e4
         return emtpy array on GET to database                                               $e8
         return 404 on attempt to GET a collection which does not exist                      $e5
-        return 404 on attempt to DELETE a collection which does not exist                   $e7
+        return OK on attempt to DELETE a collection which does not exist                    $e7
         return 404 on attempt to create a collection on a non-existing database             $e9
                                                                                             ${section("mongodb","postgresql")}
     """
@@ -45,7 +45,7 @@ class CollectionAPISpec extends InDatabaseSpecification {
 
   def e5 = getCollection(testDbName, testColName).applyMatcher(_.status must equalTo(NOT_FOUND))
 
-  def e7 = deleteCollection(testDbName, testColName).applyMatcher(_.status must equalTo(NOT_FOUND))
+  def e7 = deleteCollection(testDbName, testColName).applyMatcher(_.status must equalTo(OK))
 
   def e8 = getDatabase(testDbName).applyMatcher(res =>
     (res.status must equalTo(OK)) and (res.responseBody must beSome(equalTo(Json.arr())))
