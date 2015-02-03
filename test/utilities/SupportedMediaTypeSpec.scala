@@ -1,7 +1,9 @@
 package utilities
 
+import config.ConfigurationValues
 import org.specs2.mutable._
 import config.ConfigurationValues.{Version, Format}
+import play.api.http.{MediaRange, MediaType}
 import play.api.test.{FakeRequest, FakeHeaders}
 
 /**
@@ -70,8 +72,10 @@ class SupportedMediaTypeSpec extends Specification {
     satisfySpec("application/*", null, Some( Format.JSON -> Version.v1_0) )
 
 
+    satisfySpec("application/vnd.geolatte-featureserver+json", Version.stringify(Version.default), Some(Format.JSON -> Version.default))
 
   }
+
 
 
 }

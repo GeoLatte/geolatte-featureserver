@@ -16,17 +16,18 @@ import akka.util.Timeout
 class ViewDefsAPISpec extends InCollectionSpecification {
 
 
-  def is = s2""" $sequential
+  def is = s2"""
 
-     The ViewDefs /put should:
+     The ViewDefs /put should:                                                    ${section("mongodb","postgresql")}
        Return 404 when the collection does not exist                              $e1
        Return CREATED when the view did not yet exist                             $e2
         and create the view                                                       $e3
         and response has a LOCATION header                                        $e4
+
        Return OK when the view already existed                                    $e5
         and replace the view                                                      $e6
        Allow empty projection parameters                                          $e7 
-
+                                                                                  ${section("mongodb","postgresql")}
   """
 
   //import default values
@@ -34,11 +35,11 @@ class ViewDefsAPISpec extends InCollectionSpecification {
   import RestApiDriver._
 
   val viewName = "view-1"
-  val jsInViewDef = Json.obj("query" -> Json.obj("id" -> 1), "projection" -> Json.arr("foo", "bar"))
-  val jsInViewDef2 = Json.obj("query" -> Json.obj("id" -> 2), "projection" -> Json.arr("foo", "bar"))
-  val InViewDefNoProjection = Json.obj( "query" -> Json.obj("foo" -> "bar") )
-  val jsOutViewDef = Json.obj("name" -> viewName, "query" -> Json.obj("id" -> 1), "projection" -> Json.arr("foo", "bar"))
-  val jsOutViewDef2 = Json.obj("name" -> viewName, "query" -> Json.obj("id" -> 2), "projection" -> Json.arr("foo", "bar"))
+  val jsInViewDef = Json.obj("query" -> JsString("id = 1"), "projection" -> Json.arr("foo", "bar"))
+  val jsInViewDef2 = Json.obj("query" -> JsString("id = 2"), "projection" -> Json.arr("foo", "bar"))
+  val InViewDefNoProjection = Json.obj( "query" -> JsString("foo = 'bar'") )
+  val jsOutViewDef = Json.obj("name" -> viewName, "query" -> JsString("id = 1"), "projection" -> Json.arr("foo", "bar"))
+  val jsOutViewDef2 = Json.obj("name" -> viewName, "query" -> JsString("id = 2"), "projection" -> Json.arr("foo", "bar"))
   val OutViewDefNoProjection = InViewDefNoProjection ++ Json.obj("name" -> "view-2", "projection" -> Json.arr())
 
   def e1 = putView(testDbName, "NonExistingCollection", viewName, jsInViewDef) applyMatcher( _.status must equalTo(NOT_FOUND))

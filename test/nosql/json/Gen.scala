@@ -1,11 +1,14 @@
 package nosql.json
 
 
+import java.util.UUID
+
 import org.geolatte.geom._
 import play.api.libs.json._
 import play.api.libs.json.Json.JsValueWrapper
 import nosql.json.GeometryReaders._
 import org.geolatte.geom.curve.MortonCode
+import scala.reflect.ClassTag
 import scala.util.Random
 import scala.Predef._
 import scala.Some
@@ -68,6 +71,10 @@ object Gen {
     { val i : AtomicInteger = new AtomicInteger(1); () => Some(i.getAndIncrement) }
   }
 
+  def idString : Gen[String] = gen {
+    { () => Some(UUID.randomUUID().toString) }
+  }
+
   /**
    * Turns a list of Gen[T] into a Gen[List[T]]
    * if one of the generators fails (returns None), the result Gen will fail also
@@ -90,17 +97,29 @@ object Gen {
   }
 
   def pointSequence(size: Int, dimFlag: DimensionalFlag = d2D, closed: Boolean = false)
-            (implicit extent: Envelope): Gen[PointSequence] =
-    new Gen[PointSequence] {
+            (implicit extent: Envelope): Gen[PointSequence] = new Gen[PointSequence] {
+
+      def createPnt  ={
+        val x = extent.getMinX + Math.random() * extent.getWidth
+        val y = extent.getMinY + Math.random() * extent.getHeight
+        val z = 1 + 100 * Math.random()
+        val m = 1 + 100* Math.random()
+        dimFlag match {
+          case DimensionalFlag.d2D => Points.create2D(x, y, extent.getCrsId)
+          case DimensionalFlag.d3D => Points.create3D(x,y,z, extent.getCrsId)
+          case DimensionalFlag.d2DM => Points.create2DM(x,y,m, extent.getCrsId)
+          case DimensionalFlag.d3DM => Points.create3DM(x,y,z,m, extent.getCrsId)
+        }
+      }
+
       def sample = Some(
         Range(0, size).foldLeft((Point.createEmpty(), PointSequenceBuilders.fixedSized(size, dimFlag, extent.getCrsId)))(
           (state, i) => {
             val (startPnt, ps) = state
-            val x = extent.getMinX + Math.random() * extent.getWidth
-            val y = extent.getMinY + Math.random() * extent.getHeight
-            if (i == 0) (Points.create2D(x, y, extent.getCrsId), ps.add(x, y))
-            else if (i == size && closed) (startPnt, ps.add(startPnt.getX, startPnt.getY))
-            else (startPnt, ps.add(x, y))
+            val pnt = createPnt
+            if (i == 0) (createPnt, ps.add(pnt))
+            else if (i == size && closed) (startPnt, ps.add(startPnt))
+            else (startPnt, ps.add(pnt))
           })._2.toPointSequence
       )
     }
@@ -136,13 +155,17 @@ object Gen {
     genListOfPolys.map( lp => new MultiPolygon(lp.toArray))
   }
 
-  def geoJsonFeature[G <: Geometry](id: Gen[Int], geom: Gen[G], prop: Gen[JsObject]) : Gen[JsObject] =
+  def geoJsonFeature[T : ClassTag, G <: Geometry](id: Gen[T], geom: Gen[G], prop: Gen[JsObject]) : Gen[JsObject] =
     for {
       g <- geom
       p <- prop
       i <- id
     } yield {
-      Json.obj( "id" -> JsNumber(i), "type" -> "Feature", "geometry" -> Json.toJson(g)(GeometryWithoutCrsWrites), "properties" -> p)
+      i match {
+        case i: String => Json.obj ("id" -> i, "type" -> "Feature", "geometry" -> Json.toJson (g) (GeometryWithoutCrsWrites), "properties" -> p)
+        case i: Int => Json.obj ("id" -> i, "type" -> "Feature", "geometry" -> Json.toJson (g) (GeometryWithoutCrsWrites), "properties" -> p)
+        case _ =>   Json.obj ("id" -> i.toString, "type" -> "Feature", "geometry" -> Json.toJson (g) (GeometryWithoutCrsWrites), "properties" -> p)
+      }
     }
 
   def geoJsonFeatureArray( jsonGen: Gen[JsObject], size: Int) : Gen[JsArray] = sequence(List.fill(size)(jsonGen)).map(js => JsArray(js))

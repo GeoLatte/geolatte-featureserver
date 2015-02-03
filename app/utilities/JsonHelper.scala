@@ -1,7 +1,12 @@
 package utilities
 
-import play.api.libs.json.JsPath
+import play.api.libs.json._
+import play.api.libs.json.Reads._ //note that this imports the required object reducer
+import play.api.libs.functional.syntax._ //note tha this import is required vor the functional composition of Reads
+
 import play.api.data.validation.ValidationError
+
+import scala.collection.mutable.ListBuffer
 
 /**
  * Helpers for working the Json lib 
@@ -10,6 +15,43 @@ import play.api.data.validation.ValidationError
  *         creation-date: 12/4/13
  */
 object JsonHelper {
+
+  /**
+   * Flattens a Json object to a sequence of keys, values.
+   *
+   * {'a' : 1, 'b' : { 'c' , 2}} is flattened to Seq( ('a', 1), ('b.c', 2))
+   * Arrays are filtered out
+   *
+   * @param jsObject
+   */
+  def flatten(jsObject: JsObject) : Seq[(String, JsValue)]=  {
+
+    def join(path: String, key: String) : String =
+      new StringBuilder(path).append(".").append(key).toString()
+
+    def prependPath(path: String, kv : (String, JsValue)) : (String, JsValue) = kv match {
+      case (k,v) => (join(path,k), v)
+    }
+
+    def flattenAcc(jsObject: JsObject, buffer:ListBuffer[(String, JsValue)]): ListBuffer[(String, JsValue)] = {
+      jsObject.fields.foreach {
+        case (k, v: JsObject) => buffer.appendAll( flattenAcc(v, ListBuffer()).map( prependPath(k, _) )  )
+        case (k, v: JsArray) => Unit
+        case (k, v: JsValue) => buffer.append((k, v))
+      }
+      buffer
+    }
+    
+    flattenAcc(jsObject, ListBuffer()).toSeq
+  }
+
+
+  def mkProjection(paths : List[JsPath]) : Reads[JsObject] =
+    paths.foldLeft[Reads[JsObject]]( NoObjReads ) {
+      (r1, path) => (r1 and path.json.pickBranch) reduce
+    }
+
+
 
   /**
    * Converts a Json validation error sequence for a Feature into a single error message String.
@@ -21,5 +63,9 @@ object JsonHelper {
       case (jspath, valerrors) => jspath + " :" + valerrors.map(ve => ve.message).mkString("; ")
     } mkString "\n"
   }
-  
+
+  object NoObjReads extends Reads[JsObject] {
+    override def reads(json: JsValue): JsResult[JsObject] = JsSuccess(Json.obj())
+  }
+
 }

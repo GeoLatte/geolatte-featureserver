@@ -54,28 +54,28 @@
     </appender>
 
     <root level="info" additivity="false">
-        <appender-ref ref="STDOUT"/>
+        <!--<appender-ref ref="STDOUT"/>-->
         <appender-ref ref="FILE"/>
     </root>
 
     <logger name="application" level="debug" additivity="false">
-        <appender-ref ref="STDOUT"/>
+        <!--<appender-ref ref="STDOUT"/>-->
         <appender-ref ref="FILE"/>
     </logger>
 
     <logger name="play" level="INFO" additivity="false">
-        <appender-ref ref="STDOUT"/>
+        <!--<appender-ref ref="STDOUT"/>-->
         <appender-ref ref="FILE"/>
     </logger>
 
     <logger name="metrics" level="INFO" additivity="false">
-        <appender-ref ref="STDOUT"/>
-        <appender-ref ref="METRICFILE"/>
+        <!--<appender-ref ref="STDOUT"/>-->
+        <appender-ref ref="FILE"/>
     </logger>
 
     <logger name="requests" level="INFO" additivity="false">
         <appender-ref ref="STDOUT"/>
-        <appender-ref ref="REQUESTFILE"/>
+        <appender-ref ref="FILE"/>
     </logger>
 
 </configuration>

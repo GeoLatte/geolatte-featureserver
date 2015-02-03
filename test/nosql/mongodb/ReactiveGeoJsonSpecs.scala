@@ -1,5 +1,6 @@
 package nosql.mongodb
 
+import nosql.FeatureWriter
 import org.specs2.mutable.Specification
 import play.api.libs.iteratee._
 import scala.concurrent.{Future, Await}
@@ -28,7 +29,7 @@ class ReactiveGeoJsonSpecs extends Specification {
       val (_, enumerator) = testEnumerator(testSize)
       val sink = new mutable.ArrayBuffer[JsObject]()
       val fw = dummyWriter(sink)
-      val future = (enumerator  andThen Enumerator.eof) |>>> ReactiveGeoJson.mkStreamingIteratee(fw)
+      val future = (enumerator  andThen Enumerator.eof) |>>> ReactiveGeoJson.mkStreamingIteratee(fw, "\n")
       //Wait until de iteratee is done
       val stateIteratee = Await.result(future, Duration(5000, "millis"))
       //Wait until de Iteratee is finished writing to featurewriter
@@ -50,18 +51,15 @@ class ReactiveGeoJsonSpecs extends Specification {
 
         """
       val batched = inpJsonStr.getBytes("UTF-8").grouped(7736).toList
-      println("INPUT OPGEDEELD IN: " + batched.size)
-
       val sink = new mutable.ArrayBuffer[JsObject]()
       val fw = dummyWriter(sink)
       val enumerator = Enumerator(batched:_*)
-      val future = (enumerator andThen Enumerator.eof) |>>> ReactiveGeoJson.mkStreamingIteratee(fw)
+      val future = (enumerator andThen Enumerator.eof) |>>> ReactiveGeoJson.mkStreamingIteratee(fw, "\n")
       //Wait until de iteratee is done
       val stateIteratee = Await.result(future, Duration(5000, "millis"))
       //Wait until de Iteratee is finished writing to featurewriter
       Await.result(stateIteratee.right.get, Duration(5000, "millis"))
       val result = sink.toList
-      println("RESULT:  " + result)
 
       (stateIteratee must beRight) and
         (result must not be empty) and
@@ -86,7 +84,7 @@ class ReactiveGeoJsonSpecs extends Specification {
   }
 
   def testEnumerator(size: Int, batchSize: Int = 1000) = {
-    val text = ( genFeatures(size).map( g => g.get) mkString ConfigurationValues.jsonSeparator ) + ConfigurationValues.jsonSeparator
+    val text = ( genFeatures(size).map( g => g.get) mkString "\n" ) + "\n"
     val batched = text.getBytes("UTF-8").grouped(batchSize).toList
     (text, Enumerator(batched:_*))
   }

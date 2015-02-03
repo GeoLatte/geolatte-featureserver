@@ -66,7 +66,7 @@ object GeometryReaders {
     val boundingBox = EmptyExtent
   }
 
-  case class Position(x: Double, y: Double) extends Positions {
+  case class Position(x: Double, y: Double, other: Double *) extends Positions {
     lazy val boundingBox = NonEmptyExtent(x,y,x,y)
   }
 
@@ -96,23 +96,24 @@ object GeometryReaders {
 
   }
 
-  def positionList2PointSequence(seq: Seq[Positions])(implicit crs: CrsId): Option[PointSequence] = {
+  def positionList2PointSequence(seq: Seq[Positions])(implicit crs: CrsId): PointSequence = {
     val seqPnts = seq.map {
       case Position(x, y) => Points.create2D(x, y, crs)
+      case Position(x, y, z) => Points.create3D(x, y, z, crs)
+      case Position(x, y, z, m) => Points.create3DM(x, y, z, m, crs)
       case InvalidPosition(msg) => throw new IllegalStateException(msg)
     }
     seqPnts match {
-      case Seq() => Some(EmptyPointSequence.INSTANCE)
+      case Seq() => EmptyPointSequence.INSTANCE
       case _ => {
         val fp = seqPnts.head
         val builder = PointSequenceBuilders.variableSized(fp.getDimensionalFlag, fp.getCrsId)
-        val ps = seqPnts.foldLeft(builder)((b, p) => b.add(p)).toPointSequence
-        Some(ps)
+        seqPnts.foldLeft(builder)((b, p) => b.add(p)).toPointSequence
       }
     }
   }
 
-  implicit val PositionReads: Reads[Positions] = new Reads[Positions] {
+  implicit val  PositionReads: Reads[Positions] = new Reads[Positions] {
 
     def readArray[T](values: Seq[T]): Positions = {
 
@@ -124,6 +125,10 @@ object GeometryReaders {
       values match {
         case Nil => EmptyPosition
         case Seq((x: JsNumber), (y: JsNumber)) => Position(x.value.doubleValue(), y.value.doubleValue())
+        case Seq((x: JsNumber), (y: JsNumber), (z: JsNumber)) =>
+          Position(x.value.doubleValue(), y.value.doubleValue(), z.value.doubleValue())
+        case Seq((x: JsNumber), (y: JsNumber), (z: JsNumber), (m:JsNumber)) =>
+          Position(x.value.doubleValue(), y.value.doubleValue(), z.value.doubleValue(), m.value.doubleValue() )
         case psv: Seq[_] => {
           val pl = psv.foldLeft(ListBuffer[Positions]())( (result, el) => result :+ toPos(el) ).toList
           PositionList(pl)
@@ -144,16 +149,16 @@ object GeometryReaders {
 
   def GeometryReads(implicit defaultCrs: CrsId) = new Reads[Geometry] {
 
-    def mkLineString(list: Seq[Positions]): LineString = new LineString(positionList2PointSequence(list).get)
+    def mkLineString(list: Seq[Positions], crs: CrsId): LineString = new LineString(positionList2PointSequence(list)(crs))
 
     def toGeometry(typeKey: String, pos: Positions, geomcrs: Option[CrsId]): Geometry = {
       val crs = geomcrs.getOrElse(defaultCrs)
       (typeKey.toLowerCase, pos) match {
-        case ("point", Position(x, y)) => Points.create2D(x, y, crs)
-        case ("linestring", PositionList(list)) => mkLineString(list)
+        case ("point", pos) => new Point(positionList2PointSequence(Seq(pos))(crs))
+        case ("linestring", PositionList(list)) => mkLineString(list, crs)
         case ("multilinestring", PositionList(list)) => {
           val linestrings: Array[LineString] = list.collect {
-            case PositionList(l) => mkLineString(l)
+            case PositionList(l) => mkLineString(l, crs)
           }.toArray
           new MultiLineString(linestrings)
         }
@@ -188,15 +193,20 @@ object GeometryReaders {
 
   implicit val PointCollectionWrites = new Writes[PointCollection] {
 
-    import scala.collection.JavaConversions._
-
-    def write(ps: PointSequence): JsArray =
+    def write(ps: PointSequence): JsArray = {
+      val coordinates = new Array[Double](ps.getCoordinateDimension)
       if (ps.isEmpty) Json.arr()
-      else if (ps.size() == 1) Json.arr( ps.getX(0), ps.getY(0))
       else {
-        val buf = ps.foldLeft( ListBuffer[JsArray]())( (buf, p) => {buf.append(Json.arr( p.getX, p.getY )); buf})
+        val buf = ListBuffer[JsArray]()
+        var i = 0
+        while( i < ps.size) {
+          ps.getCoordinates(coordinates, i)
+          buf.append( Json.arr(coordinates) )
+          i = i + 1
+        }
         JsArray(buf)
       }
+    }
 
     def writes(col: PointCollection): JsArray = col match {
       case ps : PointSequence => write(ps)

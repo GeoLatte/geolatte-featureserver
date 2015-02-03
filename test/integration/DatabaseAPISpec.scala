@@ -1,11 +1,8 @@
 package integration
 
-import scala._
-import org.specs2._
-import play.api.libs.json._
-import play.api.test.Helpers._
 import org.specs2.specification.Step
-import play.api.test.WithApplication
+import play.api.libs.json._
+import play.api.mvc.AnyContentAsEmpty
 
 
 /**
@@ -14,26 +11,32 @@ import play.api.test.WithApplication
  */
 class DatabaseAPISpec extends NoSqlSpecification {
 
-  //These specifications need to be sequential (we test for objects created in previous steps/examples
-  def is =  s2""" $sequential
 
-    The /api/databases should return
+
+  //These specifications need to be sequential (we test for objects created in previous steps/examples
+  def is =  s2"""
+
+
+
+    The /api/databases should return                    ${section("mongodb", "postgresql")}
       an array of databases                             ${e1}
-      with content-type                                 ${e2("vnd.geolatte-featureserver+json")}
+      with content-type                                 ${e2("application/vnd.geolatte-featureserver+json")}
       CREATED on PUT of a database                      ${e3}
       CONFLICT on attempt to create twice               ${e4}
       array containing the name of db after create      ${e5}
       the db metadata on GET of db                      ${e6}
-      DELETED on deleting the database                  ${e7}
+      OK on deleting the database                       ${e7}
+      OK when deleting again (DELETE is Idempotent)     ${e7}
       array without name of db, after drop              ${e8}
                                                         ${Step(cleanup)}
+                                                        ${section("mongodb", "postgresql")}
+
   """
 
-  import RestApiDriver._
-  import UtilityMethods._
+  import integration.RestApiDriver._
+  import integration.UtilityMethods._
 
-  def e1 =  getDatabases.applyMatcher{ it => it.status must equalTo(OK) and
-        (it.responseBody must beSome(beAnInstanceOf[JsArray])) }
+  def e1 = getDatabases.applyMatcher{ it => it.status must equalTo(OK) and (it.responseBody must beSome(beAnInstanceOf[JsArray])) }
 
   def e2(expected: String) =  getDatabases applyMatcher { it => contentType(it.wrappedResult) must beSome(expected) }
 
@@ -43,7 +46,7 @@ class DatabaseAPISpec extends NoSqlSpecification {
 
   def e5 = getDatabases.applyMatcher( testResponseContains(testDbName, 1))
 
-  def e6 = pending    //TODO - pending test
+  def e6 = pending //TODO see CollectionAPISpec#e6 (move that to here, or delete this)
 
   def e7 = dropDatabase(testDbName) applyMatcher( _.status must equalTo(OK))
 
@@ -51,12 +54,12 @@ class DatabaseAPISpec extends NoSqlSpecification {
 
   def cleanup = { RestApiDriver.dropDatabase(testDbName); success }
 
-  def testResponseContains(dbName: String, numTimes: Int) = ( res: FakeRequestResult[JsValue, _]) => {
+  def testResponseContains(dbName: String, numTimes: Int) = ( res: FakeRequestResult[Nothing, AnyContentAsEmpty.type, JsValue]) => {
       val jsArrOpt : Option[JsArray] = res.responseBody
       val test = ( __ \ "name").read[String]
       //TODO -- test for presence of correct URL
       val filtered = jsArrOpt.map( js => js.value.filter( value => value.validate(test).asOpt.getOrElse("") == testDbName) )
-      filtered must beSome( (sq:Seq[JsValue]) => sq must have size numTimes )
+      (filtered must beSome( (sq:Seq[JsValue]) => sq must have size numTimes )) and ( res.status must equalTo(OK) )
     }
 
 }

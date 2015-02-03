@@ -1,17 +1,17 @@
 package controllers
 
+import nosql.{MediaReader, Metadata}
+
 import scala.language.implicitConversions
 
 import play.api.libs.json._
 import play.api.libs.functional.syntax._
 import play.api.libs.json.Reads._
 import nosql.json.GeometryReaders._
-import nosql.mongodb.{MediaReader, Media, Metadata}
 import org.geolatte.geom.Envelope
 import org.apache.commons.codec.binary.Base64
 import play.api.libs.functional.ContravariantFunctor
 import play.api.libs.iteratee.Enumerator
-import scala.None
 
 trait RenderableResource
 trait RenderableNonStreamingResource extends RenderableResource
@@ -62,11 +62,17 @@ case class MediaReaderResource(mediaReader: MediaReader) extends Jsonable {
   def toJson = Json.toJson(mediaReader)
 }
 
-case class FeaturesResource(cnt: Int, features: List[JsObject]) extends Jsonable {
-  def toJson: JsValue = Json.obj (
-    "total" -> cnt,
+case class FeaturesResource(total: Option[Long], features: List[JsObject]) extends Jsonable {
+
+  def totalEl = total match {
+    case Some(t) => Json.obj("total" -> t)
+    case _ => Json.obj()
+  }
+
+  def toJson: JsValue = totalEl ++ Json.obj (
     "count" -> features.length ,
-    "features" -> features)
+    "features" -> features
+  )
 }
 
 object Formats {
@@ -112,31 +118,22 @@ object Formats {
       (__ \ "data").write[String].contramap[Array[Byte]]( ar => Base64.encodeBase64String(ar))
     )(unlift(MediaReader.unapply))
 
-  // View Defs
-  def escape(key: String) = key.replace(".", "/" )
-  def unescape(key: String) = key.replace("/", ".")
-
-  def viewDefkeysReads(f: String => String) : Reads[JsObject]  =  __.read[JsObject].map( js => js.value.map{
-     case (k, v : JsObject) => (f(k), v.as(viewDefkeysReads(f)))
-     case (k,v : JsValue) => (f(k),v)
-   }).map(m => JsObject(m.toSeq))
-
   val projection : Reads[JsArray] = (__ \ "projection").readNullable[JsArray].map(js=> js.getOrElse(Json.arr()))
 
   val ViewDefIn  = (
-          ( __ \ 'query).json.pickBranch(viewDefkeysReads(escape)) and
+          ( __ \ 'query).json.pickBranch(of[JsString]) and
           ( __ \ 'projection).json.copyFrom( projection  )
         ).reduce
 
   def ViewDefOut(db: String, col: String)  = (
       ( __ \ 'name).json.pickBranch(of[JsString]) and
-      ( __ \ 'query).json.pickBranch(viewDefkeysReads(unescape)) and
+      ( __ \ 'query).json.pickBranch(of[JsString]) and
       ( __ \ 'projection).json.pickBranch(of[JsArray]) and
       ( __ \ 'url).json.copyFrom( ( __ \ 'name).json.pick.map( name => JsString(controllers.routes.ViewController.get(db, col, name.as[String]).url) ) )
     ).reduce
 
   val ViewDefExtract = (
-     ( __ \ "query").readNullable(viewDefkeysReads(unescape)) and
+     ( __ \ "query").readNullable[String] and
      ( __ \ "projection").readNullable[JsArray]
     ).tupled
 

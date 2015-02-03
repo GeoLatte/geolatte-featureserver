@@ -1,5 +1,7 @@
 package nosql.mongodb
 
+import org.geolatte.geom.Envelope
+import querylang.BooleanExpr
 import reactivemongo.api._
 import reactivemongo.bson._
 import reactivemongo.bson.DefaultBSONHandlers._
@@ -10,22 +12,11 @@ import play.modules.reactivemongo._
 import play.modules.reactivemongo.json.ImplicitBSONHandlers._
 
 import collection.JavaConversions._
-import org.geolatte.geom.codec.Wkb
-import org.geolatte.geom.{Geometry, Envelope, ByteBuffer, ByteOrder}
 import org.geolatte.geom.curve.{MortonContext, MortonCode}
 
 import play.Logger
-import scala.concurrent.{ExecutionContext, Future}
-import reactivemongo.api.indexes.IndexType.Ascending
-import reactivemongo.api.Cursor
 import play.api.libs.iteratee._
-import reactivemongo.api.indexes.Index
-import scala.Some
-import reactivemongo.api.collections.default.BSONCollection
-import reactivemongo.core.commands.{Count, GetLastError}
-import scala.util.{Try, Failure, Success}
-import java.util.Date
-import play.modules.reactivemongo.json.collection.JSONCollection
+import scala.util.{Success, Try, Failure}
 import nosql.json.GeometryReaders._
 import nosql.json.GeometryReaders
 
@@ -33,29 +24,10 @@ import scala.language.reflectiveCalls
 import scala.language.implicitConversions
 
 import config.AppExecutionContexts.streamContext
-import nosql.Exceptions
-import play.modules.reactivemongo.json.collection.JSONCollection
-import scala.util.Failure
-import scala.Some
-import play.modules.reactivemongo.json.BSONFormats
-import play.modules.reactivemongo.json.collection.JSONCollection
-import scala.util.Failure
-import scala.Some
+import nosql.{InvalidQueryException, SpatialQuery, Metadata, MortonCodeQueryOptimizer}
 import play.api.libs.json.JsArray
 import play.modules.reactivemongo.json.collection.JSONCollection
-import scala.util.Failure
-import scala.Some
 
-
-
-object MetadataIdentifiers {
-  val MetadataCollectionPrefix = "geolatte_nosql."
-  val MetadataCollection = "geolatte_nosql.collections"
-  val ExtentField = "extent"
-  val IndexLevelField = "index_depth"
-  val CollectionField = "collection"
-  val Fields = Set(ExtentField, CollectionField)
-}
 
 object SpecialMongoProperties {
 
@@ -70,20 +42,9 @@ object SpecialMongoProperties {
 
 }
 
-trait MortonCodeQueryOptimizer {
-  //the return type of the optimizer
-  type QueryDocuments = List[JsObject]
-
-  /**
-   * Optimizes the window query, given the specified MortonCode
-   * @param window
-   * @return
-   */
-  def optimize(window: Envelope, mortoncode: MortonCode): QueryDocuments
-}
-
 trait SubdividingMCQueryOptimizer extends MortonCodeQueryOptimizer {
 
+  type QueryDocuments = List[JsObject]
 
   def optimize(window: Envelope, mortoncode: MortonCode): QueryDocuments = Try{
 
@@ -114,25 +75,8 @@ trait SubdividingMCQueryOptimizer extends MortonCodeQueryOptimizer {
     Logger.debug(s"num. of queries for window ${window.toString}= ${result.size}")
     result
   }.recoverWith {
-    case e: Throwable => Failure(new Exceptions.InvalidQueryException(e.getMessage))
+    case e: Throwable => Failure(new InvalidQueryException(e.getMessage))
   }.get
-
-}
-
-case class Metadata(name: String, envelope: Envelope, level : Int, count: Long = 0)
-
-object Metadata {
-
-  import MetadataIdentifiers._
-
-  //added so that MetadataReads compiles
-  def apply(name: String, envelope:Envelope, level: Int): Metadata = this(name, envelope,level, 0)
-
-  implicit val MetadataReads = (
-    (__ \ CollectionField).read[String] and
-    (__ \ ExtentField).read[Envelope](EnvelopeFormats) and
-    (__ \ IndexLevelField).read[Int]
-  )(Metadata.apply _)
 
 }
 
@@ -140,12 +84,18 @@ object Metadata {
 abstract class MongoSpatialCollection(collection: JSONCollection, metadata: Metadata) {
 
   //we require a MortonCodeQueryOptimizer to be mixed in on instantiation
-  this: MortonCodeQueryOptimizer =>
+  this: SubdividingMCQueryOptimizer =>
 
   lazy val mortonContext = new MortonContext(metadata.envelope, metadata.level)
 
   def mortonCode = new MortonCode(mortonContext)
 
+
+  private def render(expr : BooleanExpr) : JsObject = MongoDBQueryRenderer.render(expr) match {
+    case jsvalue if jsvalue.isInstanceOf[JsObject] => jsvalue.asInstanceOf[JsObject]
+    //TODO -- how better to handle exceptions
+    case _ => throw new IllegalArgumentException();
+  }
 
   def window2query(window: Envelope) = {
     val qds: Seq[JsValue] = optimize(window, mortonCode)
@@ -155,7 +105,7 @@ abstract class MongoSpatialCollection(collection: JSONCollection, metadata: Meta
 
   def selector(sq: SpatialQuery) = {
      val windowPart = sq.windowOpt.map( window2query(_) ).getOrElse(Json.obj())
-     val query = sq.queryOpt.getOrElse(Json.obj())
+     val query = sq.queryOpt.map( render(_) ).getOrElse(Json.obj())
      query ++ windowPart
   }
 

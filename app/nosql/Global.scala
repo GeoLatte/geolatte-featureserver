@@ -28,20 +28,33 @@ object Global extends GlobalSettings {
     Future { NotFound(s"Request ${request.path} not found.") }
   }
 
-  val metricRegistry = new MetricRegistry()
+  lazy val metricRegistry = new MetricRegistry()
 
-  val jmxReporter = JmxReporter.forRegistry(metricRegistry).build()
+  lazy val jmxReporter = JmxReporter.forRegistry(metricRegistry).build()
 
-  val logReporter = Slf4jReporter.forRegistry(metricRegistry)
+  lazy val logReporter = Slf4jReporter.forRegistry(metricRegistry)
     .outputTo(LoggerFactory.getLogger("metrics"))
     .convertRatesTo(TimeUnit.SECONDS)
     .convertDurationsTo(TimeUnit.MILLISECONDS)
     .build()
 
-  override def onStart(app: Application) {
+  def startMetrics(app: Application) : Unit = {
+    if (app.mode == Mode.Prod) {
+      jmxReporter.start()
+      logReporter.start(1, TimeUnit.MINUTES)
+    }
+  }
 
-    jmxReporter.start()
-    logReporter.start(1, TimeUnit.MINUTES)
+  def stopMetrics(app: Application) : Unit = {
+    if (app.mode == Mode.Prod) {
+      jmxReporter.stop()
+      logReporter.stop()
+    }
+  }
+
+
+  override def onStart(app: Application) {
+    startMetrics(app)
   }
 
   val requestLogger = LoggerFactory.getLogger("requests")
@@ -58,6 +71,11 @@ object Global extends GlobalSettings {
       result.withHeaders("Request-Time" -> requestTime.toString)
 
     }
+  }
+
+  override def onStop(app: Application): Unit = {
+    stopMetrics(app)
+    //TODO also stop repository connection pools (e.g. postgresql-async!)
   }
 
 

@@ -1,4 +1,4 @@
 #! /bin/sh
 
-curl -X POST  -i --header "Transfer-Encoding: chunked" --data-binary @- $1
+curl -X POST  -i --header "Transfer-Encoding: chunked" --limit-rate 2048k --data-binary @- $1
 

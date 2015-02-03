@@ -1,5 +1,7 @@
 package controllers
 
+import querylang.{BooleanAnd, QueryParser, BooleanExpr}
+
 import scala.language.reflectiveCalls
 import scala.language.implicitConversions
 
@@ -16,25 +18,33 @@ import org.supercsv.encoder.DefaultCsvEncoder
 import org.supercsv.prefs.CsvPreference
 import scala.concurrent.Future
 import play.api.Play._
-import play.api.libs.json.JsUndefined
+
 import play.api.libs.json.JsString
 import play.api.libs.json.JsBoolean
-import scala.Some
+
 import play.api.libs.json.JsNumber
-import utilities.QueryParam
-import nosql.Exceptions.InvalidQueryException
+import utilities.{EnumeratorUtility, QueryParam}
+import nosql.InvalidQueryException
 import play.api.libs.json.JsObject
-import com.fasterxml.jackson.core.JsonParseException
-import nosql.{FutureInstrumented, Instrumented}
-import nl.grons.metrics.scala.FutureMetrics
-import java.util.concurrent.atomic.AtomicInteger
+import nosql.{Metadata, SpatialQuery, FutureInstrumented}
+
+import scala.util.{Failure, Success}
 
 
 object FeatureCollectionController extends AbstractNoSqlController with FutureInstrumented {
 
   import AppExecutionContexts.streamContext
 
+  import config.ConfigurationValues._
+  val COLLECTION_LIMIT = MaxReturnItems
+
+  def parse2Optional(s: String) : Option[BooleanExpr]= QueryParser.parse(s) match {
+    case Success(expr) => Some(expr)
+    case Failure(t) => throw InvalidQueryException(t.getMessage)
+  }
+
   object QueryParams {
+
     //we leave bbox as a String parameter because an Envelope needs a CrsId
     val BBOX = QueryParam("bbox", (s: String) => Some(s))
 
@@ -49,64 +59,63 @@ object FeatureCollectionController extends AbstractNoSqlController with FutureIn
       else Some(JsArray( s.split(',').toSeq.map(e => JsString(e)) ))
     )
 
-    val QUERY : QueryParam[JsObject] = QueryParam("query", (s:String) =>
-      try {
-        Json.parse(s).asOpt[JsObject]
-      } catch {
-        case e : JsonParseException => throw  InvalidQueryException(e.getMessage)
-      })
+    val QUERY : QueryParam[BooleanExpr] = QueryParam("query", parse2Optional )
 
   }
 
-  val COLLECTION_LIMIT = current.configuration.getInt("max-collection-size").getOrElse[Int](10000)
+
 
   def query(db: String, collection: String) =
-    repositoryAction ( implicit request => futureTimed("featurecollection-query"){
+    repositoryAction ( implicit request =>
+      futureTimed("featurecollection-query"){
         implicit val queryStr = request.queryString
+
+        val start : Option[Int] = QueryParams.START.extract
+        val limit : Option[Int]= QueryParams.LIMIT.extract
+
         Logger.info(s"Query string $queryStr on $db, collection $collection")
-        Repository.metadata(db, collection).flatMap(md =>
-          doQuery(db, collection, md).map[SimpleResult](x => x)
-        ).recover {
-          case ex: InvalidQueryException => BadRequest(s"${ex.getMessage}")
-        }.recover (commonExceptionHandler(db, collection))
-    })
+          repository.metadata(db, collection).flatMap(md =>
+            doQuery(db, collection, md, start, limit).map[SimpleResult]{
+              case (_, x) => x
+            }
+          ).recover {
+            case ex: InvalidQueryException => BadRequest(s"${ex.getMessage}")
+          }.recover (commonExceptionHandler(db, collection))
+      }
+    )
 
 
   def download(db: String, collection: String) = repositoryAction {
       implicit request => {
         Logger.info(s"Downloading $db/$collection.")
-        Repository.query(db, collection, SpatialQuery()).map[SimpleResult](x => x).recover {
+        repository.query(db, collection, SpatialQuery()).map[SimpleResult] {
+          case (_, x) => x
+        }.recover {
           commonExceptionHandler(db, collection)
         }
       }
     }
 
 
-  def collectFeatures(start: Int, max: Int) : Iteratee[JsObject, (Int, List[JsObject])] = {
-
-    case class fState(features: List[JsObject] = Nil, collected: Int = 0, total: Int = 0)
-
-    Iteratee.fold[JsObject, fState]( fState( total = start ) ) ( (state, feature) =>
-      if (state.collected >= max) state.copy( total = state.total+1)
-      else fState(feature::state.features, state.collected + 1, state.total + 1)
-    ).map(state => (state.total, state.features))
-
-  }
+  def collectFeatures : Iteratee[JsObject, List[JsObject]] =
+    Iteratee.fold[JsObject, List[JsObject]]( List[JsObject]() ) ( (state, feature) =>
+      feature::state
+    )
 
   def list(db: String, collection: String) = repositoryAction(
     implicit request => futureTimed("featurecollection-list"){
       implicit val queryStr = request.queryString
-      def enumerator2list(enum: Enumerator[JsObject]) : Future[(Int, List[JsObject])] = {
-        val limit = Math.min( QueryParams.LIMIT.extract.getOrElse(COLLECTION_LIMIT),COLLECTION_LIMIT)
-        val start = QueryParams.START.extract.getOrElse(0)
-        enum &> Enumeratee.drop(start)  |>>> collectFeatures(start, limit)
-      }
+
+      val limit = Math.min( QueryParams.LIMIT.extract.getOrElse(COLLECTION_LIMIT),COLLECTION_LIMIT)
+      val start = QueryParams.START.extract.getOrElse(0)
+
       Logger.info(s"Query string $queryStr on $db, collection $collection")
-      Repository.metadata(db, collection).flatMap(md =>
-        doQuery(db, collection, md).flatMap {
-          case enum => enumerator2list(enum)
+
+      repository.metadata(db, collection).flatMap(md =>
+        doQuery(db, collection, md, Some(start), Some(limit)).flatMap {
+          case ( optTotal , enum) => (enum |>>> collectFeatures) map ( l => (optTotal, l))
         }.map[SimpleResult]{
-          case (cnt, features) => toSimpleResult(FeaturesResource(cnt, features))
+          case (optTotal, features) => toSimpleResult(FeaturesResource(optTotal, features))
         }
       ).recover {
         case ex: InvalidQueryException => BadRequest(s"${ex.getMessage}")
@@ -130,77 +139,90 @@ object FeatureCollectionController extends AbstractNoSqlController with FutureIn
 
       def encode(v: JsString) = "\"" + encoder.encode(v.value, null, CsvPreference.STANDARD_PREFERENCE) + "\""
 
-      //TODO -- refactor to clarify structure
-      def project(js: JsObject)(pf: PartialFunction[Option[(String, String)], String], pf2: Geometry => String) = {
+
+      def expand(v : JsObject) : Seq[(String, String)] = utilities.JsonHelper.flatten(v).map {
+        case (k, v: JsString)   => (k, encode(v) )
+        case (k, v: JsNumber)   => (k, Json.stringify(v) )
+        case (k, v: JsBoolean)  => (k, Json.stringify(v) )
+        case (k, _) => (k, "")
+      }
+
+
+      def project(js: JsObject)(selector: PartialFunction[(String, String), String], geomToString: Geometry => String) : Seq[String] = {
         val jsObj = (js \ "properties").asOpt[JsObject].getOrElse(JsObject(List()))
-        val attributes = jsObj.fields.map {
-          case (k, v: JsString) => Some((k, encode(v)))
-          case (k, v: JsNumber) => Some((k, v.value.toString))
-          case (k, v: JsBoolean) => Some((k, v.value.toString))
-          case (k, JsNull) => Some((k, ""))
-          case (k, _: JsUndefined) => Some((k, ""))
-          case _ => None
-        }.collect(pf)
-        val geom = pf2((js \ "geometry").asOpt(GeometryReads(CrsId.UNDEFINED)).getOrElse(Point.createEmpty()))
-        val idOpt = (js \ "_id" \ "$oid").asOpt[String].map(v => ("_id", v))
-        pf(idOpt) +: geom +: attributes
+        val attributes = expand(jsObj).collect(selector)
+        val geom = geomToString((js \ "geometry").asOpt(GeometryReads(CrsId.UNDEFINED)).getOrElse(Point.createEmpty()))
+        val idOpt = (js \ "_id" \ "$oid").asOpt[String].map(v => ("_id", v)).getOrElse(("_id", "null"))
+        selector(idOpt) +: geom +: attributes
       }
 
       val toCsvRecord = (js: JsObject) => project(js)({
-        case Some((k, v)) => v
+        case (k, v) => v
         case _ => "None"
       }, g => g.asText).mkString(",")
+
       val toCsvHeader = (js: JsObject) => project(js)({
-        case Some((k, v)) => k
+        case (k, v) => k
         case _ => "None"
       }, _ => "geometry-wkt").mkString(",")
 
-      // toCsv works as a state machine, on first invocation it print header, and record,
-      // on subsequent invocations, only the record
-      var toCsv: (JsObject) => String = js => {
-        this.toCsv = toCsvRecord
-        toCsvHeader(js) + "\n" + toCsvRecord(js)
+      val toCsv : (Int, JsObject) => String = (i,js) => {
+        if (i != 0) toCsvRecord(js)
+        else toCsvHeader(js)  + "\n" + toCsvRecord(js)
       }
 
       def toJsonStream = enum
 
-      def toCsvStream = enum.map(js => toCsv(js))
+      def toCsvStream = EnumeratorUtility.withIndex(enum).map[String]( toCsv.tupled)
 
-    }
-    )
+    })
 
-  private def doQuery(db: String, collection: String, smd: Metadata)
-                            (implicit queryStr: Map[String, Seq[String]]) : Future[Enumerator[JsObject]] =
-    queryString2SpatialQuery(db,collection,smd).flatMap( q =>  Repository.query(db, collection, q) )
+  private def doQuery(db: String, collection: String, smd: Metadata, start: Option[Int] = None, limit: Option[Int] = None)
+                            (implicit queryStr: Map[String, Seq[String]]) : Future[(Option[Long], Enumerator[JsObject])] =
+    queryString2SpatialQuery(db,collection,smd).flatMap( q =>  repository.query(db, collection, q, start, limit) )
 
 
   implicit def queryString2SpatialQuery(db: String, collection: String, smd: Metadata)
-                                       (implicit queryStr: Map[String, Seq[String]]) = {
+                                       (implicit queryStr: Map[String, Seq[String]]) : Future[SpatialQuery] = {
     val windowOpt = Bbox(QueryParams.BBOX.extractOrElse(""), smd.envelope.getCrsId)
     val projectionOpt = QueryParams.PROJECTION.extract
     val queryParamOpt = QueryParams.QUERY.extract
-    val viewDef = QueryParams.WITH_VIEW.extract.map(vd => Repository.getView(db, collection, vd))
+    val viewDef = QueryParams.WITH_VIEW.extract.map(vd => repository.getView(db, collection, vd))
       .getOrElse(Future {
       Json.obj()
     })
+
     viewDef.map(vd => vd.as(Formats.ViewDefExtract))
       .map {
       case (queryOpt, projOpt) =>
         SpatialQuery(
           windowOpt,
-          jsOptMerge(queryOpt, queryParamOpt)(_ ++ _),
-          jsOptMerge(projOpt, projectionOpt)(_ ++ _))
+          selectorMerge(queryOpt, queryParamOpt),
+          projectionMerge(projOpt, projectionOpt))
     }
+
   }
 
-  private def jsOptMerge[J <: JsValue](elem: Option[J]*)(union: (J, J) => J): Option[J] =
-    elem.foldLeft(None: Option[J]) {
-      (s, e) => e match {
-        case None => s
-        case Some(_) if s.isDefined => e.map(js => union(s.get, js))
-        case _ => e
-      }
+  private def selectorMerge(viewQuery: Option[String], exprOpt : Option[BooleanExpr]) : Option[BooleanExpr] = {
+
+    val res = (viewQuery, exprOpt) match {
+      case (Some(str), Some(e)) => parse2Optional(str).map(expr => BooleanAnd(expr, e))
+      case (None, s @ Some(_)) => s
+      case (Some(str), _) => parse2Optional(str)
+      case _ => None
     }
+    Logger.debug(s"Merging optional selectors of view and query to: $res")
+    res
+  }
+
+  private def projectionMerge(viewProj: Option[JsArray], qProj: Option[JsArray]): Option[JsArray] = {
+    val vp1 = viewProj.getOrElse(Json.arr())
+    val vp2 = qProj.getOrElse(Json.arr())
+    val combined = vp1 ++ vp2
+    val result = if (combined.value.isEmpty) None else Some(combined)
+    Logger.debug(s"Merging optional projectors of view and query to: $result")
+    result
+  }
 
   object Bbox {
 
