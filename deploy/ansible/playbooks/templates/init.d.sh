@@ -4,9 +4,6 @@
 APPLICATION_NAME={{package_name}}
 APPLICATION_HOME={{work_path}}
 APPLICATION_JAVA_OPTS="{{app.java_opts}}"
-# Er zit een bug in de huidige versie van de SBT native packager, waardoor de java_opts genegeerd worden, vandaar dat we 
-# voorlopig werken met de mem optie. In SBT native packager 0.7.0 zal deze bug gefixed zijn (moet nog uitkomen - nu: 14 mei 2014).
-APPLICATION_JAVA_MEM="{{app.mem_opts}}"
 APPLICATION_USER={{app.user}}
 CONF={{conf_path}}
 LOGGING={{log_conf_path}}

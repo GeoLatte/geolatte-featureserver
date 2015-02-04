@@ -12,8 +12,7 @@ app:
   service: "{{package_name}}{{env_suffix}}"
   restart: true
   user: "{{package_name}}"
-  java_opts: "-J-Xms512m -J-Xmx1024m -J-XX:MaxPermSize=256m"
-  mem_opts: "-mem 1024"
+  java_opts: "-J-Xms512m -J-Xmx2024m"
   context: "geolatte-nosqlfs"
 
 # Opmerking bij 'mem_opts':
