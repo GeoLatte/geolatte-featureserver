@@ -1,0 +1,32 @@
+# Volgende variabelen worden extern gedefinieerd, e.g. in het script dat de ansible-playbook start.
+#  app_version:
+#  package_name:
+#  baseline_path:
+
+java_home: "/usr"
+
+app:
+  home: "/ONT/{{package_name}}/app"
+  service: "{{package_name}}"
+  restart: false
+  user: "{{package_name}}"
+  java_opts: "-J-Xms256m -J-Xmx768m -J-XX:MaxPermSize=256m"
+
+host:
+  ip: "{{package_name}}"
+  # poort nummer waarop de applicatie wordt opgestart
+  port: 8080
+  # publieke url van de app
+  url: http://vm/{{package_name}}
+
+# configuratie van postgres 
+postgres:
+  host: db
+  port: 5432
+  db: "{{package_name}}"
+  username: ls
+  password: ls
+
+# deze logging configuratie wordt nog niet gebruikt in {{package_name}}
+logging:
+  history: 3 # keep number of days' worth of history

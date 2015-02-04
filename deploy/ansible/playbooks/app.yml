@@ -1,0 +1,92 @@
+---
+- hosts: all
+  gather_facts: false
+  user: root
+  sudo: yes
+  vars:
+    full_package_name: "{{package_name}}-{{app_version}}"
+    package: "{{full_package_name}}.zip"
+    package_dist: "{{baseline_path}}/{{package}}"
+
+    work_path: "{{app.home}}/{{package_name}}"
+    tmp_path: "/var/tmp"
+
+    conf_dir_path: "{{work_path}}/config"
+    logs_dir_path: "{{work_path}}/logs"
+    work_dir_path: "{{work_path}}/work"
+
+    conf_path: "{{conf_dir_path}}/{{package_name}}.conf"
+    log_conf_path: "{{conf_dir_path}}/{{package_name}}-logger.xml"
+
+    src_initd_script_template: "templates/init.d.sh"
+    dst_initd_script_template: "/etc/init.d/{{app.service}}"
+
+    src_application_conf_template: "templates/{{package_name}}.conf"
+    dst_application_conf_template: "{{conf_path}}"
+    
+    src_logging_xml_template: "templates/logging.xml"
+    dst_logging_xml_template: "{{log_conf_path}}"
+
+  tasks:
+  - name: create application user
+    user: name={{app.user}}
+
+  - name: create install path
+    file: path={{app.home}} owner={{app.user}} group={{app.user}} mode=0774 state=directory
+
+  - name: make work path
+    action: command mkdir -p {{app.home}}/{{full_package_name}}
+
+  - name: symlink dirs
+    file: src={{app.home}}/{{full_package_name}} dest={{work_path}} state=link
+
+  - name: chmod RUNNING_PID file
+    action: file path={{work_path}}/RUNNING_PID owner={{app.user}} mode=0755 state=touch
+    when: app.restart
+
+  - name: stop service
+    command: /sbin/service {{app.service}} stop
+    when: app.restart
+    # dit werkt blijkbaar niet: service: name={{app.service}} state=stopped
+
+  - name: waiting for the application to stop
+    wait_for: host={{host.ip}} port={{host.port}} state=stopped
+    when: app.restart
+
+  - name: copy package
+    action: copy src={{package_dist}} dest={{tmp_path}}/{{package}}
+
+  - name: unpack distributable
+    action: command unzip -o {{tmp_path}}/{{package}} -d {{app.home}}
+
+  - name: chmod permissions
+    action: command echo {{app.home}}
+
+  - name: make necessary directories
+    action: command mkdir -p {{item}}
+    with_items:
+      - "{{logs_dir_path}}"
+      - "{{conf_dir_path}}"
+      - "{{work_dir_path}}"
+
+  - name: process templates initd
+    action: template src={{src_initd_script_template}} dest={{dst_initd_script_template}}
+
+  - name: chmod initd file
+    action: file path={{dst_initd_script_template}} owner=root mode=0755
+
+  - name: chmod startup file
+    action: file path={{work_path}}/bin/{{package_name}} owner={{app.user}} mode=0755
+
+  - name: process template application config
+    action: template src={{src_application_conf_template}} dest={{dst_application_conf_template}}
+
+  - name: process template logging config
+    action: template src={{src_logging_xml_template}} dest={{dst_logging_xml_template}}
+
+  - name: chown files to user
+    action: command chown -R {{app.user}} {{app.home}}/{{full_package_name}}
+
+  - name: start service
+    service: name={{app.service}} state=started
+    when: app.restart

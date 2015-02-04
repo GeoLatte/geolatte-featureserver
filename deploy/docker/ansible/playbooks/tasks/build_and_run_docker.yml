@@ -1,0 +1,33 @@
+#bouwt de docker images en gaat die ook runnen
+    - name: remove locatieservices postgres
+      action: shell docker rm -f locatieservices-postgres || true
+
+    - name: remove locatieservices
+      action: shell docker rm -f locatieservices || true
+
+    - name: build images
+      action: command docker build --no-cache={{no_cache}} -t locatieservices {{docker_dir}}
+
+    - name: run locatieservices postgres
+      action: command docker run -d --name="locatieservices-postgres" --hostname="lspostgres" -p 49032:5432 wegenenverkeer/postgres /sbin/my_init --enable-insecure-key
+
+    - wait_for: port=49032 delay=10
+
+    - shell: PGPASSWORD=docker psql -U docker -h 0.0.0.0 -p 49032 -d postgres --command "CREATE USER ls WITH SUPERUSER PASSWORD 'ls';"
+
+    - shell: PGPASSWORD=docker createdb -U docker -h 0.0.0.0 -p 49032 -O ls --template=template_postgis2.1 locatieservices
+
+    - stat: path=/tmp/locatieservices-2014-11-09.dmp
+      register: dump_file
+
+    - s3: bucket=awvdatabasestore-dev object=/2014/11/09/locatieservices.dmp dest=/tmp/locatieservices-2014-11-09.dmp mode=get aws_access_key=AKIAI5KQQWFMKNXVSPXA aws_secret_key=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
+      name: Downloaden van dump uit S3 naar /tmp/locatieservices-2014-11-09.dmp (kan lang duren als deze nog niet bestaat in /tmp)
+      when: not dump_file.stat.exists
+
+    - name: restore locatieservices dump
+      shell: PGPASSWORD=ls psql -h 0.0.0.0 -p 49032 -U ls locatieservices < /tmp/locatieservices-2014-11-09.dmp
+
+    - name: run locatieservices container
+      action: command docker run -d --name="locatieservices" --hostname="locatieservices" --link locatieservices-postgres:db -p 49034:8080 locatieservices /sbin/my_init --enable-insecure-key
+
+    - wait_for: port=49034 delay=10

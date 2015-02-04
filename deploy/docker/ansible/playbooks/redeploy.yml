@@ -1,0 +1,17 @@
+---
+# TODO  urls voor retrieven van locatieservices uit nexus kloppen nog niet volledig dynamisch, fix onze sbt plugin daarvoor (zie http://dev-colab.awv.vlaanderen.be/jira/browse/WDB-5483 )
+- name: locatie services docker container playbook
+  hosts: docker
+  gather_facts: false
+  connection: local
+  vars:
+    no_cache: false
+    docker_dir: ../../../docker         # locatie van de docker folder t.o.v. van deze playbook
+    docker_ansible_dir: ../../ansible   # locatie van de docker ansible folder t.o.v. van deze playbook
+    base_ansible_dir: ../../../ansible  # locatie van de base ansible foder t.o.v. deze playbook
+    deploy_root_dir: ../../../../       # locatie waaronder de deploy folder staat, daar staat het artifact dat gedeployd wordt
+
+  tasks:  
+    - include: tasks/deploy_to_docker.yml
+
+    - include: tasks/restart-service.yml
