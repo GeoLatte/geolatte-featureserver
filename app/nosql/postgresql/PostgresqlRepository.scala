@@ -127,8 +127,13 @@ object PostgresqlRepository extends Repository {
 
 
   def insert(database: String, collection: String, jsons: Seq[(JsObject,Polygon)] ): Future[Long] = {
+    def id(json: JsValue) : Any = json match {
+      case JsString(v) => v
+      case JsNumber(i) => i
+      case _ => throw new IllegalArgumentException("No ID property of type String or Number")
+    }
     val paramValues : Seq[Seq[Any]] = jsons.map{
-        case (json, env) =>  Seq( (json \ "id").toString , unescapeJson(json), org.geolatte.geom.codec.Wkb.toWkb(env))
+        case (json, env) =>  Seq( id(json \ "id") , unescapeJson(json), org.geolatte.geom.codec.Wkb.toWkb(env))
     }
     val numRowsAffected : Future[List[Long]] = executePreparedStmts(Sql.INSERT_DATA(database, collection), paramValues){_.rowsAffected}
     numRowsAffected.map( cnts => cnts.foldLeft(0L)( _ + _))

@@ -32,7 +32,7 @@ class TransactionAPISpec  extends InCollectionSpecification {
         accept Json values with string-value ID props                             $e62
 
      The transaction /delete should:
-        deleting an element and return status DELETED                             $e7
+        deleting an element and return status OK                                  $e7
 
       The transaction /delete should:
         return status code BAD_REQUEST when query is malformed                    $e8
@@ -124,7 +124,15 @@ class TransactionAPISpec  extends InCollectionSpecification {
     postUpsert(testDbName, testColName, f).status must equalTo(OK)
   }
 
-  def e7 = pending
+  def e7 = {
+    removeData(testDbName, testColName)
+    val f = featureWithStringId().sample.get
+    val id = (f \ "id").as[String]
+    postUpsert(testDbName, testColName, f).status
+
+    postRemove(testDbName, testColName, Json.obj("query" -> s"id = '${id}'")).status must equalTo(OK)
+
+  }
 
   def e8 = {
     removeData(testDbName, testColName)

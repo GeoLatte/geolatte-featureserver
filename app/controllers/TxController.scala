@@ -82,7 +82,7 @@ object TxController extends AbstractNoSqlController {
         js => js \ key
       } match {
         case Some(v: T) => v
-        case _ => throw new InvalidParamsException(s"Request body isn't a Json with an  $key property of correct type")
+        case _ => throw new InvalidParamsException(s"Request body $in isn't a Json with an  $key property of correct type")
       }
     }
 
