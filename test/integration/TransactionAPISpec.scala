@@ -46,6 +46,15 @@ class TransactionAPISpec  extends InCollectionSpecification {
   import UtilityMethods._
   import Gen._
 
+
+  //metadata for collections with text-based identifiers
+  val metaWithTextIdType = Json.obj(
+    "extent" -> Json.obj("crs" -> defaultExtent.getCrsId.getCode, "envelope" ->
+      Json.arr(defaultExtent.getMinX, defaultExtent.getMinY, defaultExtent.getMaxX, defaultExtent.getMaxY)),
+    "index-level" -> defaultIndexLevel,
+    "id-type" -> "text"
+  )
+
  //Generators for data
   val prop = Gen.properties("foo" -> Gen.oneOf("bar1", "bar2", "bar3"), "num" -> Gen.oneOf(1, 2, 3))
   def geom(mc: String = "") = Gen.lineString(3)(mc)
@@ -90,16 +99,20 @@ class TransactionAPISpec  extends InCollectionSpecification {
   }
 
   def e42 = {
+
+    val newColName = testColName + "2"
+    makeCollection(testDbName, newColName, metaWithTextIdType)
     val f = featureWithStringId().sample.get
-    removeData(testDbName, testColName)
-    postUpsert(testDbName, testColName, f)
+    postUpsert(testDbName, newColName, f)
     val modifier = __.json.update(( __ \ "properties" \ "num").json.put(JsNumber(4)))
     val modifiedFeature = f.transform(modifier).asOpt.get
-    postUpsert(testDbName, testColName, modifiedFeature)
-    postUpsert(testDbName, testColName, modifiedFeature)
-    getList(testDbName, testColName, "") applyMatcher { res =>
+    postUpsert(testDbName, newColName, modifiedFeature)
+    postUpsert(testDbName, newColName, modifiedFeature)
+    val result = getList(testDbName, newColName, "") applyMatcher { res =>
       res.responseBody must beSome(matchFeaturesInJson(Json.arr(modifiedFeature)))
     }
+    deleteCollection(testDbName, newColName)
+    result
   }
 
 
@@ -120,8 +133,12 @@ class TransactionAPISpec  extends InCollectionSpecification {
   def e6 = pending
 
   def e62 = {
+    val newColName = testColName + "2"
+    makeCollection(testDbName, newColName, metaWithTextIdType)
     val f = featureWithStringId().sample.get
-    postUpsert(testDbName, testColName, f).status must equalTo(OK)
+    val res = postUpsert(testDbName, newColName, f).status must equalTo(OK)
+    deleteCollection(testDbName, newColName)
+    res
   }
 
   def e7 = {

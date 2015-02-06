@@ -57,6 +57,7 @@ class CollectionAPISpec extends InDatabaseSpecification {
   // the inbound metadata
   val inMetadata = Json.obj(
     "index-level" -> 4,
+    "id-type" -> "text",
     "extent" -> Json.obj(
       "crs" -> 4326,
       "envelope" -> Json.arr(0.0, 0.0, 90.0, 90.0)

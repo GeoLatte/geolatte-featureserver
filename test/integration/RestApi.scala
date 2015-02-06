@@ -283,7 +283,8 @@ with FutureAwaits {
   val defaultCollectionMetadata = Json.obj(
     "extent" -> Json.obj("crs" -> defaultExtent.getCrsId.getCode, "envelope" ->
       Json.arr(defaultExtent.getMinX, defaultExtent.getMinY, defaultExtent.getMaxX, defaultExtent.getMaxY)),
-    "index-level" -> defaultIndexLevel
+    "index-level" -> defaultIndexLevel,
+    "id-type" -> "decimal"
   )
 
   implicit def mapOfQParams2QueryStr[T](params: Map[String, T]): String = params.map { case (k, v) => s"$k=$v"} mkString "&"

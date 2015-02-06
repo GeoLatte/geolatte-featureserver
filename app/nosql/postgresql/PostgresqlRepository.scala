@@ -62,12 +62,13 @@ object PostgresqlRepository extends Repository {
     executeStmtsInTransaction(Sql.DROP_SCHEMA(dbname)){ _ => true }.map(_.head)
 
 
-  override def createCollection(dbName: String, colName: String, spatialSpec: Option[Metadata]): Future[Boolean] = {
-    def stmts = spatialSpec match {
-      case Some(md) => List( Sql.CREATE_COLLECTION_TABLE(dbName, colName), Sql.INSERT_METADATA(dbName, colName, md)
-        , Sql.CREATE_COLLECTION_INDEX(dbName, colName))
-      case None =>   List( Sql.CREATE_COLLECTION_TABLE(dbName, colName), Sql.CREATE_COLLECTION_INDEX(dbName, colName))
-    }
+  override def createCollection(dbName: String, colName: String, md: Metadata): Future[Boolean] = {
+    val stmts = List(
+      Sql.CREATE_COLLECTION_TABLE(dbName, colName),
+      Sql.INSERT_METADATA(dbName, colName, md),
+      Sql.CREATE_COLLECTION_SPATIAL_INDEX(dbName, colName),
+      Sql.CREATE_COLLECTION_ID_INDEX(dbName, colName, md.idType)
+    )
     executeStmtsInTransaction( stmts :_*) map ( _ => true )
   }
 
@@ -84,7 +85,7 @@ object PostgresqlRepository extends Repository {
         case JsSuccess(value, _) => value
         case _ => throw new RuntimeException("Invalid envellopre JSON format.")
       }
-      Metadata(collection, env, row(1).asInstanceOf[Int], cnt)
+      Metadata(collection, env, row(1).asInstanceOf[Int], row(2).asInstanceOf[String], cnt)
     }
 
     def queryResult2Metadata(qr: QueryResult, cnt: Long) =
@@ -384,6 +385,7 @@ object PostgresqlRepository extends Repository {
   private def quote(str: String) : String = "\"" + str + "\""
   private def single_quote(str: String) : String = "'" + str + "'"
   private def unescapeJson(js: JsObject):String = Json.stringify(js).replaceAll("'", "''")
+  private def toColName(str: String) : String = str.replaceAll("-", "_")
 
   //These are the SQL statements for managing and retrieving data
   object Sql {
@@ -449,9 +451,10 @@ object PostgresqlRepository extends Repository {
 
     def CREATE_METADATA_TABLE_IN(dbname : String) =
       s"""CREATE TABLE ${quote(dbname)}.${quote(MetadataCollection)} (
-          | $ExtentField JSON,
-          | $IndexLevelField INT,
-          | $CollectionField VARCHAR(255) PRIMARY KEY
+          | ${toColName(ExtentField)} JSON,
+          | ${toColName(IndexLevelField)} INT,
+          | ${toColName(IdTypeField)} VARCHAR(120),
+          | ${toColName(CollectionField)} VARCHAR(255) PRIMARY KEY
           | )
        """.stripMargin
 
@@ -462,7 +465,6 @@ object PostgresqlRepository extends Repository {
           | VIEW_DEF JSON,
           | UNIQUE (COLLECTION, VIEW_NAME)
           | )
-          |
        """.stripMargin
 
 
@@ -474,7 +476,12 @@ object PostgresqlRepository extends Repository {
           | )
        """.stripMargin
 
-    def CREATE_COLLECTION_INDEX(dbname: String, tableName: String) =
+    def CREATE_COLLECTION_ID_INDEX(dbname: String, tableName: String, idType: String) =
+    s"""CREATE INDEX ${quote("idx_"+tableName+"_id")}
+       |ON ${quote(dbname)}.${quote(tableName)} ( (json_extract_path_text(json, 'id')::${idType}) )
+     """.stripMargin
+
+    def CREATE_COLLECTION_SPATIAL_INDEX(dbname: String, tableName: String) =
       s"""CREATE INDEX ${quote(tableName + "_spatial_index")}
       | ON ${quote(dbname)}.${quote(tableName)} USING GIST ( geometry )
      """.stripMargin
@@ -503,6 +510,7 @@ object PostgresqlRepository extends Repository {
       s"""insert into ${quote(dbname)}.${quote(MetadataCollection)} values(
        | ${single_quote(Json.stringify(Json.toJson(md.envelope)))}::json,
        | ${md.level},
+       | ${single_quote(md.idType)},
        | ${single_quote(tableName)}
        | )
      """.stripMargin
