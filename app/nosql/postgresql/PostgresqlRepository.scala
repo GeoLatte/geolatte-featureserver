@@ -77,29 +77,30 @@ object PostgresqlRepository extends Repository {
       toList(_)(row => Some(row(0).asInstanceOf[String]))
     }
 
-  override def metadata(database: String, collection: String): Future[Metadata] = {
+  private def metadataFromDb(database: String, collection: String) : Future[Metadata] = {
 
-    def mkMetadata(row: RowData, cnt: Long) : Metadata = {
+    def mkMetadata(row: RowData) : Metadata = {
       val jsEnv = Json.parse(row(0).asInstanceOf[String])
       val env = Json.fromJson[Envelope](jsEnv) match {
         case JsSuccess(value, _) => value
         case _ => throw new RuntimeException("Invalid envellopre JSON format.")
       }
-      Metadata(collection, env, row(1).asInstanceOf[Int], row(2).asInstanceOf[String], cnt)
+      Metadata(collection, env, row(1).asInstanceOf[Int], row(2).asInstanceOf[String])
     }
 
-    def queryResult2Metadata(qr: QueryResult, cnt: Long) =
+    def queryResult2Metadata(qr: QueryResult) =
       qr.rows match {
-        case Some(rs) if rs.size > 0 => mkMetadata(rs.head, cnt)
+        case Some(rs) if rs.size > 0 => mkMetadata(rs.head)
         case _ => throw new CollectionNotFoundException()
       }
-
-    count(database, collection)
-      .flatMap { cnt =>
-        executeStmt(Sql.SELECT_METADATA(database, collection))(qr => queryResult2Metadata(qr, cnt))
-    }
-
+    executeStmt(Sql.SELECT_METADATA(database, collection))( queryResult2Metadata )
   }
+
+
+  override def metadata(database: String, collection: String): Future[Metadata] =
+     count(database, collection)
+      .flatMap { cnt => metadataFromDb(database, collection).map( md => md.copy(count = cnt) )
+    }
 
   override def deleteCollection(dbName: String, colName: String): Future[Boolean] =
   executeStmtsInTransaction(
