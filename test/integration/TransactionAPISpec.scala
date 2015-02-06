@@ -24,12 +24,13 @@ class TransactionAPISpec  extends InCollectionSpecification {
        return OK when the collection does exist, and data is valid                $e2
        insert value idem-potently when object does not exist                      $e3
        update value idem-potently when object does already exist                  $e4
-       update value idem-potently when object does already exist and id is string $e42
+       update value idem-potently when object does already exist and id is text   $e42
 
      The transaction /insert should:
         return OK when the collection exists, and data is valid                   $e5
         metadata query returns the inserted number of objects                     $e6
-        accept Json values with string-value ID props                             $e62
+        accept Json values with string-value ID props if id-type is 'text'        $e62
+        refuses Json values with numerical ID props if id-type is 'text'          $e63
 
      The transaction /delete should:
         deleting an element and return status OK                                  $e7
@@ -139,6 +140,11 @@ class TransactionAPISpec  extends InCollectionSpecification {
     val res = postUpsert(testDbName, newColName, f).status must equalTo(OK)
     deleteCollection(testDbName, newColName)
     res
+  }
+
+  def e63 = {
+    val f = featureWithStringId().sample.get
+    postUpsert(testDbName, testColName, f).status must equalTo(BAD_REQUEST)
   }
 
   def e7 = {

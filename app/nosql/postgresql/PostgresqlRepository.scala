@@ -77,7 +77,13 @@ object PostgresqlRepository extends Repository {
       toList(_)(row => Some(row(0).asInstanceOf[String]))
     }
 
-  private def metadataFromDb(database: String, collection: String) : Future[Metadata] = {
+  /**
+   * Retrieves the collection metadata from the server, but does not count number of rows
+   * @param database
+   * @param collection
+   * @return metadata, but row count is set to 0
+   */
+  def metadataFromDb(database: String, collection: String) : Future[Metadata] = {
 
     def mkMetadata(row: RowData) : Metadata = {
       val jsEnv = Json.parse(row(0).asInstanceOf[String])
@@ -126,24 +132,6 @@ object PostgresqlRepository extends Repository {
 
   override def writer(database: String, collection: String): FeatureWriter = new PGWriter(database, collection)
 
-
-
-  def insert(database: String, collection: String, jsons: Seq[(JsObject,Polygon)] ): Future[Long] = {
-    def id(json: JsValue) : Any = json match {
-      case JsString(v) => v
-      case JsNumber(i) => i
-      case _ => throw new IllegalArgumentException("No ID property of type String or Number")
-    }
-    val paramValues : Seq[Seq[Any]] = jsons.map{
-        case (json, env) =>  Seq( id(json \ "id") , unescapeJson(json), org.geolatte.geom.codec.Wkb.toWkb(env))
-    }
-    val numRowsAffected : Future[List[Long]] = executePreparedStmts(Sql.INSERT_DATA(database, collection), paramValues){_.rowsAffected}
-    numRowsAffected.map( cnts => cnts.foldLeft(0L)( _ + _))
-  }
-
-  def insert(database: String, collection: String, json: JsObject, env: Polygon ): Future[Boolean] =
-    insert(database, collection, Seq((json, env))).map(_ => true)
-
   override def query(database: String, collection: String, spatialQuery: SpatialQuery, start : Option[Int] = None,
                      limit: Option[Int] = None): Future[CountedQueryResult] = {
 
@@ -175,13 +163,29 @@ object PostgresqlRepository extends Repository {
   override def delete(database: String, collection: String, query: BooleanExpr): Future[Boolean] =
     executeStmt(Sql.DELETE_DATA(database, collection, PGQueryRenderer.render(query))){ _ => true}
 
+  def batchInsert(database: String, collection: String, jsons: Seq[(JsObject, Polygon)] ): Future[Long] = {
+    def id(json: JsValue) : Any = json match {
+      case JsString(v) => v
+      case JsNumber(i) => i
+      case _ => throw new IllegalArgumentException("No ID property of type String or Number")
+    }
+    val paramValues : Seq[Seq[Any]] = jsons.map{
+      case (json, env) =>  Seq( id(json \ "id") , unescapeJson(json), org.geolatte.geom.codec.Wkb.toWkb(env))
+    }
+    val numRowsAffected : Future[List[Long]] = executePreparedStmts(Sql.INSERT_DATA(database, collection),
+      paramValues){_.rowsAffected}
+    numRowsAffected.map( cnts => cnts.foldLeft(0L)( _ + _))
+  }
 
   override def insert(database: String, collection: String, json: JsObject): Future[Boolean] =
-    metadata(database, collection)
+    metadataFromDb(database, collection)
       .map{ md =>
-      FeatureTransformers.envelopeTransformer(md.envelope)
-    }.flatMap { evr =>
-      insert(database, collection, json, json.as[Polygon](evr))
+      (FeatureTransformers.envelopeTransformer(md.envelope), FeatureTransformers.validator(md.idType))
+    }.flatMap { case (evr, validator) =>
+      batchInsert(database, collection, Seq( (json.as(validator), json.as[Polygon](evr)))) .map( _ => true)
+    }.recover {
+      case t: play.api.libs.json.JsResultException =>
+        throw new InvalidParamsException("Invalid Json object")
     }
 
   def update(database: String, collection: String, query: BooleanExpr, newValue: JsObject, envelope: Polygon) : Future[Int] = {
@@ -191,7 +195,7 @@ object PostgresqlRepository extends Repository {
   }
 
   override def update(database: String, collection: String, query: BooleanExpr, updateSpec: JsObject): Future[Int] =
-    metadata(database, collection)
+    metadataFromDb(database, collection)
       .map { md => FeatureTransformers.envelopeTransformer(md.envelope)
     }.flatMap { implicit evr => {
       val ne = updateSpec.as[Polygon] //extract new envelope
