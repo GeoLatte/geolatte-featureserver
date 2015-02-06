@@ -44,9 +44,9 @@ class QueryParser (val input: ParserInput ) extends Parser {
 
   def InputLine = rule { BooleanExpression ~ EOI }
 
-  def BooleanExpression :  Rule1[BooleanExpr] = rule { ( ( BooleanTerm ~ WS ~ ignoreCase("or") ~ WS ~ BooleanTerm ) ~> BooleanOr ) | BooleanTerm }
+  def BooleanExpression :  Rule1[BooleanExpr] = rule { BooleanTerm   ~ WS ~ zeroOrMore(ignoreCase("or")  ~ WS ~ BooleanTerm   ~> BooleanOr )  }
 
-  def BooleanTerm = rule { ( ( BooleanFactor ~ WS ~ ignoreCase("and") ~ WS ~ BooleanFactor ) ~> BooleanAnd ) | BooleanFactor }
+  def BooleanTerm : Rule1[BooleanExpr]        = rule { BooleanFactor ~ WS ~ zeroOrMore(ignoreCase("and") ~ WS ~ BooleanFactor  ~> BooleanAnd )   }
 
   def BooleanFactor = rule { WS ~ ignoreCase("not") ~ WS ~ BooleanPrim ~> BooleanNot | BooleanPrim}
 
