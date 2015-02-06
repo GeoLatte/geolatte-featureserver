@@ -24,12 +24,12 @@ object PGQueryRenderer extends QueryRenderer[String] {
       case LiteralNumber(_)  => "decimal"
       case LiteralString(_)  => "text"
     }
-    s"json_extract_path_text(json, $variadicPath)::$cast"
+    s"json_extract_path_text(json, $variadicPath)"
   }
 
   private def renderValue(expr: ValueExpr) : String = expr match{
-    case LiteralBoolean(b) => if (b) " true " else " false "
-    case LiteralNumber(n)  => s" ${n.toString} "
+    case LiteralBoolean(b) => if (b) " 'true' " else " 'false' "
+    case LiteralNumber(n)  => s" '${n.toString}' "
     case LiteralString(s)  => s" '$s' "
   }
 
