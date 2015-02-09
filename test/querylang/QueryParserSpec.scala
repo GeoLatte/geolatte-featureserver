@@ -93,6 +93,18 @@ class QueryParserSpec extends Specification {
 
     }
 
+    "handle consecutive AND combinator without needing nesting parenthesis" in {
+      querylang.QueryParser.parse("vara > 12 and varb =  '123' and varc = 'bla'") must beSuccessfulTry.withValue(
+        BooleanAnd(
+          BooleanAnd(
+            ComparisonPredicate(PropertyExpr("vara"), GT, LiteralNumber(BigDecimal(12))),
+            ComparisonPredicate(PropertyExpr("varb"), EQ, LiteralString("123"))
+          ),
+          ComparisonPredicate(PropertyExpr("varc"), EQ, LiteralString("bla"))
+        )
+      )
+    }
+
     "handle OR combinator properly" in {
       (
         querylang.QueryParser.parse("(vara > 12) or not (varb =  '123')") must beSuccessfulTry.withValue(
@@ -112,6 +124,18 @@ class QueryParserSpec extends Specification {
             ComparisonPredicate(PropertyExpr("varb"),EQ,LiteralString("123")),
             ComparisonPredicate(PropertyExpr("varc"),EQ,LiteralString("abc")))))
         )
+    }
+
+    "handle consecutive OR combinator without needing nesting parenthesis" in {
+      querylang.QueryParser.parse("vara > 12 or varb =  '123' or varc = 'bla'") must beSuccessfulTry.withValue(
+        BooleanOr(
+          BooleanOr(
+            ComparisonPredicate(PropertyExpr("vara"), GT, LiteralNumber(BigDecimal(12))),
+            ComparisonPredicate(PropertyExpr("varb"), EQ, LiteralString("123"))
+          ),
+          ComparisonPredicate(PropertyExpr("varc"), EQ, LiteralString("bla"))
+        )
+      )
     }
 
     "handle boolean literal values in expression" in {

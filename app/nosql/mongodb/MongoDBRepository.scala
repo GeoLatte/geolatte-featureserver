@@ -157,7 +157,7 @@ object MongoDBRepository extends nosql.Repository with FutureInstrumented {
     def mkMetadata() = for {
       mdOpt <- readMetadata()
       cnt <- count(database, collection)
-    } yield mdOpt.map(md => md.copy(count = cnt)).getOrElse(Metadata(collection, Envelope.EMPTY, 0, cnt))
+    } yield mdOpt.map(md => md.copy(count = cnt)).getOrElse(Metadata(collection, Envelope.EMPTY, 0, "string", cnt))
 
     existsDb(database).flatMap(existsDb =>
       if (existsDb) existsCollection(database, collection)
@@ -175,34 +175,29 @@ object MongoDBRepository extends nosql.Repository with FutureInstrumented {
   } yield found
 
 
-  def createCollection(dbName: String, colName: String, spatialSpec: Option[Metadata]) = {
+  override def createCollection(dbName: String, colName: String, md: Metadata) = {
 
     def doCreateCollection() = connection(dbName).collection[JSONCollection](colName).create().andThen {
       case Success(b) => Logger.info(s"collection $colName created: $b")
       case Failure(t) => Logger.error(s"Attempt to create collection $colName threw exception: ${t.getMessage}")
     }
 
-    def saveMetadata = spatialSpec map {
-      spec => connection(dbName).collection[JSONCollection](MetadataCollection).insert(Json.obj(
-        ExtentField -> spec.envelope,
-        IndexLevelField -> spec.level,
+    def saveMetadata = connection(dbName).collection[JSONCollection](MetadataCollection).insert(Json.obj(
+        ExtentField -> md.envelope,
+        IndexLevelField -> md.level,
+        IdTypeField -> md.idType,
         CollectionField -> colName),
         GetLastError(j = true, w = Some(BSONInteger(1)))
       ).andThen {
         case Success(le) => Logger.info(s"Writing metadata for $colName has result: ${le.ok}")
         case Failure(t) => Logger.error(s"Writing metadata for $colName threw exception: ${t.getMessage}")
       }.map(_ => true)
-    } getOrElse {
-      Future.successful(true)
-    }
+
 
     def ensureIndexes = {
       val idxManager = connection(dbName).collection[JSONCollection](colName).indexesManager
-      val fSpatialIndexCreated = if (spatialSpec.isDefined) {
-        idxManager.ensure(new Index(Seq((SpecialMongoProperties.MC, Ascending))))
-      } else Future.successful(true)
-      val fIdIndex = idxManager.ensure(new Index(key = Seq((SpecialMongoProperties.ID, Ascending)), unique = true))
-      fIdIndex.flatMap(_ => fSpatialIndexCreated)
+      idxManager.ensure(new Index(Seq((SpecialMongoProperties.MC, Ascending))))
+      idxManager.ensure(new Index(key = Seq((SpecialMongoProperties.ID, Ascending)), unique = true))
     }
 
     existsDb(dbName).flatMap(dbExists =>
@@ -211,8 +206,9 @@ object MongoDBRepository extends nosql.Repository with FutureInstrumented {
     ).flatMap(collectionExists =>
       if (!collectionExists) doCreateCollection()
       else throw new CollectionAlreadyExists()
-      ).flatMap(_ => saveMetadata
-      ).flatMap(_ => ensureIndexes)
+      )
+      .flatMap(_ => saveMetadata)
+      .flatMap(_ => ensureIndexes)
   }
 
   def deleteCollection(dbName: String, colName: String) = {
