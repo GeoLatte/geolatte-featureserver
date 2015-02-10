@@ -1,6 +1,6 @@
 package nosql.json
 
-import nosql.FeatureTransformers
+import nosql.{Metadata, FeatureTransformers}
 import nosql.json.Gen._
 import nosql.json.GeometryReaders._
 import nosql.mongodb.SpecialMongoProperties
@@ -12,6 +12,7 @@ import org.specs2.mutable.Specification
 import play.api.libs.json.{JsObject, JsString, _}
 
 import scala.language.implicitConversions
+import scala.util.Try
 
 
 /**
@@ -74,6 +75,63 @@ class FeatureTransformerSpecs extends Specification {
         ( extract(transformResult, SpecialMongoProperties.MC) must beSome(expectedMc)) and
         ( extract(transformResult, SpecialMongoProperties.BBOX) must beSome(expectedExtent))
 
+    }
+
+  }
+
+  "An IdValidator" should {
+
+
+    val pnt = point(d2D)("02").sample.get
+    val prop = properties( "foo" -> Gen.oneOf("bar", "bar2") , "num" -> Gen.oneOf(1,2,3))
+
+
+    "validate jsons with numeric ID-properties iff metadata indicates decimal id-type" in {
+      val md = Metadata("col", new Envelope(0,0,1000,1000), 8, "decimal")
+      val validator = FeatureTransformers.validator(md.idType)
+      val pf = geoJsonFeature(Gen.id, Gen(pnt), prop)
+      val json = pf.sample.get
+      json.validate(validator) must_== JsSuccess(json)
+    }
+
+    "json.as(validator) returns json if it validates" in {
+      val md = Metadata("col", new Envelope(0,0,1000,1000), 8, "decimal")
+      val validator = FeatureTransformers.validator(md.idType)
+      val pf = geoJsonFeature(Gen.id, Gen(pnt), prop)
+      val json = pf.sample.get
+      json.as(validator) must_== json
+    }
+
+    "validate jsons with string ID-properties iff metadata indicates text id-type" in {
+      val md = Metadata("col", new Envelope(0,0,1000,1000), 8, "text")
+      val validator = FeatureTransformers.validator(md.idType)
+      val pf = geoJsonFeature(Gen.idString, Gen(pnt), prop)
+      val json = pf.sample.get
+      json.validate(validator) must_== JsSuccess(json)
+    }
+
+    "not validate jsons with string ID-properties iff metadata indicates decimal-type" in {
+      val md = Metadata("col", new Envelope(0,0,1000,1000), 8, "decimal")
+      val validator = FeatureTransformers.validator(md.idType)
+      val pf = geoJsonFeature(Gen.idString, Gen(pnt), prop)
+      val json = pf.sample.get
+      json.validate(validator).isInstanceOf[JsError]
+    }
+
+    "json.as(validator) throw exceptions if it doesn't validates" in {
+      val md = Metadata("col", new Envelope(0,0,1000,1000), 8, "decimal")
+      val validator = FeatureTransformers.validator(md.idType)
+      val pf = geoJsonFeature(Gen.idString, Gen(pnt), prop)
+      val json = pf.sample.get
+      Try{json.as(validator)} must beFailedTry
+    }
+
+    "not validate jsons with numeric ID-properties iff metadata indicates textl id-type" in {
+      val md = Metadata("col", new Envelope(0,0,1000,1000), 8, "text")
+      val validator = FeatureTransformers.validator(md.idType)
+      val pf = geoJsonFeature(Gen.id, Gen(pnt), prop)
+      val json = pf.sample.get
+      json.validate(validator).isInstanceOf[JsError]
     }
 
   }

@@ -1,13 +1,12 @@
 package nosql
 
-import nosql.json.GeometryReaders
 import nosql.mongodb.SpecialMongoProperties._
 import org.geolatte.geom._
 import org.geolatte.geom.curve.{MortonCode, MortonContext}
 import play.api.data.validation.ValidationError
-import play.api.libs.json.Reads._
 import play.api.libs.json._
-
+import play.api.libs.json.Reads._
+import play.api.libs.functional.syntax._
 /**
  * @author Karel Maesen, Geovise BVBA
  *         creation-date: 10/18/13
@@ -66,5 +65,12 @@ object FeatureTransformers {
     builder.add(envelope.getMinX, envelope.getMinY)
     new Polygon(builder.toPointSequence)
   }
+
+  def validator(idType: String) : Reads[JsObject] = idType match {
+    case "decimal" => (__ \ "id").read[Long] andKeep (__).read[JsObject]
+    case "text"  =>   (__ \ "id").read[String] andKeep (__).read[JsObject]
+    case _ => throw new IllegalArgumentException("Invalid metadata")
+  }
+
 
 }

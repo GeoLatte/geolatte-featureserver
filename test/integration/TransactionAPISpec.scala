@@ -24,15 +24,16 @@ class TransactionAPISpec  extends InCollectionSpecification {
        return OK when the collection does exist, and data is valid                $e2
        insert value idem-potently when object does not exist                      $e3
        update value idem-potently when object does already exist                  $e4
-       update value idem-potently when object does already exist and id is string $e42
+       update value idem-potently when object does already exist and id is text   $e42
 
      The transaction /insert should:
         return OK when the collection exists, and data is valid                   $e5
         metadata query returns the inserted number of objects                     $e6
-        accept Json values with string-value ID props                             $e62
+        accept Json values with string-value ID props if id-type is 'text'        $e62
+        refuses Json values with numerical ID props if id-type is 'text'          $e63
 
      The transaction /delete should:
-        deleting an element and return status DELETED                             $e7
+        deleting an element and return status OK                                  $e7
 
       The transaction /delete should:
         return status code BAD_REQUEST when query is malformed                    $e8
@@ -45,6 +46,15 @@ class TransactionAPISpec  extends InCollectionSpecification {
   import RestApiDriver._
   import UtilityMethods._
   import Gen._
+
+
+  //metadata for collections with text-based identifiers
+  val metaWithTextIdType = Json.obj(
+    "extent" -> Json.obj("crs" -> defaultExtent.getCrsId.getCode, "envelope" ->
+      Json.arr(defaultExtent.getMinX, defaultExtent.getMinY, defaultExtent.getMaxX, defaultExtent.getMaxY)),
+    "index-level" -> defaultIndexLevel,
+    "id-type" -> "text"
+  )
 
  //Generators for data
   val prop = Gen.properties("foo" -> Gen.oneOf("bar1", "bar2", "bar3"), "num" -> Gen.oneOf(1, 2, 3))
@@ -90,16 +100,20 @@ class TransactionAPISpec  extends InCollectionSpecification {
   }
 
   def e42 = {
+
+    val newColName = testColName + "2"
+    makeCollection(testDbName, newColName, metaWithTextIdType)
     val f = featureWithStringId().sample.get
-    removeData(testDbName, testColName)
-    postUpsert(testDbName, testColName, f)
+    postUpsert(testDbName, newColName, f)
     val modifier = __.json.update(( __ \ "properties" \ "num").json.put(JsNumber(4)))
     val modifiedFeature = f.transform(modifier).asOpt.get
-    postUpsert(testDbName, testColName, modifiedFeature)
-    postUpsert(testDbName, testColName, modifiedFeature)
-    getList(testDbName, testColName, "") applyMatcher { res =>
+    postUpsert(testDbName, newColName, modifiedFeature)
+    postUpsert(testDbName, newColName, modifiedFeature)
+    val result = getList(testDbName, newColName, "") applyMatcher { res =>
       res.responseBody must beSome(matchFeaturesInJson(Json.arr(modifiedFeature)))
     }
+    deleteCollection(testDbName, newColName)
+    result
   }
 
 
@@ -120,11 +134,28 @@ class TransactionAPISpec  extends InCollectionSpecification {
   def e6 = pending
 
   def e62 = {
+    val newColName = testColName + "2"
+    makeCollection(testDbName, newColName, metaWithTextIdType)
     val f = featureWithStringId().sample.get
-    postUpsert(testDbName, testColName, f).status must equalTo(OK)
+    val res = postUpsert(testDbName, newColName, f).status must equalTo(OK)
+    deleteCollection(testDbName, newColName)
+    res
   }
 
-  def e7 = pending
+  def e63 = {
+    val f = featureWithStringId().sample.get
+    postUpsert(testDbName, testColName, f).status must equalTo(BAD_REQUEST)
+  }
+
+  def e7 = {
+    removeData(testDbName, testColName)
+    val f = featureWithStringId().sample.get
+    val id = (f \ "id").as[String]
+    postUpsert(testDbName, testColName, f).status
+
+    postRemove(testDbName, testColName, Json.obj("query" -> s"id = '${id}'")).status must equalTo(OK)
+
+  }
 
   def e8 = {
     removeData(testDbName, testColName)

@@ -17,24 +17,22 @@ case class PGWriter(db: String, collection: String) extends FeatureWriter {
 
   lazy val metadata : Future[Metadata] = PostgresqlRepository.metadata(db, collection)
 
-  lazy val envelopeReads: Future[Reads[Polygon]] = metadata.map{ md =>
-    FeatureTransformers.envelopeTransformer(md.envelope)
+  lazy val reads: Future[(Reads[Polygon], Reads[JsObject])] = metadata.map{ md =>
+    ( FeatureTransformers.envelopeTransformer(md.envelope),
+      FeatureTransformers.validator(md.idType)
+      )
   }
 
   override def add(features: Seq[JsObject]): Future[Long] =
     if(features.isEmpty) Future.successful(0)
     else {
-      envelopeReads.flatMap { evr =>
+      reads.flatMap { case (evr, validator)  =>
         val docs : Seq[(JsObject, Polygon)] = features.map {f =>
-          (f, f.asOpt[Polygon](evr))
+          (f.asOpt(validator), f.asOpt[Polygon](evr))
         } collect {
-          case (f, Some(env)) => (f, env)
+          case (Some(f), Some(env)) => (f, env)
         }
-        val fLng = PostgresqlRepository.insert(db, collection, docs)
-//        Logger.debug(" Flushing data to postgresql (" + docs.size + " features)")
-//        val fLng = Future.sequence( for( (f,e) <- docs) yield PostgresqlRepository.insert(db, collection, f,e) )
-//          .map(s => s.foldLeft(0L)( (a,b) => if (b) a+1 else a ) )
-
+        val fLng = PostgresqlRepository.batchInsert(db, collection, docs)
         fLng.onSuccess {
           case num => Logger.info(s"Successfully inserted $num features")
         }

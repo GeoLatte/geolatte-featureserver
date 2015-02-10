@@ -55,6 +55,11 @@ object GeolatteNoSqlBuild extends Build {
     resolvers ++= commonResolvers
   )
 
+  lazy val ItTest = config("integration") extend Test
+
+  def itFilter(name: String): Boolean = name startsWith "integration"
+  def unitFilter(name: String): Boolean = !itFilter(name)
+
   //Settings applied to all projects
   lazy val defaultSettings =
     commonBuildSettings ++
@@ -67,14 +72,17 @@ object GeolatteNoSqlBuild extends Build {
   //Options for running tests
   val testSettings = Seq(
     Keys.fork in Test := false, //Fork a new JVM for running tests
-    parallelExecution in Test := false,
-    testOptions in Test += Tests.Argument("sequential")
+    testOptions in Test := Seq(Tests.Filter(unitFilter)),
+    parallelExecution in ItTest := false,
+    testOptions in ItTest := Seq(Tests.Argument("sequential"), Tests.Filter(itFilter))
   )
 
   val main = play.Project(
     appName,
     appVersion,
     dependencies = dependencies
-  ).settings((defaultSettings ++ testSettings): _*)
+  ).configs(ItTest)
+    .settings(inConfig(ItTest)(Defaults.testTasks): _*)
+    .settings((defaultSettings ++ testSettings): _*)
 
 }

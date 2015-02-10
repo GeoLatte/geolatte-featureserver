@@ -3,6 +3,7 @@ import nosql.json.GeometryReaders._
 import nosql.mongodb._
 import org.geolatte.geom.Envelope
 import org.geolatte.geom.curve.MortonCode
+import play.api.data.validation.ValidationError
 import play.api.libs.iteratee.Enumerator
 import play.api.libs.json._
 import play.api.libs.functional.syntax._
@@ -12,15 +13,17 @@ import scala.concurrent.Future
 import scala.util.{Failure, Success}
 
 
-case class Metadata(name: String, envelope: Envelope, level : Int, count: Long = 0)
+case class Metadata(name: String, envelope: Envelope, level : Int, idType: String, count: Long = 0)
 
 object MetadataIdentifiers {
   val MetadataCollectionPrefix = "geolatte_nosql_"
   val MetadataCollection = "geolatte_nosql_collections"
   val ViewCollection = "geolatte_nosql_views"
   val ExtentField = "extent"
-  val IndexLevelField = "index_depth"
+  val IndexLevelField = "index-level"
   val CollectionField = "collection"
+  val IdTypeField = "id-type"
+  val CountField = "count"
 }
 
 object Metadata {
@@ -28,14 +31,18 @@ object Metadata {
   import MetadataIdentifiers._
 
   //added so that MetadataReads compiles
-  def apply(name: String, envelope:Envelope, level: Int): Metadata = this(name, envelope,level, 0)
+  def fromReads(name: String, envelope:Envelope, level: Int, idType: String): Metadata =
+      this(name, envelope,level, idType, 0)
 
   implicit val MetadataReads = (
-    (__ \ CollectionField).read[String] and
+      (__ \ CollectionField).read[String] and
       (__ \ ExtentField).read[Envelope](EnvelopeFormats) and
-      (__ \ IndexLevelField).read[Int]
-    )(Metadata.apply _)
-
+      (__ \ IndexLevelField).read[Int] and
+      ( __ \ IdTypeField).read[String]( Reads.filter[String]
+          ( ValidationError("Requires 'text' or 'decimal") )
+          ( tpe => tpe == "text" || tpe == "decimal" )
+      )
+    )(Metadata.fromReads _)
 }
 
 case class Media(id: String, md5: Option[String])
@@ -104,7 +111,7 @@ trait Repository {
 
   def existsCollection(dbName: String, colName: String): Future[Boolean]
 
-  def createCollection(dbName: String, colName: String, spatialSpec: Option[Metadata]) : Future[Boolean]
+  def createCollection(dbName: String, colName: String, spatialSpec: Metadata) : Future[Boolean]
 
   def deleteCollection(dbName: String, colName: String) : Future[Boolean]
 

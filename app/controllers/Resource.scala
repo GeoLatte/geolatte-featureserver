@@ -1,6 +1,7 @@
 package controllers
 
-import nosql.{MediaReader, Metadata}
+import nosql.{MetadataIdentifiers, MediaReader, Metadata}
+import play.api.data.validation.ValidationError
 
 import scala.language.implicitConversions
 
@@ -92,19 +93,24 @@ object Formats {
     )(unlift(MediaMetadataResource.unapply))
 
 
-  def mkMetadata(extent: Envelope, level: Int) = Metadata.apply("", extent, level)
-
+  def mkMetadata(extent: Envelope, level: Int, idtype: String) =
+      Metadata.fromReads("", extent, level, idtype)
 
   val CollectionReads: Reads[Metadata] = (
-         (__ \ "extent").read(EnvelopeFormats) and
-         (__ \ "index-level").read[Int](min(0))
+            (__ \ MetadataIdentifiers.ExtentField).read(EnvelopeFormats) and
+            (__ \ MetadataIdentifiers.IndexLevelField).read[Int](min(0)) and
+            (__ \ MetadataIdentifiers.IdTypeField).read[String](
+              Reads.filter[String]( ValidationError("Requires 'text' or 'decimal") )
+              ( tpe => tpe == "text" || tpe == "decimal" )
+            )
        ) ( mkMetadata _ )
 
   val CollectionWrites :  Writes[Metadata] = (
-     ( __ \ "collection").write[String] and
-     ( __ \ "extent").write[Envelope] and
-     ( __ \ "index-level").write[Int] and
-     ( __ \ "count").write[Long]
+        ( __ \ MetadataIdentifiers.CollectionField).write[String] and
+        ( __ \ MetadataIdentifiers.ExtentField).write[Envelope] and
+        ( __ \ MetadataIdentifiers.IndexLevelField).write[Int] and
+        ( __ \ MetadataIdentifiers.IdTypeField).write[String] and
+        ( __ \ MetadataIdentifiers.CountField).write[Long]
    )(unlift(Metadata.unapply))
 
   implicit val CollectionFormat : Format[Metadata]  = Format(CollectionReads, CollectionWrites)

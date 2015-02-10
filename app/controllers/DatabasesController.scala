@@ -68,12 +68,12 @@ object DatabasesController extends AbstractNoSqlController {
         case JsNull => Left(Json.obj("error" -> "Received empty request body (null json)."))
         case js: JsValue => js.validate(Formats.CollectionFormat).fold(
           invalid = errs => Left(JsError.toFlatJson(errs)),
-          valid = v => Right(Some(v)))
+          valid = v => Right(v))
         case _ => Left(Json.obj("error" -> "Received no request body."))
       }
 
-      def doCreate(spatialSpecOpt: Option[Metadata]) = {
-        repository.createCollection(db, col, spatialSpecOpt).map(_ => Created(s"$db/$col ")).recover {
+      def doCreate(metadata: Metadata) = {
+        repository.createCollection(db, col, metadata).map(_ => Created(s"$db/$col ")).recover {
           case ex: DatabaseNotFoundException => NotFound(s"No database $db")
           case ex: CollectionAlreadyExists => Conflict(s"Collection $db/$col already exists.")
           case ex: Throwable => InternalServerError(s"{ex.getMessage}")
