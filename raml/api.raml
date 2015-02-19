@@ -1,0 +1,158 @@
+#%RAML 0.8
+title: nosqlfs
+version: 1.0
+baseUri: http://www.example.com/featureserver/api
+documentation: 
+  - title: Home
+    content: | 
+      This API exposes a generic storage and query service for geojson features. 
+      The features are organised into databases and collections (as in MongoDB).
+      
+      Currently two persistence options are provided: Postgresql and MongoDB.      
+      
+mediaType: application/vnd.geolatte-featureserver+json;version=1.0
+
+/databases:
+  displayName: databases available on server
+  get:
+    description: Returns a list of databases
+    responses:
+      200:
+        body:
+          application/vnd.geolatte-featureserver+json;version=1.0 :
+            example : | 
+              [
+                {
+                  "name": "wegsegmenten",
+                  "url": "/api/databases/wegsegmenten"
+                }
+              ]
+  /{database}:
+    description: database (schema) containing collections (tables)
+    get:
+      description: Returns the list of collections (tables) in the specified database
+      responses:
+        200:
+          body:
+            application/vnd.geolatte-featureserver+json;version=1.0 :
+              example : | 
+                 [
+                    {
+                        "name": "collection",
+                        "url": "/api/databases/wegsegmenten/collection"
+                    }
+                  ]    
+        404: 
+          description: the database does not exist.
+    put:
+      description: Creates a new database (no request body is required).
+      responses: 
+        201:
+          description: CREATED when the database has been successfully created.
+        409:
+          description: CONFLICT when the database already has been created
+    delete:
+      description: Drops the database 
+      responses:
+        200: 
+          description: The database has been successfully dropped (or doesn't exist)
+    /{collection}:
+      displayName: GeoJson feature collection
+      description: a collection (table) of GeoJSON features.
+      get:
+        description: | 
+          Returns the metadata associated with this collection. The metadata consists of:
+            * the name of the collection
+            * the spatial extent of the complete collection
+            * the index-level (only used for MongoDB)
+            * the type of the (required) id property (either 'text' or 'decimal')
+            * the number of features currrently in the collection
+        responses:
+          200:
+            body: 
+              application/vnd.geolatte-featureserver+json;version=1.0 :
+                example: |
+                  {
+                    "collection": "segment",
+                    "extent": {
+                      "crs": 31370,
+                      "envelope": [0, 0, 300000, 300000]
+                    },
+                    "index-level": 8,
+                    "id-type": "text",
+                    "count": 151922
+                  }
+          404: 
+            description: if the collection or database does not exist
+      put:
+        description: |
+          Creates a collection, using the metadata specified in the request body
+        body:
+          application/vnd.geolatte-featureserver+json;version=1.0 :
+              example : | 
+               {
+                "index-level": 8,
+                "id-type": "text",
+                "extent": { 
+                   "crs" : 4326,
+                   "envelope": [-90,-180, 90, 180]
+                   }                 
+               }
+        responses:
+          201:
+            description: the collection has been created successfully
+          409: 
+            description: the collection already exists
+          404:
+            description: the database does not exist
+      delete:
+        description: |
+          Drops the collection, and all associated database objects (views, metadata, etc.)
+        responses:
+          200: 
+            description: the collection has been dropped, or doesn't exist
+      /tx:
+        displayName: Transaction service for the collection
+        description: |
+          Resource for executing transactions against the specified collection.
+        /insert:
+          displayName: insert features
+          post:
+            description: |
+              POST a stream of GeoJson features to this resource for bulk upload or insert.
+              
+              The features must be seperated by a newline.
+            body:
+              application/vnd.geolatte-featureserver+json;version=1.0 :                  
+                example: |
+                  <GeoJson>\n
+                  <GeoJson>\n
+                  ....              
+        /remove:
+          displayName: delete features
+          post:
+            description: |
+              POST a delete specification. A delete specification is a json object having a "query" property, which contains a 
+              query expression
+            body:
+              application/vnd.geolatte-featureserver+json;version=1.0 :                  
+                example: |
+                  {
+                    "query" : "id = 433"
+                  }
+            responses:
+              200:
+                description: the transaction executed successfully
+              400: 
+                description: the delete specification is malformed (either not a json, or invalid query expression).
+              404:
+                description: the database or collection does not exist
+              
+        /update:
+          displayName: resourceName        
+        /upsert:
+          displayName: resourceName        
+          
+      
+      
+        
