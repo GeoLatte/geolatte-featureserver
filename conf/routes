@@ -37,6 +37,11 @@ GET /api/databases/:db/:collection/views/:view          controllers.ViewControll
 DELETE /api/databases/:db/:collection/views/:view       controllers.ViewController.delete(db: String, collection: String, view: String)
 
 
+POST /api/database/:db/:collection/indexes              controllers.IndexController.post(db: String, collection: String)
+GET  /api/database/:db/:collection/indexes              controllers.IndexController.list(db:String, collection: String)
+GET /api/database/:db/:collection/indexes/:idx          controllers.IndexController.get(db: String, collection: String, index: String)
+DELETE /api/database/:db/:collection/indexes/:idx       controllers.IndexController.delete(db: String, collection: String, index: String)
+
 # Map static resources from the /public folder to the /assets URL path
 GET     /assets/*file               controllers.Assets.at(path="/public", file)
 #GET     /*file                      controllers.Assets.at(path="/public", file)
