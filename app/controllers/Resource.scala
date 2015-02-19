@@ -84,6 +84,11 @@ case class IndexDefsResource(dbName: String, colName: String, indexNames : Trave
   def toJson = Json.toJson(intermediate)
 }
 
+case class IndexDefResource(dbName: String, colName: String, indexDef : IndexDef) extends Jsonable {
+  import Formats.IndexDefWrites
+  def toJson = Json.toJson(indexDef)
+}
+
 object Formats {
 
   def toByteArray(implicit r: Reads[String]) : Reads[Array[Byte]] = r.map(str => Base64.decodeBase64(str))
@@ -151,13 +156,13 @@ object Formats {
      ( __ \ "projection").readNullable[JsArray]
     ).tupled
 
-  implicit val IndexDefReads = (
+  implicit val IndexDefReads : Reads[IndexDef]= (
       (__ \ 'name).readNullable[String].map{ _.getOrElse("") } and
       (__ \ 'path).read[String] and
       (__ \ 'type).read[String]
     )(IndexDef)
 
-  implicit val IndexDefWrites = (
+  implicit val IndexDefWrites : Writes[IndexDef]= (
     ( __ \ 'name).write[String] and
       ( __ \ 'path).write[String] and
       (__ \ 'type).write[String]

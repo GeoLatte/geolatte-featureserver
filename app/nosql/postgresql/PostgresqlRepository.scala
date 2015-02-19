@@ -296,20 +296,26 @@ object PostgresqlRepository extends Repository {
     else Some(IndexDef(name, path, "<unknown>")) //we can't determine the cast used during definition of index
   }
 
-  private def getInternalIndices(dbName: String, colName: String) : Future[List[IndexDef]] = {
-    executeStmt( Sql.SELECT_INDEXES_FOR_TABLE(dbName, colName) ){
+  private def getInternalIndices(dbName: String, colName: String) : Future[List[IndexDef]] =
+    existsCollection(dbName, colName).flatMap { exists =>
+    if(exists) executeStmt( Sql.SELECT_INDEXES_FOR_TABLE(dbName, colName) ){
       toList(_)(rd => toIndexDef(rd(0).asInstanceOf[String], rd(1).asInstanceOf[String]))
     }
+    else throw new CollectionNotFoundException()
   }
 
   override def getIndices(dbName: String, colName: String): Future[List[String]] =
     getInternalIndices(dbName, colName).map( listIdx => listIdx.filter(q => q.path != "id").map(_.name) )
 
   override def getIndex(dbName: String, colName: String, indexName: String): Future[IndexDef] =
-    getInternalIndices(dbName, colName).map( listIdx => listIdx.filter(q => q.name == indexName).head)
+    getInternalIndices(dbName, colName).map{ listIdx =>
+    listIdx.find(q => q.name == indexName) match {
+        case Some(idf) => idf
+        case None => throw new IndexNotFoundException(s"Index $indexName on $dbName/$colName not found.")
+      }
+    }
 
   override def dropIndex(database: String, collection: String, index: String): Future[Boolean] = ???
-
 
   //Private Utility methods
 

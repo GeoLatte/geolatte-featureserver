@@ -18,7 +18,11 @@ class IndexAPISpec extends InCollectionSpecification {
 
       The GET on /indexes should:
         return 404 when the collection does not exist                               $e5
-        return 200 when db and collection exist                                     $e6
+        return 200 and Json arraywhen db and collection exist                       $e6
+
+      The GET on /indexes/<index-name> should:
+        return 404 when the index does not exist                                    $e7
+        return 200 and Json info when index does exist                              $e8
 
 
   """
@@ -41,7 +45,20 @@ class IndexAPISpec extends InCollectionSpecification {
 
   def e4 = putIndex(testDbName, testColName, "my_idx", indexDef) applyMatcher( _.status must equalTo(CONFLICT))
 
-  def e5 = pending
+  def e5 = getIndices(testDbName, "NonexistingCollection") applyMatcher(_.status must equalTo(NOT_FOUND))
 
-  def e6 = pending
+  def e6 = getIndices(testDbName, testColName) applyMatcher( res =>
+    (res.status must equalTo(OK)) and
+      (res.responseBody must beSome(
+        Json.arr(
+          Json.obj("name" -> "my_idx", "url" -> "/api/databases/xfstestdb/xfstestcoll/indexes/my_idx"))))
+    )
+
+  def e7 = getIndex(testDbName, testColName, "doesntexist") applyMatcher( _.status must equalTo(NOT_FOUND) )
+
+  def e8 = getIndex(testDbName, testColName, "my_idx") applyMatcher{ resp =>
+    (resp.status must equalTo(OK)) and
+      (resp.responseBody must beSome( Json.obj("name" -> "my_idx", "path" -> "a.b", "type" -> "<unknown>" )) )
+  }
+
 }

@@ -32,10 +32,15 @@ object IndexController extends AbstractNoSqlController{
   def list(db: String, collection: String) = repositoryAction {
     implicit req => {
       repository.getIndices(db, collection).map[SimpleResult]{ indexNames => IndexDefsResource(db, collection, indexNames)  }
-    }
+    }.recover(commonExceptionHandler(db, collection))
   }
 
-  def get(db: String, collection: String, index: String) = play.mvc.Results.TODO
+  def get(db: String, collection: String, index: String) = repositoryAction {
+    implicit req => {
+      repository.getIndex(db, collection, index).map[SimpleResult]{ indexDef => IndexDefResource(db, collection, indexDef)  }
+    }.recover(commonExceptionHandler(db, collection))
+  }
 
   def delete(db: String, collection: String, index: String) = play.mvc.Results.TODO
+
 }
