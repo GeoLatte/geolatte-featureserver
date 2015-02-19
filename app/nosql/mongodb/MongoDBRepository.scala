@@ -1,5 +1,6 @@
 package nosql.mongodb
 
+import controllers.IndexDef
 import org.geolatte.geom.Envelope
 import play.api.Logger
 import querylang.BooleanExpr
@@ -101,7 +102,7 @@ object MongoDBRepository extends nosql.Repository with FutureInstrumented {
           case ex: Throwable => throw new DatabaseCreationException(s"Unknown exception of type: ${ex.getClass.getCanonicalName} having message: ${ex.getMessage}")
         }
       }
-      case _ => throw new DatabaseAlreadyExists(s"Database $dbname already exists.")
+      case _ => throw new DatabaseAlreadyExistsException(s"Database $dbname already exists.")
     }
 
   }
@@ -205,7 +206,7 @@ object MongoDBRepository extends nosql.Repository with FutureInstrumented {
       else throw new DatabaseNotFoundException()
     ).flatMap(collectionExists =>
       if (!collectionExists) doCreateCollection()
-      else throw new CollectionAlreadyExists()
+      else throw new CollectionAlreadyExistsException()
       )
       .flatMap(_ => saveMetadata)
       .flatMap(_ => ensureIndexes)
@@ -426,6 +427,13 @@ object MongoDBRepository extends nosql.Repository with FutureInstrumented {
       throw InvalidParamsException("Only fields allowed in update document when upserting.")
   }
 
+  override def createIndex(dbName: String, colName: String, indexDef: IndexDef): Future[Boolean] = ???
+
+  override def getIndices(database: String, collection: String): Future[List[String]] = ???
+
+  override def getIndex(database: String, collection: String, index: String): Future[IndexDef] = ???
+
+  override def dropIndex(database: String, collection: String, index: String): Future[Boolean] = ???
 
 }
 

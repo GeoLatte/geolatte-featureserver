@@ -10,10 +10,15 @@ class IndexAPISpec extends InCollectionSpecification {
 
   def is = s2"""
                                                                                     ${section("mongodb", "postgresql")}
-      The PUT index should:
+      The PUT on /index should:
         return 404 when the collection does not exist                               $e1
         return 400 (BAD REQUEST) when index data is invalid                         $e2
-        return OK when the collection does exist, and indexdata is valid            $e3
+        return CREATED when the collection does exist, and indexdata is valid       $e3
+        return CONFLICT when the index already exists                               $e4
+
+      The GET on /indexes should:
+        return 404 when the collection does not exist                               $e5
+        return 200 when db and collection exist                                     $e6
 
 
   """
@@ -31,6 +36,12 @@ class IndexAPISpec extends InCollectionSpecification {
 
   def e2 = putIndex(testDbName, testColName, "my_idx", Json.obj("bla" -> 2)) applyMatcher( _.status must equalTo(BAD_REQUEST))
 
-  def e3 = putIndex(testDbName, testColName, "my_idx", indexDef) applyMatcher( _.status must equalTo(OK))
+  def e3 = putIndex(testDbName, testColName, "my_idx", indexDef) applyMatcher( _.status must equalTo(CREATED))
 
+
+  def e4 = putIndex(testDbName, testColName, "my_idx", indexDef) applyMatcher( _.status must equalTo(CONFLICT))
+
+  def e5 = pending
+
+  def e6 = pending
 }

@@ -96,8 +96,10 @@ trait AbstractNoSqlController extends Controller with FutureInstrumented {
 
   def commonExceptionHandler(db : String, col : String = "") : PartialFunction[Throwable, SimpleResult] = {
     case ex: DatabaseNotFoundException => NotFound(s"Database $db does not exist.")
-    case ex: CollectionNotFoundException => NotFound(s"Collection $db/$col does not exist.")
+    case ex: DatabaseAlreadyExistsException => Conflict(ex.getMessage)
     case ex: MediaObjectNotFoundException => NotFound(s"Media object does not exist.")
+    case ex: CollectionNotFoundException => NotFound(s"Collection $db/$col does not exist.")
+    case ex: CollectionAlreadyExistsException => Conflict(ex.getMessage)
     case ex: ViewObjectNotFoundException => NotFound(s"View object does not exist.")
     case ex: InvalidParamsException => BadRequest(s"Invalid parameters: ${ex.getMessage}")
     case ex: Throwable => {
