@@ -24,6 +24,11 @@ class IndexAPISpec extends InCollectionSpecification {
         return 404 when the index does not exist                                    $e7
         return 200 and Json info when index does exist                              $e8
 
+      The DELETE on /indexes/<index-name> should:
+        return 200 to indicate success                                              $e9
+          also when executed again (idem-potent)                                    $e9
+          and then /indexes/<index-name> should return 404                          $e10
+          and /indexes should return empty list                                     $e11
 
   """
 
@@ -51,7 +56,9 @@ class IndexAPISpec extends InCollectionSpecification {
     (res.status must equalTo(OK)) and
       (res.responseBody must beSome(
         Json.arr(
-          Json.obj("name" -> "my_idx", "url" -> "/api/databases/xfstestdb/xfstestcoll/indexes/my_idx"))))
+          Json.obj("name" -> "my_idx", "url" -> "/api/databases/xfstestdb/xfstestcoll/indexes/my_idx")
+        )
+      ))
     )
 
   def e7 = getIndex(testDbName, testColName, "doesntexist") applyMatcher( _.status must equalTo(NOT_FOUND) )
@@ -60,5 +67,18 @@ class IndexAPISpec extends InCollectionSpecification {
     (resp.status must equalTo(OK)) and
       (resp.responseBody must beSome( Json.obj("name" -> "my_idx", "path" -> "a.b", "type" -> "<unknown>" )) )
   }
+
+  def e9 = deleteIndex(testDbName, testColName, "my_idx") applyMatcher( _.status must equalTo(OK))
+
+  def e10 = getIndex(testDbName, testColName, "my_idx") applyMatcher( _.status must equalTo(NOT_FOUND) )
+
+  def e11 = getIndices(testDbName, testColName) applyMatcher( res =>
+    (res.status must equalTo(OK)) and
+      (res.responseBody must beSome(
+        Json.arr()
+          )
+        )
+    )
+
 
 }

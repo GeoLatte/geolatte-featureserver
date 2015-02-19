@@ -315,7 +315,9 @@ object PostgresqlRepository extends Repository {
       }
     }
 
-  override def dropIndex(database: String, collection: String, index: String): Future[Boolean] = ???
+  override def dropIndex(database: String, collection: String, index: String): Future[Boolean] =
+    executeStmtsInTransaction( Sql.DROP_INDEX(database, collection, index) ).map( _ => true)
+
 
   //Private Utility methods
 
@@ -630,7 +632,10 @@ object PostgresqlRepository extends Repository {
          |WHERE schemaname = ${single_quote(db)} AND tablename = ${single_quote(col)}
      """.stripMargin
 
-
+    def DROP_INDEX(db: String, col: String, indexName: String): String =
+    s"""
+       |DROP INDEX IF EXISTS ${quote(db)}.${quote(indexName)}
+     """.stripMargin
 
   }
 

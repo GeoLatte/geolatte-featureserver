@@ -41,6 +41,10 @@ object IndexController extends AbstractNoSqlController{
     }.recover(commonExceptionHandler(db, collection))
   }
 
-  def delete(db: String, collection: String, index: String) = play.mvc.Results.TODO
+  def delete(db: String, collection: String, index: String) = repositoryAction {
+    implicit req => {
+      repository.dropIndex(db, collection, index).map[SimpleResult]{ _ => Ok  }
+    }.recover(commonExceptionHandler(db, collection))
+  }
 
 }
