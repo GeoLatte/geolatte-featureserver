@@ -1,0 +1,19 @@
+{
+    "$schema": "http://json-schema.org/draft-04/schema#",
+    "title": "View Definition",
+    "description": "Defines an View",
+    "type": "object",
+    "properties": {
+        "query": {
+          "description": "Query expression",
+          "type": "string"
+        },
+        "projection":{
+          "description": "The projection (properties to show",
+           "type": "array",
+           "items": { "type": "string" },
+           "minItems" : 1
+        }    
+    },
+    "required": ["query"]
+}

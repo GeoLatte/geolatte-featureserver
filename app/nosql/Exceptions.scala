@@ -10,11 +10,13 @@ package object nosql {
 
   case class CollectionNotFoundException(msg: String = "") extends NoSqlException(msg)
 
+  case class IndexNotFoundException(msg: String = "") extends NoSqlException(msg)
+
   case class NoSpatialMetadataException(msg: String = "") extends NoSqlException(msg)
 
-  case class DatabaseAlreadyExists(msg: String = "") extends NoSqlException(msg)
+  case class DatabaseAlreadyExistsException(msg: String = "") extends NoSqlException(msg)
 
-  case class CollectionAlreadyExists(msg: String ="") extends NoSqlException(msg)
+  case class CollectionAlreadyExistsException(msg: String ="") extends NoSqlException(msg)
 
   case class DatabaseCreationException(msg: String = "") extends NoSqlException(msg)
 

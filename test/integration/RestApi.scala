@@ -227,6 +227,26 @@ object RestApiDriver {
     FakeRequestResult.DELETE(url)
   }
 
+  def putIndex(dbName: String, colName: String, idx: String, body: JsObject) = {
+    val url = DATABASES / dbName / colName / INDEXES / idx
+    FakeRequestResult.PUT(url, Some(body))
+  }
+
+  def getIndices(dbName: String, colName: String)  = {
+    val url = DATABASES / dbName / colName / INDEXES
+    FakeRequestResult.GET(url, contentAsJson)
+  }
+
+  def getIndex(dbName: String, colName: String, idx: String) = {
+    val url = DATABASES / dbName / colName / INDEXES / idx
+    FakeRequestResult.GET(url, contentAsJson)
+  }
+
+  def deleteIndex(dbName: String, colName: String, idx: String) = {
+    val url = DATABASES / dbName / colName / INDEXES / idx
+    FakeRequestResult.DELETE(url)
+  }
+
   def loadData[B](db: String, col: String, data: Array[Byte]) = {
     Logger.info("START LOADING TEST DATA")
     val url = DATABASES / db / col / TX / INSERT
@@ -405,5 +425,7 @@ object API {
   val MEDIA = "media"
 
   val VIEWS = "views"
+
+  val INDEXES = "indexes"
 
 }

@@ -6,7 +6,7 @@ import com.github.mauricio.async.db.postgresql.exceptions.GenericDatabaseExcepti
 import com.github.mauricio.async.db.postgresql.pool.PostgreSQLConnectionFactory
 import com.github.mauricio.async.db.postgresql.util.URLParser
 import config.{AppExecutionContexts, ConfigurationValues}
-import controllers.Formats
+import controllers.{IndexDef, Formats}
 import nosql._
 import nosql.json.GeometryReaders
 import org.geolatte.geom.codec.{Wkt, Wkb}
@@ -280,6 +280,43 @@ object PostgresqlRepository extends Repository {
       if (exists) executePreparedStmt(Sql.GET_VIEWS(database), Seq(collection)) { qr => toProjectedJsonList(qr, None) }
       else throw new CollectionNotFoundException()
     }
+
+  override def createIndex(dbName: String, colName: String, indexDef: IndexDef) : Future[Boolean] =
+    executeStmtsInTransaction (
+      Sql.CREATE_INDEX(dbName, colName, indexDef.name, indexDef.path, indexDef.cast)
+    ).map(_ => true)
+
+
+
+
+  private def toIndexDef(name: String, defText: String) : Option[IndexDef] = {
+    val pathElRegex = "\\'(\\w+)\\'".r
+    val path = (for ( m <- pathElRegex.findAllMatchIn(defText) ) yield m group 1 ) mkString "."
+    if (path.isEmpty) None //empty path, means not an index on JSON value (maybe spatial, maybe on ID
+    else Some(IndexDef(name, path, "<unknown>")) //we can't determine the cast used during definition of index
+  }
+
+  private def getInternalIndices(dbName: String, colName: String) : Future[List[IndexDef]] =
+    existsCollection(dbName, colName).flatMap { exists =>
+    if(exists) executeStmt( Sql.SELECT_INDEXES_FOR_TABLE(dbName, colName) ){
+      toList(_)(rd => toIndexDef(rd(0).asInstanceOf[String], rd(1).asInstanceOf[String]))
+    }
+    else throw new CollectionNotFoundException()
+  }
+
+  override def getIndices(dbName: String, colName: String): Future[List[String]] =
+    getInternalIndices(dbName, colName).map( listIdx => listIdx.filter(q => q.path != "id").map(_.name) )
+
+  override def getIndex(dbName: String, colName: String, indexName: String): Future[IndexDef] =
+    getInternalIndices(dbName, colName).map{ listIdx =>
+    listIdx.find(q => q.name == indexName) match {
+        case Some(idf) => idf
+        case None => throw new IndexNotFoundException(s"Index $indexName on $dbName/$colName not found.")
+      }
+    }
+
+  override def dropIndex(database: String, collection: String, index: String): Future[Boolean] =
+    executeStmtsInTransaction( Sql.DROP_INDEX(database, collection, index) ).map( _ => true)
 
 
   //Private Utility methods
@@ -578,6 +615,28 @@ object PostgresqlRepository extends Repository {
        |FROM ${quote(dbname)}.${quote(ViewCollection)}
        |WHERE COLLECTION = ?
      """.stripMargin
+
+    def CREATE_INDEX(dbName: String, colName: String, indexName: String, path: String, cast: String)   = {
+      val pathExp = path.split("\\.").map(
+       el => single_quote(el)
+      ).mkString(",")
+      s"""CREATE INDEX ${quote(indexName)}
+          |ON ${quote(dbName)}.${quote(colName)} ( (json_extract_path_text(json, ${pathExp})::${cast}) )
+      """.stripMargin
+    }
+
+    def SELECT_INDEXES_FOR_TABLE(db: String, col: String): String =
+      s"""
+         |SELECT INDEXNAME, INDEXDEF
+         |FROM pg_indexes
+         |WHERE schemaname = ${single_quote(db)} AND tablename = ${single_quote(col)}
+     """.stripMargin
+
+    def DROP_INDEX(db: String, col: String, indexName: String): String =
+    s"""
+       |DROP INDEX IF EXISTS ${quote(db)}.${quote(indexName)}
+     """.stripMargin
+
   }
 
 
@@ -589,9 +648,9 @@ object PostgresqlRepository extends Repository {
     def getMessage(dbe: GenericDatabaseException) = dbe.errorMessage.fields.getOrElse('M', "Database didn't return a message")
     def unapply(t : Throwable): Option[RuntimeException] =  t match {
       case t: GenericDatabaseException if getStatus(t) == Some("42P06") =>
-        Some(new DatabaseAlreadyExists(getMessage(t)))
+        Some(new DatabaseAlreadyExistsException(getMessage(t)))
       case t: GenericDatabaseException if getStatus(t) == Some("42P07") =>
-        Some(new CollectionAlreadyExists(getMessage(t)))
+        Some(new CollectionAlreadyExistsException(getMessage(t)))
       case t: GenericDatabaseException if getStatus(t) == Some("3F000") =>
         Some(new  DatabaseNotFoundException(getMessage(t)))
       case t: GenericDatabaseException if getStatus(t) == Some("42P01") =>
