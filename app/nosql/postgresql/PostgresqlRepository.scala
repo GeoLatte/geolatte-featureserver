@@ -251,11 +251,7 @@ object PostgresqlRepository extends Repository {
 
   override def dropView(database: String, collection: String, id: String): Future[Boolean] =
     existsCollection(database, collection).flatMap { exists =>
-      if (exists) executeStmtsInTransaction(Sql.DELETE_VIEW(database, collection, id)){
-          _ => true
-        }.map{
-          _.head
-        }
+      if (exists) executeStmtInTransaction(Sql.DELETE_VIEW(database, collection, id)){ _ => true }
       else throw new CollectionNotFoundException()
       }
 
@@ -282,9 +278,9 @@ object PostgresqlRepository extends Repository {
     }
 
   override def createIndex(dbName: String, colName: String, indexDef: IndexDef) : Future[Boolean] =
-    executeStmtsInTransaction (
+    executeStmtInTransaction (
       Sql.CREATE_INDEX(dbName, colName, indexDef.name, indexDef.path, indexDef.cast)
-    ).map(_ => true)
+    ){_ => true}
 
 
 
@@ -316,30 +312,32 @@ object PostgresqlRepository extends Repository {
     }
 
   override def dropIndex(database: String, collection: String, index: String): Future[Boolean] =
-    executeStmtsInTransaction( Sql.DROP_INDEX(database, collection, index) ).map( _ => true)
+    executeStmtInTransaction( Sql.DROP_INDEX(database, collection, index) ){ _ => true}
 
 
+  //************************************************************************
   //Private Utility methods
+  //************************************************************************
+
+  private def  sendstatement[T](stmt: String)(implicit resultHandler: QueryResult => T, c: Connection) : Future[T] = {
+    Logger.debug("SQL IN TRANSACTION: " + stmt)
+    c.sendQuery(stmt).map(qr => resultHandler(qr))
+  }
 
   // if resultHandler is not specified, the identity function is used by implicits of Predef
-  private def executeStmtsInTransaction[T](sql: String*)(implicit resultHandler: QueryResult => T) : Future[List[T]] = {
-
-    def addResultToList(qr: QueryResult, l : List[T]) : List[T] = resultHandler(qr)::l
-
-    def  sendstmt(stmt: String, results: List[T])(implicit c: Connection) : Future[List[T]]= {
-      Logger.debug("SQL IN TRANSACTION: " + sql)
-      c.sendQuery(stmt).map(qr => addResultToList(qr, results))
-    }
-
-    pool.inTransaction { implicit c =>
-      sql.foldLeft ( Future.successful( List[T]() ) )
-      {
-        (futurelist: Future[List[T]], stmt: String) => futurelist.flatMap (l => sendstmt(stmt,l))
+  private def executeStmtsInTransaction[T](sql: String*)(implicit resultHandler: QueryResult => T) : Future[List[T]] =
+    doInTransaction { connection =>
+      sql.foldLeft(Future.successful(List[T]())) {
+        (futurelist: Future[List[T]], stmt: String) => futurelist.flatMap[List[T]]{l =>
+            sendstatement(stmt)(resultHandler, connection).map(t => t :: l)
+        }.map(l => l.reverse)
       }
-    }.recover {
-      case MappableException(mappedException) => throw mappedException
     }
-  }
+
+  private def executeStmtInTransaction[T](sql: String)(implicit resultHandler: QueryResult =>T) : Future[T] =
+      doInTransaction { connection =>
+          sendstatement(sql)(resultHandler, connection)
+      }
 
   private def sendprepared[T](sql: String, vals: Seq[Any])(implicit c : Connection) : Future[QueryResult] = {
     Logger.debug( s"\t\t Executing Prepared statement $sql in transactions with values ${vals mkString ", "}" )
@@ -347,27 +345,29 @@ object PostgresqlRepository extends Repository {
   }
 
   private def executePreparedStmts[T](sql: String, values: Seq[Seq[Any]])(implicit resultHandler: QueryResult => T) : Future[List[T]] =
-    pool.inTransaction { implicit c =>
-      values.foldLeft( Future.successful( List[T]() )) {
+    doInTransaction { implicit c =>
+      values.foldLeft(Future.successful(List[T]())) {
         (flist: Future[List[T]], vals: Seq[Any]) =>
-          flist.flatMap{ l =>
+          flist.flatMap { l =>
             sendprepared(sql, vals)
-              .map( resultHandler )
-              .map(t => t::l)
-          }
+              .map(resultHandler)
+              .map(t => t :: l)
+          }.map(l => l.reverse)
       }
-    }.recover {
-      case MappableException(mappedException) => throw mappedException
     }
 
 
   private def executePreparedStmt[T](sql: String, values: Seq[Any])(implicit resultHandler: QueryResult => T) : Future[T] =
-    pool.inTransaction { implicit c =>
+    doInTransaction { implicit c =>
       sendprepared(sql, values).map( resultHandler)
+    }
+
+  private def doInTransaction[T](block : Connection => Future[T]) : Future[T] =
+    pool.inTransaction { implicit c =>
+      block(c)
     }.recover {
       case MappableException(mappedException) => throw mappedException
     }
-
 
   private def executeStmt[T](sql: String)(resultHandler: QueryResult => T): Future[T] = {
     Logger.debug("SQL : " + sql)
@@ -614,6 +614,12 @@ object PostgresqlRepository extends Repository {
        |SELECT VIEW_DEF
        |FROM ${quote(dbname)}.${quote(ViewCollection)}
        |WHERE COLLECTION = ?
+     """.stripMargin
+
+
+    def GET_INSTALLED_EXENSIONS() =
+    s"""
+       |SELECT extname FROM pg_extension ;
      """.stripMargin
 
     def CREATE_INDEX(dbName: String, colName: String, indexName: String, path: String, cast: String)   = {
