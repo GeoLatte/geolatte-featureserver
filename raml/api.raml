@@ -226,7 +226,7 @@ mediaType: application/vnd.geolatte-featureserver+json;version=1.0
       /indexes:
         description: |
           **Note:** Index management is not yet implemented in the MongoDB store
-        
+
         get:
           description: |
             Gets the indexes defined on the specified collection.
@@ -248,13 +248,17 @@ mediaType: application/vnd.geolatte-featureserver+json;version=1.0
           put:
             description: |
               Creates the index on the specified collection.
+              
+              If the `regex` property is specified and set to `true` a GIST index will be created using the tigram matching functions of the pg_trgm
+              extension. If this extension has not been created in the database, index creation will fail.
             body:
               application/vnd.geolatte-featureserver+json;version=1.0 :
                 schema: !include schemas/indexdefinition.schema
                 example: |
                   {
                     "path" : "properties.entity.id",
-                    "type" : "decimal"
+                    "type" : "decimal",
+                    "regex" : true
                   }
             responses:
               201: 
@@ -263,17 +267,18 @@ mediaType: application/vnd.geolatte-featureserver+json;version=1.0
                   **Note:** It is possible to successfully create an index to a non-existent property paths.
           get:
             description: |
-              GETs index information.
-              **Note:** Due to the limitation of Postgresql's metadata, it is not possible to determine as what type the indexed property path is declared on index creation. For that reason, the `type` property is not present in the returned object.
+              GETs index definition
             responses:
               200:
                 body:
                   application/vnd.geolatte-featureserver+json;version=1.0 :
-                    schema: !include schemas/indexinfo.schema
+                    schema: !include schemas/indexdefinition.schema
                     example: |
                       {
                         "name": "ididx",
-                        "path": "properties.entity.id"
+                        "path": "properties.entity.id",
+                        "type": "decimal",
+                        "regex": false
                       }
               404:
                 description: if the specified index does not exist (or the collection, or database).

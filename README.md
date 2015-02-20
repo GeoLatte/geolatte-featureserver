@@ -17,6 +17,17 @@ Building NoSQL-FeatureServer
 * execute `sbt` and then 'run' to run the built-in development server
 
 
+=============================
+Postgresql note's
+=============================
+
+Prerequisites: create the database that will hold the schema's and tables managed by this server. For best performance of regex expression, make sure
+the pg_trgm extension is enable like so:
+
+    psql=# CREATE EXTENSION pg_trgm;
+
+
+
 
 
 

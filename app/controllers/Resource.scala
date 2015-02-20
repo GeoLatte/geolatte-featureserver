@@ -77,7 +77,7 @@ case class FeaturesResource(total: Option[Long], features: List[JsObject]) exten
 }
 
 
-case class IndexDef(name: String, path: String, cast: String)
+case class IndexDef(name: String, path: String, cast: String, regex: Boolean)
 
 case class IndexDefsResource(dbName: String, colName: String, indexNames : Traversable[String]) extends Jsonable {
   lazy val intermediate = indexNames map (name => Map("name" -> name, "url" -> routes.IndexController.get(dbName, colName, name).url))
@@ -159,17 +159,20 @@ object Formats {
   implicit val IndexDefReads : Reads[IndexDef]= (
       (__ \ 'name).readNullable[String].map{ _.getOrElse("") } and
       (__ \ 'path).read[String] and
-      (__ \ 'type).read[String]
+      (__ \ 'type).read[String](filter[String]
+          (ValidationError("Type must be either 'text', 'bool' or 'decimal'"))
+          (s => List("text", "bool","decimal").contains(s))) and
+      (__ \ 'regex).readNullable[Boolean].map(_.getOrElse(false))
     )(IndexDef)
 
-  val indexForWrites : IndexDef => (String, String) = (indexDef) => (indexDef.name, indexDef.path)
-
   implicit val IndexDefWrites : Writes[IndexDef]= (
-    ( __ \ 'name).write[String] and
-      ( __ \ 'path).write[String]
-    )( indexForWrites )
+      ( __ \ 'name).write[String] and
+      ( __ \ 'path).write[String] and
+      (__ \ 'type).write[String] and
+      ( __ \ 'regex).write[Boolean]
+    )( unlift(IndexDef.unapply) )
 
-  implicit val IndexDefFormat : Format[IndexDef] = Format(IndexDefReads, IndexDefWrites)
+  implicit val IndexDefFormat   : Format[IndexDef] = Format(IndexDefReads, IndexDefWrites)
 
 }
 

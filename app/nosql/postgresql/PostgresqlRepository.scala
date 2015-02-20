@@ -278,18 +278,31 @@ object PostgresqlRepository extends Repository {
     }
 
   override def createIndex(dbName: String, colName: String, indexDef: IndexDef) : Future[Boolean] =
-    executeStmtInTransaction (
-      Sql.CREATE_INDEX(dbName, colName, indexDef.name, indexDef.path, indexDef.cast)
-    ){_ => true}
-
-
-
+      if ( indexDef.regex ) executeStmtInTransaction(
+          Sql.CREATE_INDEX_WITH_TRGM(dbName, colName, indexDef.name, indexDef.path, indexDef.cast)
+        ) { _ => true}
+      else executeStmtInTransaction(
+          Sql.CREATE_INDEX(dbName, colName, indexDef.name, indexDef.path, indexDef.cast)
+        ){_ => true}
 
   private def toIndexDef(name: String, defText: String) : Option[IndexDef] = {
     val pathElRegex = "\\'(\\w+)\\'".r
+    val methodRegex = "USING (\\w+) ".r
+    val castRegex = "::(\\w+)\\)\\)$".r
+
+    val method = methodRegex.findFirstMatchIn(defText).map{ m => m group 1 }
+    val isForRegex = method.exists( _ == "gist" )
+
+    val cast = castRegex.findFirstMatchIn(defText).map{ m => m group 1} match {
+      case Some("boolean") => "bool"
+      case Some("numeric") => "decimal"
+      case _ => "text"
+    }
+
     val path = (for ( m <- pathElRegex.findAllMatchIn(defText) ) yield m group 1 ) mkString "."
+
     if (path.isEmpty) None //empty path, means not an index on JSON value (maybe spatial, maybe on ID
-    else Some(IndexDef(name, path, "<unknown>")) //we can't determine the cast used during definition of index
+    else Some(IndexDef(name, path, cast, isForRegex)) //we can't determine the cast used during definition of index
   }
 
   private def getInternalIndices(dbName: String, colName: String) : Future[List[IndexDef]] =
@@ -369,7 +382,7 @@ object PostgresqlRepository extends Repository {
       case MappableException(mappedException) => throw mappedException
     }
 
-  private def executeStmt[T](sql: String)(resultHandler: QueryResult => T): Future[T] = {
+  def executeStmt[T](sql: String)(resultHandler: QueryResult => T): Future[T] = {
     Logger.debug("SQL : " + sql)
     pool.sendQuery(sql)
       .map {
@@ -617,10 +630,10 @@ object PostgresqlRepository extends Repository {
      """.stripMargin
 
 
-    def GET_INSTALLED_EXENSIONS() =
-    s"""
-       |SELECT extname FROM pg_extension ;
-     """.stripMargin
+//    def CHECK_TRGM_EXTENSION() =
+//    s"""
+//       |select true from pg_extension where extname = 'pg_trgm'
+//     """.stripMargin
 
     def CREATE_INDEX(dbName: String, colName: String, indexName: String, path: String, cast: String)   = {
       val pathExp = path.split("\\.").map(
@@ -628,6 +641,16 @@ object PostgresqlRepository extends Repository {
       ).mkString(",")
       s"""CREATE INDEX ${quote(indexName)}
           |ON ${quote(dbName)}.${quote(colName)} ( (json_extract_path_text(json, ${pathExp})::${cast}) )
+      """.stripMargin
+    }
+
+    def CREATE_INDEX_WITH_TRGM(dbName: String, colName: String, indexName: String, path: String, cast: String)   = {
+      val pathExp = path.split("\\.").map(
+        el => single_quote(el)
+      ).mkString(",")
+      s"""CREATE INDEX ${quote(indexName)}
+          |ON ${quote(dbName)}.${quote(colName)} using gist
+          |( (json_extract_path_text(json, ${pathExp})::${cast}) gist_trgm_ops)
       """.stripMargin
     }
 
