@@ -21,11 +21,14 @@ case class BooleanNot(expr: BooleanExpr) extends BooleanExpr
 
 sealed trait Predicate extends BooleanExpr
 case class ComparisonPredicate(lhs: PropertyExpr, op: ComparisonOperator, rhs: ValueExpr) extends Predicate
+case class InPredicate(lhs: PropertyExpr, rhs: ValueListExpr) extends Predicate
 
 sealed trait ValueExpr extends Expr
 case class LiteralString(value: String) extends ValueExpr
 case class LiteralNumber(value: BigDecimal) extends ValueExpr
 case class LiteralBoolean(value: Boolean) extends ValueExpr with BooleanExpr
+
+case class ValueListExpr(values: List[ValueExpr]) extends Expr
 
 case class PropertyExpr(path: String) extends Expr
 
@@ -52,11 +55,17 @@ class QueryParser (val input: ParserInput ) extends Parser {
 
   def BooleanPrim = rule { WS ~ ch('(') ~ WS ~ BooleanExpression ~ WS ~ ch(')') ~ WS | Predicate  }
 
-  def Predicate = rule { Comparison | LiteralBool }
+  def Predicate = rule { ComparisonPred | InPred | LiteralBool }
 
-  def Comparison = rule { (WS ~ Property ~ WS ~ ComparisonOp ~ Expression ~ WS )  ~> ComparisonPredicate }
+  def InPred = rule{ (WS ~ Property ~ WS ~ ignoreCase("in") ~ WS ~ ExpressionList ~ WS) ~> InPredicate}
+
+  def ComparisonPred = rule { (WS ~ Property ~ WS ~ ComparisonOp ~ Expression ~ WS )  ~> ComparisonPredicate }
 
   def ComparisonOp =  rule { ">=" ~ push(GTE) | "<=" ~ push(LTE) | "=" ~ push(EQ) | "!=" ~ push(NEQ) | "<" ~ push(LT) | ">" ~ push(GT)  }
+
+  val toValList : ValueExpr => ValueListExpr = v => ValueListExpr(List(v))
+  val combineVals: (ValueListExpr, ValueExpr) => ValueListExpr = (list, ve) => ValueListExpr(ve::list.values)
+  def ExpressionList = rule { WS ~ "(" ~ WS ~ (Expression ~> toValList) ~ WS ~ zeroOrMore( "," ~ WS ~ (Expression ~> combineVals) ~ WS) ~ WS ~ ")" }
 
   def Expression = rule { LiteralBool | LiteralStr | LiteralNum }
 
