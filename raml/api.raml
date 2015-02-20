@@ -1,5 +1,5 @@
 #%RAML 0.8
-title: nosqlfs
+title: Feature Server
 version: 1.0
 baseUri: http://www.example.com/featureserver/api
 documentation: 
@@ -152,9 +152,9 @@ mediaType: application/vnd.geolatte-featureserver+json;version=1.0
           displayName: update features
           post:
             description: |
-              POST an update specification. An update specification is a json object having `query` and `update` properties. The `query` property holds a query epxression that specifies the features to update. The `update` property holds
-                * in case of MongoDB storage, either a replacement feature (document), or an object consisting of only update operators. (The update will be performend with `multi=true`);
-                * in case of Postgresql, a replacement features.
+              POST an update specification. An update specification is a json object having `query` and `update` properties. The `query` property holds a query expression that specifies the features to update. The `update` property holds
+                * in case of MongoDB, either a replacement feature (document), or an object consisting of only update operators. (The update will be performed with `multi=true`);
+                * in case of Postgresql, a replacement feature.
             body:
               application/vnd.geolatte-featureserver+json;version=1.0 :
                 example: |
