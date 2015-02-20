@@ -1,7 +1,6 @@
 package querylang
 
 
-import org.parboiled2.RuleFrame.NoneOf
 import org.parboiled2._
 import scala.util.{Try, Success, Failure}
 
@@ -42,7 +41,8 @@ case object GTE extends ComparisonOperator
 
 class QueryParserException(message: String = null) extends RuntimeException(message)
 
-class QueryParser (val input: ParserInput ) extends Parser {
+class QueryParser (val input: ParserInput ) extends Parser
+                                            with StringBuilding{
 
 
   def InputLine = rule { BooleanExpression ~ EOI }
@@ -56,7 +56,7 @@ class QueryParser (val input: ParserInput ) extends Parser {
   def BooleanPrim = rule { WS ~ ch('(') ~ WS ~ BooleanExpression ~ WS ~ ch(')') ~ WS | Predicate  }
 
   def Predicate = rule { ComparisonPred | InPred | LiteralBool }
-
+  
   def InPred = rule{ (WS ~ Property ~ WS ~ ignoreCase("in") ~ WS ~ ExpressionList ~ WS) ~> InPredicate}
 
   def ComparisonPred = rule { (WS ~ Property ~ WS ~ ComparisonOp ~ Expression ~ WS )  ~> ComparisonPredicate }
@@ -75,9 +75,13 @@ class QueryParser (val input: ParserInput ) extends Parser {
 
   def LiteralNum = rule {  capture(Number)  ~> toNum  }
 
-  def LiteralStr = rule {  ch(''') ~ (capture(zeroOrMore( noneOf("'") )) ~> LiteralString ) ~ ch(''') }
+  val printableChar = ( CharPredicate.Printable -- "'" )
 
-  def Property = rule { capture(NameString)  ~> PropertyExpr ~ WS}
+  def LiteralStr = rule {  ch(''') ~ clearSB() ~ zeroOrMore( (printableChar | "\'\'") ~ appendSB()  ) ~ ch(''') ~ push( LiteralString(sb.toString) )  }
+
+  def Regex = rule {  ch('/') ~ clearSB() ~ zeroOrMore( ( noneOf("/\\") ~ appendSB() )  | ch('\\') ~ CharPredicate.Printable ~ appendSB()  ) ~ ch('/') ~ push( LiteralString(sb.toString) )  }
+
+  def Property = rule { capture(NameString)  ~> PropertyExpr ~ WS }
 
 
   //basic tokens
