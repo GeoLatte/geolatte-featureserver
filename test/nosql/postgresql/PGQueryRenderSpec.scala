@@ -74,6 +74,12 @@ class PGQueryRenderSpec extends Specification {
         "json_extract_path_text(json, 'a','b')::decimal in (3,2,1)"
     }
 
+    "properly render simple regex expression " in {
+      val expr = QueryParser.parse("properties.foo ~ /bar1.*/").get
+      compressWS(renderer.render(expr)) === "json_extract_path_text(json, 'properties','foo')::text ~ 'bar1.*'"
+    }
+
+
   }
 
   private def compressWS(str : String) = str.replaceAll(" +", " ").trim

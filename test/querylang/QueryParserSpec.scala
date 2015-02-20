@@ -166,6 +166,11 @@ class QueryParserSpec extends Specification {
       ))
     }
 
+    "support regex predicates" in {
+      querylang.QueryParser.parse("""var ~ /a\.*.*b/""") must beSuccessfulTry.withValue(
+        RegexPredicate(PropertyExpr("var"), RegexExpr("""a\.*.*b"""))
+      )
+    }
   }
 
 }

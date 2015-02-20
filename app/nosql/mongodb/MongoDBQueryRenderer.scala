@@ -30,6 +30,10 @@ object MongoDBQueryRenderer extends QueryRenderer[JsValue]{
           renderValue(rhs)
         )
       )
+    case RegexPredicate(lhs, rhs) => Json.obj(
+      lhs.path ->
+        Json.obj( "$regex" -> rhs.pattern) //TODO -- this is not tested !!
+    )
     case LiteralBoolean(b) => Json.obj()
   }
 
