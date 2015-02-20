@@ -65,7 +65,7 @@ class IndexAPISpec extends InCollectionSpecification {
 
   def e8 = getIndex(testDbName, testColName, "my_idx") applyMatcher{ resp =>
     (resp.status must equalTo(OK)) and
-      (resp.responseBody must beSome( Json.obj("name" -> "my_idx", "path" -> "a.b", "type" -> "<unknown>" )) )
+      (resp.responseBody must beSome( Json.obj("name" -> "my_idx", "path" -> "a.b")) )
   }
 
   def e9 = deleteIndex(testDbName, testColName, "my_idx") applyMatcher( _.status must equalTo(OK))

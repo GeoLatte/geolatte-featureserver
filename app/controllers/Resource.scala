@@ -162,11 +162,12 @@ object Formats {
       (__ \ 'type).read[String]
     )(IndexDef)
 
+  val indexForWrites : IndexDef => (String, String) = (indexDef) => (indexDef.name, indexDef.path)
+
   implicit val IndexDefWrites : Writes[IndexDef]= (
     ( __ \ 'name).write[String] and
-      ( __ \ 'path).write[String] and
-      (__ \ 'type).write[String]
-    )(unlift(IndexDef.unapply))
+      ( __ \ 'path).write[String]
+    )( indexForWrites )
 
   implicit val IndexDefFormat : Format[IndexDef] = Format(IndexDefReads, IndexDefWrites)
 
