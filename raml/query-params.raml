@@ -1,0 +1,30 @@
+bbox:
+  description: Bounding box in string-representation (`<min-x>,<min-y>,<max-x>,<max-y>`)
+  type: string
+  required: false
+  example: "0,0,90,90"
+query:
+  description: Query expression
+  type: string
+  required: false
+  example: Properties.foo = 'bar'
+start:
+  description: Skips the specified number of features before returning features
+  type: integer
+  required: false
+limit:
+  description: Specifies the maximum number of features to return
+  type: integer
+  required: false
+projection:
+  description: | 
+    specifies a comma-separated list of feature property paths. If this parameter is present, only the specified property paths will be retained in the resulting features.
+  type: string
+  required: false
+  example: properties.foo,properties.bar,properties.baz
+with-view:
+  description: | 
+    The name of the ViewDef to apply. 
+    A ViewDef has `query` and `projection` properties. The ViewDef `query` expression will be conjoined (AND-ed) to the `query` request parameter, and the ViewDef `projection` property will be concatenated to the `projection` request parameter.
+  type: string
+  required: false

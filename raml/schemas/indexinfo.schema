@@ -1,0 +1,17 @@
+{
+    "$schema": "http://json-schema.org/draft-04/schema#",
+    "title": "IndexInfo",
+    "description": "Presents information about an index",
+    "type": "object",
+    "properties": {
+        "name":{
+          "description": "The name of the index",
+           "type" : "string"
+         },
+        "path": {
+          "description": "Property path on which the index has been created",
+          "type": "string"
+          }
+        },
+    "required": ["name", "path"]
+}

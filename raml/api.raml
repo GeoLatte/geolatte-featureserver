@@ -132,7 +132,7 @@ mediaType: application/vnd.geolatte-featureserver+json;version=1.0
           displayName: delete features
           post:
             description: |
-              POST a delete specification. A delete specification is a json object having a "query" property, which contains a 
+              POST a delete specification. A delete specification is a json object having a `query` property, which contains a 
               query expression
             body:
               application/vnd.geolatte-featureserver+json;version=1.0 :                  
@@ -149,10 +149,200 @@ mediaType: application/vnd.geolatte-featureserver+json;version=1.0
                 description: the database or collection does not exist
               
         /update:
-          displayName: resourceName        
+          displayName: update features
+          post:
+            description: |
+              POST an update specification. An update specification is a json object having `query` and `update` properties. The `query` property holds a query epxression that specifies the features to update. The `update` property holds
+                * in case of MongoDB storage, either a replacement feature (document), or an object consisting of only update operators. (The update will be performend with `multi=true`);
+                * in case of Postgresql, a replacement features.
+            body:
+              application/vnd.geolatte-featureserver+json;version=1.0 :
+                example: |
+                    {
+                    "query": "id = 433",
+                    "update" : {id = 433, geometry":{"type":"Point","crs":{"properties":{"name":"EPSG:31370"},"type":"name"},"bbox":[158000,191400,158050,191400],"coordinates":[158000,191400]},"type":"Feature","properties":{"some-property":"some-value"}}
+                    }                  
+            responses:
+              200:
+                description: The update executed successfully
+              400: 
+                description: The request body doesn't contain a JSON object with valid `query` or `update` properties.                              
         /upsert:
-          displayName: resourceName        
-          
-      
-      
+          displayName: upserts features
+          post:
+            description: |
+              POST an GeoJson feature to upsert into the specified collection. 
+              
+              An upsert performs an update if the collection already contains the feature, and an insert otherwise. Features are identified by their `id` property.
+            body:
+              application/vnd.geolatte-featureserver+json;version=1.0 :
+                example: |
+                  {id = 433, geometry":{"type":"Point","crs":{"properties":{"name":"EPSG:31370"},"type":"name"},"bbox":[158000,191400,158050,191400],"coordinates":[158000,191400]},"type":"Feature","properties":{"some-property":"some-value"}}
+      /query:
+        displayName: Queries the collection
+        get:
+          description: |
+            Executes a query on the specified collection and returns a stream of features (separated by a newline character).
+            The `bbox` and `query` parameters are ANDed together.
+            
+          queryParameters: !include query-params.raml            
+          responses:
+            200:
+              description: Successfully executed the query
+              body:
+                 application/vnd.geolatte-featureserver+json;version=1.0 :
+                   example: |
+                    {id = 433, geometry":{"type":"Point","crs":{"properties":{"name":"EPSG:31370"},"type":"name"},"bbox":[158000,191400,158050,191400],"coordinates":[158000,191400]},"type":"Feature","properties":{"some-property":"some-value"}}
+                    {id = 434, geometry":{"type":"Point","crs":{"properties":{"name":"EPSG:31370"},"type":"name"},"bbox":[158001,191401,158051,191401],"coordinates":[158001,191401]},"type":"Feature","properties":{"some-property":"some-other-value"}}
+                    ....
+                 application/vnd.geolatte-featureserver+csv;version=1.0 : 
+                   example:  |
+                     id, geometry-wkt, some-property
+                     433,SRID=31370;POINT(158000 191400),"some-value"
+                     434,SRID=31370;POINT(158001 191401),"some-other-value"
+      /featurecollection:
+        get:
+          description: |
+            Executes the query on the specified collection and returns the result in a Json response object.
+            
+            The only difference between this and the `/query` request, is that the `query` request returns the object as a stream of objects (http chunked encoded), and this request a single Json object. The returned object contains
+          queryParameters: !include query-params.raml
+          responses:
+            200:
+              description: Successfully executed the query
+              body:
+               application/vnd.geolatte-featureserver+json;version=1.0 :
+                 schema: !include schemas/featurecollection.schema
+                 example: |
+                   {
+                     "total":151921,
+                     "count":3,
+                     "features":[
+                      {id = 433, geometry":{"type":"Point","crs":{"properties":{"name":"EPSG:31370"},"type":"name"},"bbox":[158000,191400,158050,191400],"coordinates":[158000,191400]},"type":"Feature","properties":{"some-property":"some-value"}}
+                      {id = 434, geometry":{"type":"Point","crs":{"properties":{"name":"EPSG:31370"},"type":"name"},"bbox":[158001,191401,158051,191401],"coordinates":[158001,191401]},"type":"Feature","properties":{"some-property":"some-other-value"}}
+                      ...
+                      ]
+                    }
+      /indexes:
+        description: |
+          **Note:** Index management is not yet implemented in the MongoDB store
         
+        get:
+          description: |
+            Gets the indexes defined on the specified collection.
+            
+            **Note:** in addition to the indexes listed in the response, there will always be also a spatial index, and an index on the `id` property.
+          responses:
+              200:
+                description: Returns the array with index descriptions
+                body:
+                 application/vnd.geolatte-featureserver+json;version=1.0 :
+                   example: |
+                    [
+                      {
+                        "name": "ididx",
+                        "url": "/api/databases/wegsegmenten/segment/indexes/ididx"
+                    }
+                    ]
+        /{indexName}:
+          put:
+            description: |
+              Creates the index on the specified collection.
+            body:
+              application/vnd.geolatte-featureserver+json;version=1.0 :
+                schema: !include schemas/indexdefinition.schema
+                example: |
+                  {
+                    "path" : "properties.entity.id",
+                    "type" : "decimal"
+                  }
+            responses:
+              201: 
+                description: | 
+                  The index has been created.
+                  **Note:** It is possible to successfully create an index to a non-existent property paths.
+          get:
+            description: |
+              GETs index information.
+              **Note:** Due to the limitation of Postgresql's metadata, it is not possible to determine as what type the indexed property path is declared on index creation. For that reason, the `type` property is not present in the returned object.
+            responses:
+              200:
+                body:
+                  application/vnd.geolatte-featureserver+json;version=1.0 :
+                    schema: !include schemas/indexinfo.schema
+                    example: |
+                      {
+                        "name": "ididx",
+                        "path": "properties.entity.id"
+                      }
+              404:
+                description: if the specified index does not exist (or the collection, or database).
+          delete:
+            description: Deletes the specified index
+            responses:
+              200: 
+                description: Successful deletion of the index (or the index doesn't exist)
+      /views:
+        description: |
+          A Resource for managing views on the collection.           
+        get:
+          description: Returns the list with View descriptions
+          responses:
+            200:
+              body:
+               application/vnd.geolatte-featureserver+json;version=1.0 :
+#                 example: 
+        /{viewName}:
+          description: |
+            This resource represents a View defined on the specified collection.
+          put:
+            description: |
+              Creates a View
+            body:
+              application/vnd.geolatte-featureserver+json;version=1.0 :
+                schema: !include schemas/viewdef.schema
+                example: |
+                  {
+                    "query" : "foo.bar = 2",
+                    "projection": [
+                                    "foo.bar", 
+                                    "foo.baz"
+                                  ]
+                  }
+            responses:
+              201:
+                headers: 
+                  Location: 
+                    description: URL to the created view.
+                description: Successful creation of the index
+          get:
+            description: |
+              Returns the view defintion
+            responses:
+              200:
+                description: The view definition
+                body:
+                  application/vnd.geolatte-featureserver+json;version=1.0 :
+                    example: |
+                      {
+                          "name": "view_1",
+                          "query": "foo.bar = 2",
+                          "projection": [
+                              "foo.bar",
+                              "foo.baz"
+                          ],
+                          "url": "/api/databases/someDb/comeCollection/views/view_1"
+                      }  
+          delete:
+            description: Deletes the view
+            responses:
+              200:
+                description: Deletes the view, or the view does not exist.
+                
+              
+                  
+
+                
+              
+                  
+              
