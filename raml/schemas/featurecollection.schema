@@ -1,0 +1,21 @@
+{
+    "$schema": "http://json-schema.org/draft-04/schema#",
+    "title": "FeatureCollection",
+    "description": "The result of a query",
+    "type": "object",
+    "properties": {
+        "total": {
+          "description": "The total number of features that satisfy the specified condition (query + bbox)",
+          "type": "integer"
+        },
+        "count":{
+          "description": "The number of features contained in this object features property.",
+          "type" : "integer"
+        },
+        "features": {
+          "description" : "The array containing the query results.",
+          "type": "array"
+        }
+    },
+    "required": ["total", "count", "features"]
+}
