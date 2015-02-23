@@ -1,7 +1,6 @@
 package querylang
 
 
-import org.parboiled2.RuleFrame.NoneOf
 import org.parboiled2._
 import scala.util.{Try, Success, Failure}
 
@@ -21,11 +20,17 @@ case class BooleanNot(expr: BooleanExpr) extends BooleanExpr
 
 sealed trait Predicate extends BooleanExpr
 case class ComparisonPredicate(lhs: PropertyExpr, op: ComparisonOperator, rhs: ValueExpr) extends Predicate
+case class InPredicate(lhs: PropertyExpr, rhs: ValueListExpr) extends Predicate
+case class RegexPredicate(lhs: PropertyExpr, rsh: RegexExpr) extends Predicate
 
 sealed trait ValueExpr extends Expr
 case class LiteralString(value: String) extends ValueExpr
 case class LiteralNumber(value: BigDecimal) extends ValueExpr
 case class LiteralBoolean(value: Boolean) extends ValueExpr with BooleanExpr
+
+case class ValueListExpr(values: List[ValueExpr]) extends Expr
+
+case class RegexExpr(pattern: String) extends Expr
 
 case class PropertyExpr(path: String) extends Expr
 
@@ -39,7 +44,8 @@ case object GTE extends ComparisonOperator
 
 class QueryParserException(message: String = null) extends RuntimeException(message)
 
-class QueryParser (val input: ParserInput ) extends Parser {
+class QueryParser (val input: ParserInput ) extends Parser
+                                            with StringBuilding{
 
 
   def InputLine = rule { BooleanExpression ~ EOI }
@@ -52,11 +58,19 @@ class QueryParser (val input: ParserInput ) extends Parser {
 
   def BooleanPrim = rule { WS ~ ch('(') ~ WS ~ BooleanExpression ~ WS ~ ch(')') ~ WS | Predicate  }
 
-  def Predicate = rule { Comparison | LiteralBool }
+  def Predicate = rule { ComparisonPred | InPred | RegexPred | LiteralBool }
 
-  def Comparison = rule { (WS ~ Property ~ WS ~ ComparisonOp ~ Expression ~ WS )  ~> ComparisonPredicate }
+  def RegexPred = rule { (WS ~ Property ~ WS ~ "~" ~ WS ~ Regex ) ~> RegexPredicate }
+
+  def InPred = rule{ (WS ~ Property ~ WS ~ ignoreCase("in") ~ WS ~ ExpressionList ~ WS) ~> InPredicate}
+
+  def ComparisonPred = rule { (WS ~ Property ~ WS ~ ComparisonOp ~ Expression ~ WS )  ~> ComparisonPredicate }
 
   def ComparisonOp =  rule { ">=" ~ push(GTE) | "<=" ~ push(LTE) | "=" ~ push(EQ) | "!=" ~ push(NEQ) | "<" ~ push(LT) | ">" ~ push(GT)  }
+
+  val toValList : ValueExpr => ValueListExpr = v => ValueListExpr(List(v))
+  val combineVals: (ValueListExpr, ValueExpr) => ValueListExpr = (list, ve) => ValueListExpr(ve::list.values)
+  def ExpressionList = rule { WS ~ "(" ~ WS ~ (Expression ~> toValList) ~ WS ~ zeroOrMore( "," ~ WS ~ (Expression ~> combineVals) ~ WS) ~ WS ~ ")" }
 
   def Expression = rule { LiteralBool | LiteralStr | LiteralNum }
 
@@ -66,9 +80,13 @@ class QueryParser (val input: ParserInput ) extends Parser {
 
   def LiteralNum = rule {  capture(Number)  ~> toNum  }
 
-  def LiteralStr = rule {  ch(''') ~ (capture(zeroOrMore( noneOf("'") )) ~> LiteralString ) ~ ch(''') }
+  val printableChar = ( CharPredicate.Printable -- "'" )
 
-  def Property = rule { capture(NameString)  ~> PropertyExpr ~ WS}
+  def LiteralStr = rule {  ch(''') ~ clearSB() ~ zeroOrMore( (printableChar | "\'\'") ~ appendSB()  ) ~ ch(''') ~ push( LiteralString(sb.toString) )  }
+
+  def Regex = rule {  ch('/') ~ clearSB() ~ zeroOrMore( ( noneOf("/") ~ appendSB() )  ) ~ ch('/') ~ push( RegexExpr(sb.toString) )  }
+
+  def Property = rule { capture(NameString)  ~> PropertyExpr ~ WS }
 
 
   //basic tokens

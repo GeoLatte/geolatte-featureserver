@@ -6,7 +6,7 @@ import com.github.mauricio.async.db.postgresql.exceptions.GenericDatabaseExcepti
 import com.github.mauricio.async.db.postgresql.pool.PostgreSQLConnectionFactory
 import com.github.mauricio.async.db.postgresql.util.URLParser
 import config.{AppExecutionContexts, ConfigurationValues}
-import controllers.Formats
+import controllers.{IndexDef, Formats}
 import nosql._
 import nosql.json.GeometryReaders
 import org.geolatte.geom.codec.{Wkt, Wkb}
@@ -251,11 +251,7 @@ object PostgresqlRepository extends Repository {
 
   override def dropView(database: String, collection: String, id: String): Future[Boolean] =
     existsCollection(database, collection).flatMap { exists =>
-      if (exists) executeStmtsInTransaction(Sql.DELETE_VIEW(database, collection, id)){
-          _ => true
-        }.map{
-          _.head
-        }
+      if (exists) executeStmtInTransaction(Sql.DELETE_VIEW(database, collection, id)){ _ => true }
       else throw new CollectionNotFoundException()
       }
 
@@ -281,28 +277,80 @@ object PostgresqlRepository extends Repository {
       else throw new CollectionNotFoundException()
     }
 
+  override def createIndex(dbName: String, colName: String, indexDef: IndexDef) : Future[Boolean] =
+      if ( indexDef.regex ) executeStmtInTransaction(
+          Sql.CREATE_INDEX_WITH_TRGM(dbName, colName, indexDef.name, indexDef.path, indexDef.cast)
+        ) { _ => true}
+      else executeStmtInTransaction(
+          Sql.CREATE_INDEX(dbName, colName, indexDef.name, indexDef.path, indexDef.cast)
+        ){_ => true}
 
+  private def toIndexDef(name: String, defText: String) : Option[IndexDef] = {
+    val pathElRegex = "\\'(\\w+)\\'".r
+    val methodRegex = "USING (\\w+) ".r
+    val castRegex = "::(\\w+)\\)\\)$".r
+
+    val method = methodRegex.findFirstMatchIn(defText).map{ m => m group 1 }
+    val isForRegex = method.exists( _ == "gist" )
+
+    val cast = castRegex.findFirstMatchIn(defText).map{ m => m group 1} match {
+      case Some("boolean") => "bool"
+      case Some("numeric") => "decimal"
+      case _ => "text"
+    }
+
+    val path = (for ( m <- pathElRegex.findAllMatchIn(defText) ) yield m group 1 ) mkString "."
+
+    if (path.isEmpty) None //empty path, means not an index on JSON value (maybe spatial, maybe on ID
+    else Some(IndexDef(name, path, cast, isForRegex)) //we can't determine the cast used during definition of index
+  }
+
+  private def getInternalIndices(dbName: String, colName: String) : Future[List[IndexDef]] =
+    existsCollection(dbName, colName).flatMap { exists =>
+    if(exists) executeStmt( Sql.SELECT_INDEXES_FOR_TABLE(dbName, colName) ){
+      toList(_)(rd => toIndexDef(rd(0).asInstanceOf[String], rd(1).asInstanceOf[String]))
+    }
+    else throw new CollectionNotFoundException()
+  }
+
+  override def getIndices(dbName: String, colName: String): Future[List[String]] =
+    getInternalIndices(dbName, colName).map( listIdx => listIdx.filter(q => q.path != "id").map(_.name) )
+
+  override def getIndex(dbName: String, colName: String, indexName: String): Future[IndexDef] =
+    getInternalIndices(dbName, colName).map{ listIdx =>
+    listIdx.find(q => q.name == indexName) match {
+        case Some(idf) => idf
+        case None => throw new IndexNotFoundException(s"Index $indexName on $dbName/$colName not found.")
+      }
+    }
+
+  override def dropIndex(database: String, collection: String, index: String): Future[Boolean] =
+    executeStmtInTransaction( Sql.DROP_INDEX(database, collection, index) ){ _ => true}
+
+
+  //************************************************************************
   //Private Utility methods
+  //************************************************************************
+
+  private def  sendstatement[T](stmt: String)(implicit resultHandler: QueryResult => T, c: Connection) : Future[T] = {
+    Logger.debug("SQL IN TRANSACTION: " + stmt)
+    c.sendQuery(stmt).map(qr => resultHandler(qr))
+  }
 
   // if resultHandler is not specified, the identity function is used by implicits of Predef
-  private def executeStmtsInTransaction[T](sql: String*)(implicit resultHandler: QueryResult => T) : Future[List[T]] = {
-
-    def addResultToList(qr: QueryResult, l : List[T]) : List[T] = resultHandler(qr)::l
-
-    def  sendstmt(stmt: String, results: List[T])(implicit c: Connection) : Future[List[T]]= {
-      Logger.debug("SQL IN TRANSACTION: " + sql)
-      c.sendQuery(stmt).map(qr => addResultToList(qr, results))
-    }
-
-    pool.inTransaction { implicit c =>
-      sql.foldLeft ( Future.successful( List[T]() ) )
-      {
-        (futurelist: Future[List[T]], stmt: String) => futurelist.flatMap (l => sendstmt(stmt,l))
+  private def executeStmtsInTransaction[T](sql: String*)(implicit resultHandler: QueryResult => T) : Future[List[T]] =
+    doInTransaction { connection =>
+      sql.foldLeft(Future.successful(List[T]())) {
+        (futurelist: Future[List[T]], stmt: String) => futurelist.flatMap[List[T]]{l =>
+            sendstatement(stmt)(resultHandler, connection).map(t => t :: l)
+        }.map(l => l.reverse)
       }
-    }.recover {
-      case MappableException(mappedException) => throw mappedException
     }
-  }
+
+  private def executeStmtInTransaction[T](sql: String)(implicit resultHandler: QueryResult =>T) : Future[T] =
+      doInTransaction { connection =>
+          sendstatement(sql)(resultHandler, connection)
+      }
 
   private def sendprepared[T](sql: String, vals: Seq[Any])(implicit c : Connection) : Future[QueryResult] = {
     Logger.debug( s"\t\t Executing Prepared statement $sql in transactions with values ${vals mkString ", "}" )
@@ -310,29 +358,31 @@ object PostgresqlRepository extends Repository {
   }
 
   private def executePreparedStmts[T](sql: String, values: Seq[Seq[Any]])(implicit resultHandler: QueryResult => T) : Future[List[T]] =
-    pool.inTransaction { implicit c =>
-      values.foldLeft( Future.successful( List[T]() )) {
+    doInTransaction { implicit c =>
+      values.foldLeft(Future.successful(List[T]())) {
         (flist: Future[List[T]], vals: Seq[Any]) =>
-          flist.flatMap{ l =>
+          flist.flatMap { l =>
             sendprepared(sql, vals)
-              .map( resultHandler )
-              .map(t => t::l)
-          }
+              .map(resultHandler)
+              .map(t => t :: l)
+          }.map(l => l.reverse)
       }
-    }.recover {
-      case MappableException(mappedException) => throw mappedException
     }
 
 
   private def executePreparedStmt[T](sql: String, values: Seq[Any])(implicit resultHandler: QueryResult => T) : Future[T] =
-    pool.inTransaction { implicit c =>
+    doInTransaction { implicit c =>
       sendprepared(sql, values).map( resultHandler)
+    }
+
+  private def doInTransaction[T](block : Connection => Future[T]) : Future[T] =
+    pool.inTransaction { implicit c =>
+      block(c)
     }.recover {
       case MappableException(mappedException) => throw mappedException
     }
 
-
-  private def executeStmt[T](sql: String)(resultHandler: QueryResult => T): Future[T] = {
+  def executeStmt[T](sql: String)(resultHandler: QueryResult => T): Future[T] = {
     Logger.debug("SQL : " + sql)
     pool.sendQuery(sql)
       .map {
@@ -578,6 +628,44 @@ object PostgresqlRepository extends Repository {
        |FROM ${quote(dbname)}.${quote(ViewCollection)}
        |WHERE COLLECTION = ?
      """.stripMargin
+
+
+//    def CHECK_TRGM_EXTENSION() =
+//    s"""
+//       |select true from pg_extension where extname = 'pg_trgm'
+//     """.stripMargin
+
+    def CREATE_INDEX(dbName: String, colName: String, indexName: String, path: String, cast: String)   = {
+      val pathExp = path.split("\\.").map(
+       el => single_quote(el)
+      ).mkString(",")
+      s"""CREATE INDEX ${quote(indexName)}
+          |ON ${quote(dbName)}.${quote(colName)} ( (json_extract_path_text(json, ${pathExp})::${cast}) )
+      """.stripMargin
+    }
+
+    def CREATE_INDEX_WITH_TRGM(dbName: String, colName: String, indexName: String, path: String, cast: String)   = {
+      val pathExp = path.split("\\.").map(
+        el => single_quote(el)
+      ).mkString(",")
+      s"""CREATE INDEX ${quote(indexName)}
+          |ON ${quote(dbName)}.${quote(colName)} using gist
+          |( (json_extract_path_text(json, ${pathExp})::${cast}) gist_trgm_ops)
+      """.stripMargin
+    }
+
+    def SELECT_INDEXES_FOR_TABLE(db: String, col: String): String =
+      s"""
+         |SELECT INDEXNAME, INDEXDEF
+         |FROM pg_indexes
+         |WHERE schemaname = ${single_quote(db)} AND tablename = ${single_quote(col)}
+     """.stripMargin
+
+    def DROP_INDEX(db: String, col: String, indexName: String): String =
+    s"""
+       |DROP INDEX IF EXISTS ${quote(db)}.${quote(indexName)}
+     """.stripMargin
+
   }
 
 
@@ -589,9 +677,9 @@ object PostgresqlRepository extends Repository {
     def getMessage(dbe: GenericDatabaseException) = dbe.errorMessage.fields.getOrElse('M', "Database didn't return a message")
     def unapply(t : Throwable): Option[RuntimeException] =  t match {
       case t: GenericDatabaseException if getStatus(t) == Some("42P06") =>
-        Some(new DatabaseAlreadyExists(getMessage(t)))
+        Some(new DatabaseAlreadyExistsException(getMessage(t)))
       case t: GenericDatabaseException if getStatus(t) == Some("42P07") =>
-        Some(new CollectionAlreadyExists(getMessage(t)))
+        Some(new CollectionAlreadyExistsException(getMessage(t)))
       case t: GenericDatabaseException if getStatus(t) == Some("3F000") =>
         Some(new  DatabaseNotFoundException(getMessage(t)))
       case t: GenericDatabaseException if getStatus(t) == Some("42P01") =>

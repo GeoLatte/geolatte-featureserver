@@ -24,6 +24,16 @@ object MongoDBQueryRenderer extends QueryRenderer[JsValue]{
       case EQ => Json.obj( lhs.path -> renderValue(rhs))
       case _ => Json.obj(op2String(op) -> Json.arr( lhs.path, renderValue(rhs)))
     }
+    case InPredicate(lhs, rhs) => Json.obj(
+      lhs.path ->
+        Json.obj( "$in" ->
+          renderValue(rhs)
+        )
+      )
+    case RegexPredicate(lhs, rhs) => Json.obj(
+      lhs.path ->
+        Json.obj( "$regex" -> rhs.pattern) //TODO -- this is not tested !!
+    )
     case LiteralBoolean(b) => Json.obj()
   }
 
@@ -32,6 +42,8 @@ object MongoDBQueryRenderer extends QueryRenderer[JsValue]{
     case LiteralNumber(n) => JsNumber(n)
     case LiteralBoolean(b) => JsBoolean(b)
   }
+
+  def renderValue(valueListExpr: ValueListExpr) : JsArray = JsArray(valueListExpr.values.map(renderValue))
 
 }
 

@@ -158,6 +158,19 @@ class QueryParserSpec extends Specification {
         )
     }
 
+    "supports the in operator" in {
+      (querylang.QueryParser.parse("var in ('a', 'b', 'c')") must beSuccessfulTry.withValue(
+        InPredicate(PropertyExpr("var"), ValueListExpr(List(LiteralString("c"), LiteralString("b"), LiteralString("a"))))
+      )) and ( querylang.QueryParser.parse("var in  (  1,2, 3 )") must beSuccessfulTry.withValue(
+        InPredicate(PropertyExpr("var"), ValueListExpr(List(LiteralNumber(3), LiteralNumber(2), LiteralNumber(1))))
+      ))
+    }
+
+    "support regex predicates" in {
+      querylang.QueryParser.parse("""var ~ /a\.*.*b/""") must beSuccessfulTry.withValue(
+        RegexPredicate(PropertyExpr("var"), RegexExpr("""a\.*.*b"""))
+      )
+    }
   }
 
 }

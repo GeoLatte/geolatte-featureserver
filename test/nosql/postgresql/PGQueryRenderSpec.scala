@@ -68,6 +68,18 @@ class PGQueryRenderSpec extends Specification {
       renderer.render(expr)  === " true "
     }
 
+    "property render an IN predicate expression" in {
+      val expr1 = QueryParser.parse(" a.b in (1,2,3) ").get
+        compressWS(renderer.render(expr1)) ===
+        "json_extract_path_text(json, 'a','b')::decimal in (3,2,1)"
+    }
+
+    "properly render simple regex expression " in {
+      val expr = QueryParser.parse("properties.foo ~ /bar1.*/").get
+      compressWS(renderer.render(expr)) === "json_extract_path_text(json, 'properties','foo')::text ~ 'bar1.*'"
+    }
+
+
   }
 
   private def compressWS(str : String) = str.replaceAll(" +", " ").trim

@@ -1,4 +1,6 @@
 package nosql
+
+import controllers.IndexDef
 import nosql.json.GeometryReaders._
 import nosql.mongodb._
 import org.geolatte.geom.Envelope
@@ -143,5 +145,14 @@ trait Repository {
   def getView(database: String, collection: String, id: String): Future[JsObject]
 
   def dropView(database: String, collection: String, id: String): Future[Boolean]
+
+
+  def createIndex(dbName: String, colName: String, indexDef: IndexDef) : Future[Boolean]
+
+  def getIndices(database: String, collection: String) : Future[List[String]]
+
+  def getIndex(database: String, collection: String, index: String): Future[IndexDef]
+
+  def dropIndex(database: String, collection: String, index: String) : Future[Boolean]
 
 }

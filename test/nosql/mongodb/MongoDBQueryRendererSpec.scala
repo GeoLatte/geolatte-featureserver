@@ -67,6 +67,16 @@ class MongoDBQueryRendererSpec extends Specification {
       renderer.render(expr) === Json.obj()
     }
 
+    "property render an IN predicate" in {
+      val expr1 = QueryParser.parse(" a.b in (1,2,3) ").get
+      renderer.render(expr1) ===
+        Json.obj(
+          "a.b" -> Json.obj(
+            "$in" -> Json.arr(3,2,1)
+          )
+        )
+    }
+
   }
 
 }

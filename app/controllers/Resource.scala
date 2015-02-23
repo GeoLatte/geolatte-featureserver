@@ -76,6 +76,19 @@ case class FeaturesResource(total: Option[Long], features: List[JsObject]) exten
   )
 }
 
+
+case class IndexDef(name: String, path: String, cast: String, regex: Boolean)
+
+case class IndexDefsResource(dbName: String, colName: String, indexNames : Traversable[String]) extends Jsonable {
+  lazy val intermediate = indexNames map (name => Map("name" -> name, "url" -> routes.IndexController.get(dbName, colName, name).url))
+  def toJson = Json.toJson(intermediate)
+}
+
+case class IndexDefResource(dbName: String, colName: String, indexDef : IndexDef) extends Jsonable {
+  import Formats.IndexDefWrites
+  def toJson = Json.toJson(indexDef)
+}
+
 object Formats {
 
   def toByteArray(implicit r: Reads[String]) : Reads[Array[Byte]] = r.map(str => Base64.decodeBase64(str))
@@ -142,6 +155,24 @@ object Formats {
      ( __ \ "query").readNullable[String] and
      ( __ \ "projection").readNullable[JsArray]
     ).tupled
+
+  implicit val IndexDefReads : Reads[IndexDef]= (
+      (__ \ 'name).readNullable[String].map{ _.getOrElse("") } and
+      (__ \ 'path).read[String] and
+      (__ \ 'type).read[String](filter[String]
+          (ValidationError("Type must be either 'text', 'bool' or 'decimal'"))
+          (s => List("text", "bool","decimal").contains(s))) and
+      (__ \ 'regex).readNullable[Boolean].map(_.getOrElse(false))
+    )(IndexDef)
+
+  implicit val IndexDefWrites : Writes[IndexDef]= (
+      ( __ \ 'name).write[String] and
+      ( __ \ 'path).write[String] and
+      (__ \ 'type).write[String] and
+      ( __ \ 'regex).write[Boolean]
+    )( unlift(IndexDef.unapply) )
+
+  implicit val IndexDefFormat   : Format[IndexDef] = Format(IndexDefReads, IndexDefWrites)
 
 }
 

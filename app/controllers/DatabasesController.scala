@@ -37,7 +37,7 @@ object DatabasesController extends AbstractNoSqlController {
 
   def putDb(db: String) = repositoryAction (
     implicit request => repository.createDb(db).map(_ => Created(s"database $db created") ).recover {
-          case ex : DatabaseAlreadyExists => Conflict(ex.getMessage)
+          case ex : DatabaseAlreadyExistsException => Conflict(ex.getMessage)
           case ex : DatabaseCreationException => {
             Logger.error("Error: creating database", ex)
             InternalServerError(ex.getMessage)
@@ -75,7 +75,7 @@ object DatabasesController extends AbstractNoSqlController {
       def doCreate(metadata: Metadata) = {
         repository.createCollection(db, col, metadata).map(_ => Created(s"$db/$col ")).recover {
           case ex: DatabaseNotFoundException => NotFound(s"No database $db")
-          case ex: CollectionAlreadyExists => Conflict(s"Collection $db/$col already exists.")
+          case ex: CollectionAlreadyExistsException => Conflict(s"Collection $db/$col already exists.")
           case ex: Throwable => InternalServerError(s"{ex.getMessage}")
         }
       }

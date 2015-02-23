@@ -13,7 +13,7 @@ class CollectionAPISpec extends InDatabaseSpecification {
 
       The Collection API should:                                                            ${section("mongodb","postgresql")}
         return CREATED on PUT of a collection                                               $e1
-        return CONFLICT on attempt to POST to same collection name                          $e2
+        return CONFLICT on attempt to PUT to same collection name                           $e2
         return an array of collections on GET to database                                   $e6
         Out Metadata contains collection and count fields                                   $e3
         return OK on attempt to delete the collection                                       $e4
