@@ -4,6 +4,10 @@
     "description": "Defines an index",
     "type": "object",
     "properties": {
+         "name":{
+          "description": "The name of the index (ignored on PUT)",
+           "type" : "string"
+         },
         "path": {
           "description": "Property path on which to create an index",
           "type": "string"
@@ -11,6 +15,12 @@
         "type":{
           "description": "The type of the property path",
            "enum": [ "text", "decimal", "bool" ]
-        }    },
+        },
+        "regex" : {
+          "description" : "Indicates whether this index will be used for regex look-ups (Postgresql only)",
+          "type" : "boolean",
+          "default" : true            
+        }
+      },
     "required": ["path", "type"]
 }
