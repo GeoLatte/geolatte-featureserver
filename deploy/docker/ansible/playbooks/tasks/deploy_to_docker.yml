@@ -1,12 +1,12 @@
 #deployed de artifact in ansible/..../dist/baseline naar de docker container
 
-    - name: discover ip address of locatieservices docker container
-      shell: docker inspect locatieservices | grep IPAddress | cut -d '"' -f 4
+    - name: discover ip address of geolatte-nosqlfs docker container
+      shell: docker inspect geolatte-nosqlfs | grep IPAddress | cut -d '"' -f 4
       register: docker_ip
       
     - name: correct permissions on the insecure key
       action: command chmod 600 {{docker_dir}}/insecure_key
     
-    - name: deploy locatieservices artifact in docker container
+    - name: deploy geolatte-nosqlfs artifact in docker container
       action: command ansible-playbook {{base_ansible_dir}}/playbooks/app.yml -i {{docker_ansible_dir}}/hosts --private-key {{docker_dir}}/insecure_key -e "ansible_ssh_host={{item}} app_version={{app_version}} baseline_path={{deploy_root_dir}} package_name={{package_name}} ansible_python_interpreter=/usr/bin/python2.7"
       with_items: docker_ip.stdout

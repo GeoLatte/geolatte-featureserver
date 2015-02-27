@@ -1,6 +1,5 @@
 ---
-# TODO  urls voor retrieven van locatieservices uit nexus kloppen nog niet volledig dynamisch, fix onze sbt plugin daarvoor (zie http://dev-colab.awv.vlaanderen.be/jira/browse/WDB-5483 )
-- name: locatie services docker container playbook
+- name: geolatte-nosqlfs docker container playbook
   hosts: docker
   gather_facts: false
   connection: local
