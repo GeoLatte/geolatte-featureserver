@@ -43,6 +43,10 @@ class FeatureCollectionAPISpec extends InCollectionSpecification {
 
      The FeatureCollection /query in  CSV should:
         return the objects with all attributes within JSON Object tree            $e13
+
+     Projection may specify fields not in inputJson
+            with Json output, fields are set to JsNull                            $e16
+            with CSV output, fields are empty strings                             $e17
                                                                                   ${section("mongodb", "postgresql")}
   """
 
@@ -113,7 +117,7 @@ class FeatureCollectionAPISpec extends InCollectionSpecification {
   def e8 = withTestFeatures(10, 10) {
     (bbox: String, featuresIn01: JsArray) => {
       val projection = "properties.foo,properties.num"
-      val projectedFeatures = project(featuresIn01)
+      val projectedFeatures = project(projection)(featuresIn01)
       getQuery(testDbName, testColName, Map("bbox" -> bbox, "projection" -> projection))(contentAsJsonStream).applyMatcher {
         res => res.responseBody must beSomeFeatures(projectedFeatures)
       }
@@ -144,7 +148,7 @@ class FeatureCollectionAPISpec extends InCollectionSpecification {
       val filteredFeatures = JsArray(
         featuresIn01.value.filter(jsv => jsv.asOpt(picksFoo) == Some(JsString("bar1")))
       )
-      val projected = project(filteredFeatures)
+      val projected = project(projection)(filteredFeatures)
       getQuery(testDbName, testColName, Map("bbox" -> bbox, "with-view" -> "view-1"))(contentAsJsonStream) applyMatcher {
         res => res.responseBody must beSomeFeatures(projected)
       }
@@ -188,6 +192,28 @@ class FeatureCollectionAPISpec extends InCollectionSpecification {
     )
   }
 
+  def e16 = withTestFeatures(10, 10) {
+    (bbox: String, featuresIn01: JsArray) => {
+      val projection = "properties.foo,properties.bar"
+      val projectedFeatures = project(projection)(featuresIn01)
+      getQuery(testDbName, testColName, Map("bbox" -> bbox, "projection" -> projection))(contentAsJsonStream).applyMatcher {
+        res => res.responseBody must beSomeFeatures(projectedFeatures)
+      }
+    }
+  }
+
+  def e17 = withTestFeatures(10, 10) {
+    (bbox: String, featuresIn01: JsArray) => {
+      val projection = "properties.foo,properties.bar"
+      val projectedFeatures = project(projection)(featuresIn01)
+      getQuery(testDbName, testColName, Map("bbox" -> bbox, "projection" -> projection))(contentAsStringStream).applyMatcher {
+        res => res.responseBody must beSome( matchFeaturesInCsv("_id,geometry-wkt,foo,bar") )
+      }
+    }
+  }
+
+
+
   def withTestFeatures[T](sizeInsideBbox: Int, sizeOutsideBbox: Int)( block: (String, JsArray) => T) = {
     val (featuresIn01, allFeatures) = gjFeatureArrayGenerator("01", sizeInsideBbox)
           .flatMap(f1 => gjFeatureArrayGenerator("1", sizeOutsideBbox).map(f2 => (f1, f2 ++ f1))).sample.get
@@ -199,13 +225,33 @@ class FeatureCollectionAPISpec extends InCollectionSpecification {
   }
 
   //hardcoded projection parameter for now
-  def project(features: JsArray) = {
+  def project(projection: String)(features: JsArray) = {
     import play.api.libs.functional.syntax._
-    val pruner : Reads[JsObject] = (__ \ "id").json.prune andThen
-      ( __ \ "properties" \ "something").json.prune andThen
-      ( __ \ "properties" \ "nestedprop").json.prune
+    import play.api.libs.functional._
+
+    val fields=List("foo", "num","something", "nestedprop")
+    val projectionFields = projection.split(",").map(fp => fp.split("\\.")(1))
+    val fieldsToPrune = fields.filterNot( f => projectionFields.contains(f) )
+    val fieldsToAdd = projectionFields.filterNot(f => fields.contains(f))
+
+    val pruner : Reads[JsObject] = {
+
+      val p1 = fieldsToPrune.foldLeft((__ \ "id").json.prune) {
+        (p, field) => p andThen ((__ \ "properties" \ field).json.prune)
+      }
+
+      fieldsToAdd.foldLeft(p1) {
+        (p, field) => p andThen (__  \ "properties").json.update ( (__ \ "bar").json.put(JsNull) )
+      }
+
+    }
+
     JsArray(
-      for (f <- features.value) yield f.transform(pruner).asOpt.get
+      for {
+           f <- features.value
+           pruned = f.transform(pruner)
+      }
+      yield pruned.asOpt.get
     )
   }
   

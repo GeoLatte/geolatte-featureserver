@@ -18,7 +18,9 @@ limit:
   required: false
 projection:
   description: | 
-    specifies a comma-separated list of feature property paths. If this parameter is present, only the specified property paths will be retained in the resulting features.
+    specifies a comma-separated list of feature property paths. If this parameter is present, the output is garanteed to contains all and only the specified property paths. If the 
+    input Json doesn't contain a specified property path, it will be add in the output with a value of null.
+    
   type: string
   required: false
   example: properties.foo,properties.bar,properties.baz
