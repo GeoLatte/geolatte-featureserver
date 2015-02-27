@@ -72,8 +72,12 @@ abstract class InCollectionSpecification(app: FakeApplication = FakeApplication(
 
   def matchFeaturesInCsv(expectedColumnHeader: String): Matcher[Seq[String]] = (
     (received: Seq[String]) => {
-      received(0).split("\n")(0) == expectedColumnHeader
-    }, "Featurecollection CSV doesn't contain expected columns")
+      val lines = received.flatMap(l => received(0).split("\n")).map( _.trim )
+      val header = lines(0)
+      val numSeps = header.split(",").length - 1
+      def countSeps(l:String) = l.filter( _ == ',').length
+      header == expectedColumnHeader && lines.forall( countSeps(_)  == numSeps)
+    }, "Featurecollection CSV doesn't contain expected columns, or has irregular structure")
 
   def matchTotalInJson(expectedTotal: Int): Matcher[JsValue] = (
     (recJs: JsValue) => {
