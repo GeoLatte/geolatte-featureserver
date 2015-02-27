@@ -1,5 +1,6 @@
 package controllers
 
+import org.supercsv.util.CsvContext
 import querylang.{BooleanAnd, QueryParser, BooleanExpr}
 
 import scala.language.reflectiveCalls
@@ -28,7 +29,7 @@ import nosql.InvalidQueryException
 import play.api.libs.json.JsObject
 import nosql.{Metadata, SpatialQuery, FutureInstrumented}
 
-import scala.util.{Failure, Success}
+import scala.util.{Try, Failure, Success}
 
 
 object FeatureCollectionController extends AbstractNoSqlController with FutureInstrumented {
@@ -137,7 +138,8 @@ object FeatureCollectionController extends AbstractNoSqlController with FutureIn
 
       val encoder = new DefaultCsvEncoder()
 
-      def encode(v: JsString) = "\"" + encoder.encode(v.value, null, CsvPreference.STANDARD_PREFERENCE) + "\""
+      val cc = new CsvContext(0,0,0)
+      def encode(v: JsString) = "\"" + encoder.encode(v.value, cc, CsvPreference.STANDARD_PREFERENCE) + "\""
 
 
       def expand(v : JsObject) : Seq[(String, String)] = utilities.JsonHelper.flatten(v).map {
@@ -166,14 +168,20 @@ object FeatureCollectionController extends AbstractNoSqlController with FutureIn
         case _ => "None"
       }, _ => "geometry-wkt").mkString(",")
 
-      val toCsv : (Int, JsObject) => String = (i,js) => {
-        if (i != 0) toCsvRecord(js)
-        else toCsvHeader(js)  + "\n" + toCsvRecord(js)
+      val toCsv : (Int, JsObject) => String = (i,js) => Try {
+          if (i != 0) toCsvRecord(js)
+          else toCsvHeader(js)  + "\n" + toCsvRecord(js)
+      } match {
+        case Success(v) => v
+        case Failure(t) => {
+          Logger.error(s"Failure to encode $js in CSV. Message is: ")
+          ""
+        }
       }
 
       def toJsonStream = enum
 
-      def toCsvStream = EnumeratorUtility.withIndex(enum).map[String]( toCsv.tupled)
+      def toCsvStream = EnumeratorUtility.withIndex(enum).map[String]( toCsv.tupled).through(Enumeratee.filterNot(_.isEmpty))
 
     })
 
