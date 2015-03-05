@@ -28,8 +28,8 @@ host:
   # poort nummer waarop de applicatie wordt opgestart
   port: "8080"
 
-
 fs:
+  db: postgresql
   postgresql:
     url: "postgresql://nosql:nosql@localhost:5433/nosql-dev"
   mongodb:

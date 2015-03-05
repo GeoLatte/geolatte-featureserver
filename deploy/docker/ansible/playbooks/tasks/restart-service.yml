@@ -1,5 +1,0 @@
-#restart de gedeployde service
-
-    - name: restart geolatte-nosqlfs in container
-      action: command ssh root@{{item}} -oStrictHostKeyChecking=no -oUserKnownHostsFile=/dev/null -i {{docker_dir}}/insecure_key sv restart geolatte-nosqlfs
-      with_items: docker_ip.stdout
