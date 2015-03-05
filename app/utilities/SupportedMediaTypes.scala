@@ -37,6 +37,7 @@ object SupportedMediaTypes {
     val formatOpt = (mediatype.mediaType, mediatype.mediaSubType) match {
       case ("*", "*") | ("application", "*") => Some(Format.JSON)
       case ("application",  "json") => Some(Format.JSON)
+      case ("text", "csv") => Some(Format.CSV)
       case ("application", mediaSubType(format)) => Some(format)
       case _ => None
     }
