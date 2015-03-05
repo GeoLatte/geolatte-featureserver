@@ -5,7 +5,7 @@ import play.Project._
 object GeolatteNoSqlBuild extends Build {
 
   val appName = "geolatte-nosql"
-  val appVersion = "1.2-SNAPSHOT"
+  val appVersion = "1.2"
 
   //Resolvers
   lazy val commonResolvers = Seq(
