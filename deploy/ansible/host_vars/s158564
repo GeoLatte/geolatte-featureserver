@@ -6,11 +6,12 @@
 env_suffix: ""
 
 app:
-  home: "/PRD/{{package_name}}{{env_suffix}}/app"
+  home: "/ZUIL/{{package_name}}{{env_suffix}}/app"
   service: "{{package_name}}{{env_suffix}}"
   restart: true
   user: "{{package_name}}"
-  java_opts: "-J-Xms1024m -J-Xmx3072m -J-XX:MaxPermSize=256m"
+  java_opts: "-J-Xms512m -J-Xmx2024m"
+  context: "geolatte-nosqlfs"
 
 host:
   ip: 10.23.79.163
@@ -21,14 +22,13 @@ host:
 
 java_home: "/opt/jdk"
 
-# configuratie van postgres 
-postgres:
-  host: psql93-awv.vlaanderen.be
-  port: 5432
-  db: "{{package_name}}{{env_suffix}}"
-  username: ls
-  password: %TO_MODIFY_PASWOORD%
-
 # deze logging configuratie wordt nog niet gebruikt in locatieservices
 logging:
   history: 3 # keep number of days' worth of history
+
+fs:
+  db: postgresql
+  postgresql:
+    url: "postgresql://nosql:nosql@psql93-awv.vlaanderen.be:5432/nosql"
+  mongodb:
+   url: "localhost:27017"
