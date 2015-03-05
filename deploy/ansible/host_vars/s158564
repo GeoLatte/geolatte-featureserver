@@ -14,7 +14,7 @@ app:
   context: "geolatte-nosqlfs"
 
 host:
-  ip: 10.23.79.163
+  ip: 10.23.79.158
   # hostname van host
   name: "apps-tei.awv.vlaanderen.be"
   # poort nummer waarop de applicatie wordt opgestart

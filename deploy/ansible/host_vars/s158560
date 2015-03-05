@@ -14,7 +14,7 @@ app:
   context: "geolatte-nosqlfs"
 
 host:
-  ip: 10.22.24.33
+  ip: 10.22.24.28
   # hostname van host
   name: "apps.awv.vonet.be"
   # poort nummer waarop de applicatie wordt opgestart
@@ -31,4 +31,4 @@ fs:
   postgresql:
     url: "postgresql://nosql:nosql@psql93-p-db.vlaanderen.be:5433/nosql"
   mongodb:
-   url: "localhost:27017"
+   url: "10.22.25.3:27017"
