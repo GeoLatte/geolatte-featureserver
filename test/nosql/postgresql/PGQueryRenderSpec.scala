@@ -79,6 +79,11 @@ class PGQueryRenderSpec extends Specification {
       compressWS(renderer.render(expr)) === "json_extract_path_text(json, 'properties','foo')::text ~ 'bar1.*'"
     }
 
+    "properly render simple like expression " in {
+      val expr = QueryParser.parse("properties.foo like 'a%bcd'").get
+      compressWS(renderer.render(expr)) === "json_extract_path_text(json, 'properties','foo')::text ilike 'a%bcd'"
+    }
+
 
   }
 
