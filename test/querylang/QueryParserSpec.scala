@@ -171,6 +171,14 @@ class QueryParserSpec extends Specification {
         RegexPredicate(PropertyExpr("var"), RegexExpr("""a\.*.*b"""))
       )
     }
+
+
+    "support like predicate" in {
+      querylang.QueryParser.parse("""var like 'a%b' """) must beSuccessfulTry.withValue(
+        LikePredicate(PropertyExpr("var"), LikeExpr("""a%b"""))
+      )
+    }
+
   }
 
 }
