@@ -50,7 +50,7 @@ object MongoDBQueryRenderer extends QueryRenderer[JsValue] {
   def renderValue(valueListExpr: ValueListExpr): JsArray = JsArray(valueListExpr.values.map(renderValue))
 
   def like2regex(pattern: String): String =  {
-    
+
     val SpecialChars : Map[Char, String] = Map(
       '%' -> ".*",
       '_' -> ".",

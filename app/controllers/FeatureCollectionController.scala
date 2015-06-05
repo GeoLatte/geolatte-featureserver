@@ -142,7 +142,10 @@ object FeatureCollectionController extends AbstractNoSqlController with FutureIn
       def encode(v: JsString) = "\"" + encoder.encode(v.value, cc, CsvPreference.STANDARD_PREFERENCE) + "\""
 
 
-      def expand(v : JsObject) : Seq[(String, String)] = utilities.JsonHelper.flatten(v).map {
+      def expand(v : JsObject) : Seq[(String, String)] =
+        utilities.JsonHelper.flatten(v) sortBy {
+          case (k,v) => k
+        } map {
         case (k, v: JsString)   => (k, encode(v) )
         case (k, v: JsNumber)   => (k, Json.stringify(v) )
         case (k, v: JsBoolean)  => (k, Json.stringify(v) )
