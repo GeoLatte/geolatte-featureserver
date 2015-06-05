@@ -48,7 +48,7 @@ object JsonHelper {
 
   def mkProjection(paths : List[JsPath]) : Reads[JsObject] =
     paths.foldLeft[Reads[JsObject]]( NoObjReads ) {
-      (r1, path) => (r1 and path.json.pickBranch ) reduce
+      (r1, path) => (r1 and path.json.pickBranch.orElse( path.json.put( JsNull ) )) reduce
     }
 
 
