@@ -188,7 +188,7 @@ class FeatureCollectionAPISpec extends InCollectionSpecification {
   
   def e13 = withTestFeatures(3, 6) {
     (bbox: String, featuresIn01: JsArray) => getQuery(testDbName, testColName, Map("bbox" -> bbox))(contentAsStringStream).applyMatcher(
-      res => (res.status must equalTo(OK)) and (res.responseBody must beSome( matchFeaturesInCsv("_id,geometry-wkt,foo,num,something,nestedprop.nestedfoo")))
+      res => (res.status must equalTo(OK)) and (res.responseBody must beSome( matchFeaturesInCsv("_id,geometry-wkt,foo,nestedprop.nestedfoo,num,something")))
     )
   }
 
@@ -207,7 +207,7 @@ class FeatureCollectionAPISpec extends InCollectionSpecification {
       val projection = "properties.foo,properties.bar"
       val projectedFeatures = project(projection)(featuresIn01)
       getQuery(testDbName, testColName, Map("bbox" -> bbox, "projection" -> projection))(contentAsStringStream).applyMatcher {
-        res => res.responseBody must beSome( matchFeaturesInCsv("_id,geometry-wkt,foo,bar") )
+        res => res.responseBody must beSome( matchFeaturesInCsv("_id,geometry-wkt,bar,foo") )
       }
     }
   }
