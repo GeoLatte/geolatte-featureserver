@@ -68,15 +68,20 @@ class JsonHelperSpec extends Specification {
 
      }
 
-     "fails on non-existent (empty) paths" in {
+     "Projection puts JsNull for non-existent (empty) paths" in {
 
-       val withNonExistentPath = __ \ "properties" \ "entity" \ "doesntexist" :: pathList
+       val withNonExistentPath = pathList :+ (__ \ "properties" \ "entity" \ "doesntexist")
 
        val projection = JsonHelper.mkProjection(withNonExistentPath)
 
        val obj = jsObj.asOpt(projection)
 
-       obj must_== None
+       val expected = Some(Json.obj("properties" ->
+                      Json.obj("entity" ->
+                        Json.obj("doesntexist" -> JsNull))).deepMerge(Json.parse(projectedJsonText).as[JsObject])
+       )
+
+       expected must_== obj
 
      }
 

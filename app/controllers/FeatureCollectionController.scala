@@ -60,6 +60,11 @@ object FeatureCollectionController extends AbstractNoSqlController with FutureIn
       else Some(JsArray( s.split(',').toSeq.map(e => JsString(e)) ))
     )
 
+    val SORT: QueryParam[JsArray] = QueryParam("sort", (s: String) =>
+      if (s.isEmpty) throw InvalidQueryException("Empty SORT parameter")
+      else Some(JsArray( s.split(',').toSeq.map(e => JsString(e)) ))
+    )
+
     val QUERY : QueryParam[BooleanExpr] = QueryParam("query", parse2Optional )
 
   }
@@ -198,6 +203,7 @@ object FeatureCollectionController extends AbstractNoSqlController with FutureIn
     val windowOpt = Bbox(QueryParams.BBOX.extractOrElse(""), smd.envelope.getCrsId)
     val projectionOpt = QueryParams.PROJECTION.extract
     val queryParamOpt = QueryParams.QUERY.extract
+    val sortParamOpt  = QueryParams.SORT.extract
     val viewDef = QueryParams.WITH_VIEW.extract.map(vd => repository.getView(db, collection, vd))
       .getOrElse(Future {
       Json.obj()
@@ -209,7 +215,9 @@ object FeatureCollectionController extends AbstractNoSqlController with FutureIn
         SpatialQuery(
           windowOpt,
           selectorMerge(queryOpt, queryParamOpt),
-          projectionMerge(projOpt, projectionOpt))
+          projectionMerge(projOpt, projectionOpt),
+          sortParamOpt
+        )
     }
 
   }

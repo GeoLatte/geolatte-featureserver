@@ -143,12 +143,16 @@ object PostgresqlRepository extends Repository {
         pathList => JsonHelper.mkProjection(pathList)
       }
 
+    val sortExpr: Option[String] = spatialQuery.sortOpt.map {
+      arr => jsArrayToSortExpr(arr)
+    }
+
     //get the count
     val stmtTotal = Sql.SELECT_TOTAL_IN_QUERY(database, collection, spatialQuery)
     val fCnt = executeStmt(stmtTotal){ first(rd => Some(rd(0).asInstanceOf[Long]))(_).get }
 
     //get the data
-    val dataStmt = Sql.SELECT_DATA(database, collection, spatialQuery, start, limit)
+    val dataStmt = Sql.SELECT_DATA(database, collection, spatialQuery, sortExpr, start, limit)
     val fEnum = executeStmt(dataStmt){ enumerate(_,projectingReads) }
 
     {for{
@@ -401,6 +405,12 @@ object PostgresqlRepository extends Repository {
     spath => spath.split("\\.").foldLeft[JsPath]( __ )( (jsp, pe) => jsp \ pe )
   } ++ List(( __ \ "type"), ( __ \ "geometry"))
 
+  private def jsArrayToSortExpr(arr: JsArray) : String = arr.as[List[String]].map{
+    //we use the #>> operator for 9.3 support, which extracts to text
+    // if we move to 9.4  or later with jsonb then we can use the #> operator because jsonb are ordered
+    path => s" json #>> '{${path.split("\\.") mkString ","}}' "
+  } mkString ","
+
   private def first[T](rowF : RowData => Option[T])(qr: QueryResult) : Option[T] = qr.rows match {
     case Some(rs) if rs.size > 0 => rowF(rs.head)
     case _ => None  
@@ -469,7 +479,7 @@ object PostgresqlRepository extends Repository {
 
 
 
-    def SELECT_DATA(db: String, col: String, query: SpatialQuery, start: Option[Int] = None, limit: Option[Int] = None): String = {
+    def SELECT_DATA(db: String, col: String, query: SpatialQuery, sort: Option[String] = None, start: Option[Int] = None, limit: Option[Int] = None): String = {
 
       val cond = condition(query)
 
@@ -487,7 +497,7 @@ object PostgresqlRepository extends Repository {
        |SELECT json, ID
        |FROM ${quote(db)}.${quote(col)}
        |WHERE $cond
-       |ORDER BY ID
+       |ORDER BY ${ sort.getOrElse("ID") }
      """.stripMargin + offsetClause + limitClause
 
     }
