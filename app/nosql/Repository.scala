@@ -56,17 +56,11 @@ case class MediaReader(id: String,
                        contentType: Option[String],
                        data: Array[Byte])
 
-case class SpatialQuery ( windowOpt: Option[Envelope], queryOpt: Option[BooleanExpr], projectionOpt: Option[JsArray])
-
-object SpatialQuery {
-
-  def apply() : SpatialQuery = apply(None, None, None)
-
-  def apply(window: Envelope) :SpatialQuery = apply(Some(window), None, None)
-
-  def apply(window: Envelope, query: BooleanExpr) : SpatialQuery = apply(Some(window), Some(query), None)
-}
-
+case class SpatialQuery (
+                          windowOpt: Option[Envelope] = None,
+                          queryOpt: Option[BooleanExpr] = None,
+                          projectionOpt: Option[JsArray] = None,
+                          sortOpt: Option[JsArray] = None)
 
 trait MortonCodeQueryOptimizer {
 

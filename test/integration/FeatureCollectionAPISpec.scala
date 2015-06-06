@@ -31,6 +31,7 @@ class FeatureCollectionAPISpec extends InCollectionSpecification {
      The FeatureCollection /query should:
       return the objects contained within the specified bbox as a stream          $e7
       support the PROJECTION parameter                                            $e8
+      support the SORT parameter                                                  $e8b
       support the QUERY parameter                                                 $e9
       support the WITH-VIEW query-param                                           $e14
       support the WITH-VIEW query-param and a view with no projection clause      $e15
@@ -120,6 +121,20 @@ class FeatureCollectionAPISpec extends InCollectionSpecification {
       val projectedFeatures = project(projection)(featuresIn01)
       getQuery(testDbName, testColName, Map("bbox" -> bbox, "projection" -> projection))(contentAsJsonStream).applyMatcher {
         res => res.responseBody must beSomeFeatures(projectedFeatures)
+      }
+    }
+  }
+
+  def e8b = withTestFeatures(10, 10) {
+    (bbox: String, featuresIn01: JsArray) => {
+      val projection = "properties.foo,properties.num"
+      val sort = "properties.foo"
+      val projectedFeatures = project(projection)(featuresIn01)
+      val sortedFeatures = JsArray(projectedFeatures.value.sortBy[String]( jsValue => (jsValue \ "properties" \ "foo").as[String] ))
+      getQuery(testDbName, testColName, Map("bbox" -> bbox, "projection" -> projection, "sort" -> sort))(contentAsJsonStream).applyMatcher {
+        res => {
+          res.responseBody must beSomeFeatures(sortedFeatures, true)
+        }
       }
     }
   }

@@ -90,10 +90,12 @@ abstract class InCollectionSpecification(app: FakeApplication = FakeApplication(
     }, "FeatureCollection Json doesn't have expected value for count field")
 
 
-  def verify(rec: JsValue, expected: JsArray) = rec match {
+  def verify(rec: JsValue, expected: JsArray, sortMatters : Boolean = false) = rec match {
     case jsv: JsArray =>
       val received = jsv.value.map(pruneSpecialProperties)
-      val ok = received.toSet.equals(expected.value.toSet) //toSet so test in order independent
+      val ok =
+          if (sortMatters) received.equals(expected.value)
+          else received.toSet.equals(expected.value.toSet) //toSet so test in order independent
       val msg = if (!ok) {
         (for (f <- received if !expected.value.contains(f)) yield f).headOption.
           map(f => s" e.g. ${Json.stringify(f)}\nnot found among expected features. Example of expected:\n" +
@@ -114,7 +116,7 @@ abstract class InCollectionSpecification(app: FakeApplication = FakeApplication(
     }
   }
 
-  case class beSomeFeatures(expected: JsArray) extends Matcher[Option[JsValue]] {
+  case class beSomeFeatures(expected: JsArray, sorted : Boolean = false) extends Matcher[Option[JsValue]] {
     def apply[J <: Option[JsValue]](r: Expectable[J]) = {
       lazy val (succ, msg) = if (!r.value.isDefined)
         (false, "Expected Some(<features>), received None")
