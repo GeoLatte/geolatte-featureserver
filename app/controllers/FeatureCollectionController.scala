@@ -10,7 +10,6 @@ import org.geolatte.geom.{Point, Geometry, Envelope}
 import org.geolatte.geom.crs.CrsId
 import play.api.mvc._
 import play.api.Logger
-import nosql.mongodb._
 import play.api.libs.iteratee._
 import config.AppExecutionContexts
 import play.api.libs.json._
@@ -18,7 +17,6 @@ import nosql.json.GeometryReaders._
 import org.supercsv.encoder.DefaultCsvEncoder
 import org.supercsv.prefs.CsvPreference
 import scala.concurrent.Future
-import play.api.Play._
 
 import play.api.libs.json.JsString
 import play.api.libs.json.JsBoolean
@@ -39,9 +37,15 @@ object FeatureCollectionController extends AbstractNoSqlController with FutureIn
   import config.ConfigurationValues._
   val COLLECTION_LIMIT = MaxReturnItems
 
-  def parse2Optional(s: String) : Option[BooleanExpr]= QueryParser.parse(s) match {
+
+  def parseQueryExpr(s: String) : Option[BooleanExpr]= QueryParser.parse(s) match {
     case Success(expr) => Some(expr)
     case Failure(t) => throw InvalidQueryException(t.getMessage)
+  }
+
+  def parseFormat(s: String) : Option[Format.Value] = s match {
+    case Format(fmt) => Some(fmt)
+    case _ => None
   }
 
   object QueryParams {
@@ -65,7 +69,11 @@ object FeatureCollectionController extends AbstractNoSqlController with FutureIn
       else Some(JsArray( s.split(',').toSeq.map(e => JsString(e)) ))
     )
 
-    val QUERY : QueryParam[BooleanExpr] = QueryParam("query", parse2Optional )
+    val QUERY : QueryParam[BooleanExpr] = QueryParam("query", parseQueryExpr )
+
+    val SEP = QueryParam("sep", (s: String) => {println(s"Seeing separerator $s "); Some(s)})
+
+    val FMT : QueryParam[Format.Value] = QueryParam("fmt", parseFormat )
 
   }
 
@@ -166,15 +174,18 @@ object FeatureCollectionController extends AbstractNoSqlController with FutureIn
         selector(idOpt) +: geom +: attributes
       }
 
+      implicit val queryStr = req.queryString
+      val sep = QueryParams.SEP.extract.filterNot( _.isEmpty ).getOrElse(",")
+
       val toCsvRecord = (js: JsObject) => project(js)({
         case (k, v) => v
         case _ => "None"
-      }, g => g.asText).mkString(",")
+      }, g => g.asText).mkString(sep)
 
       val toCsvHeader = (js: JsObject) => project(js)({
         case (k, v) => k
         case _ => "None"
-      }, _ => "geometry-wkt").mkString(",")
+      }, _ => "geometry-wkt").mkString(sep)
 
       val toCsv : (Int, JsObject) => String = (i,js) => Try {
           if (i != 0) toCsvRecord(js)
@@ -189,7 +200,7 @@ object FeatureCollectionController extends AbstractNoSqlController with FutureIn
 
       def toJsonStream = enum
 
-      def toCsvStream = EnumeratorUtility.withIndex(enum).map[String]( toCsv.tupled).through(Enumeratee.filterNot(_.isEmpty))
+      override def toCsvStream: Enumerator[String] = EnumeratorUtility.withIndex(enum).map[String]( toCsv.tupled).through(Enumeratee.filterNot(_.isEmpty))
 
     })
 
@@ -225,9 +236,9 @@ object FeatureCollectionController extends AbstractNoSqlController with FutureIn
   private def selectorMerge(viewQuery: Option[String], exprOpt : Option[BooleanExpr]) : Option[BooleanExpr] = {
 
     val res = (viewQuery, exprOpt) match {
-      case (Some(str), Some(e)) => parse2Optional(str).map(expr => BooleanAnd(expr, e))
+      case (Some(str), Some(e)) => parseQueryExpr(str).map(expr => BooleanAnd(expr, e))
       case (None, s @ Some(_)) => s
-      case (Some(str), _) => parse2Optional(str)
+      case (Some(str), _) => parseQueryExpr(str)
       case _ => None
     }
     Logger.debug(s"Merging optional selectors of view and query to: $res")

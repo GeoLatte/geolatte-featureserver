@@ -36,3 +36,9 @@ with-view:
     A ViewDef has `query` and `projection` properties. The ViewDef `query` expression will be conjoined (AND-ed) to the `query` request parameter, and the ViewDef `projection` property will be concatenated to the `projection` request parameter.
   type: string
   required: false
+sep:
+  description: |
+    The separator to use in the CSV result
+    this parameter is ignored when the accepted media type is other than CSV
+  type: string
+  required: false
