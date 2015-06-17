@@ -71,7 +71,7 @@ object FeatureCollectionController extends AbstractNoSqlController with FutureIn
 
     val QUERY : QueryParam[BooleanExpr] = QueryParam("query", parseQueryExpr )
 
-    val SEP = QueryParam("sep", (s: String) => {println(s"Seeing separerator $s "); Some(s)})
+    val SEP = QueryParam("sep", (s: String) => Some(s))
 
     val FMT : QueryParam[Format.Value] = QueryParam("fmt", parseFormat )
 
@@ -86,11 +86,14 @@ object FeatureCollectionController extends AbstractNoSqlController with FutureIn
 
         val start : Option[Int] = QueryParams.START.extract
         val limit : Option[Int]= QueryParams.LIMIT.extract
+        implicit val format = QueryParams.FMT.extract
 
         Logger.info(s"Query string $queryStr on $db, collection $collection")
           repository.metadata(db, collection).flatMap(md =>
-            doQuery(db, collection, md, start, limit).map[SimpleResult]{
-              case (_, x) => x
+            doQuery(db, collection, md, start, limit).map{
+              case (_, x) => enumJsonToResult(x)
+            }.map{
+              x => toSimpleResult(x)
             }
           ).recover {
             case ex: InvalidQueryException => BadRequest(s"${ex.getMessage}")
@@ -102,8 +105,11 @@ object FeatureCollectionController extends AbstractNoSqlController with FutureIn
   def download(db: String, collection: String) = repositoryAction {
       implicit request => {
         Logger.info(s"Downloading $db/$collection.")
-        repository.query(db, collection, SpatialQuery()).map[SimpleResult] {
-          case (_, x) => x
+        implicit val format = QueryParams.FMT.extract(request.queryString)
+        repository.query(db, collection, SpatialQuery()).map {
+          case (_, x) => enumJsonToResult(x)
+        }.map{
+          x => toSimpleResult(x)
         }.recover {
           commonExceptionHandler(db, collection)
         }
@@ -146,8 +152,8 @@ object FeatureCollectionController extends AbstractNoSqlController with FutureIn
    * @param req
    * @return
    */
-  implicit def enumJsontoResult(enum: Enumerator[JsObject])(implicit req: RequestHeader): SimpleResult =
-    toSimpleResult(new JsonStreamable with CsvStreamable {
+  implicit def enumJsonToResult(enum: Enumerator[JsObject])(implicit req: RequestHeader) =
+    new JsonStreamable with CsvStreamable {
 
       val encoder = new DefaultCsvEncoder()
 
@@ -202,7 +208,7 @@ object FeatureCollectionController extends AbstractNoSqlController with FutureIn
 
       override def toCsvStream: Enumerator[String] = EnumeratorUtility.withIndex(enum).map[String]( toCsv.tupled).through(Enumeratee.filterNot(_.isEmpty))
 
-    })
+    }
 
   private def doQuery(db: String, collection: String, smd: Metadata, start: Option[Int] = None, limit: Option[Int] = None)
                             (implicit queryStr: Map[String, Seq[String]]) : Future[(Option[Long], Enumerator[JsObject])] =

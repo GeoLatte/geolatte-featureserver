@@ -42,3 +42,8 @@ sep:
     this parameter is ignored when the accepted media type is other than CSV
   type: string
   required: false
+fmt:
+  description: |
+    Either "csv" or "json". Hack for specifying the Accepted media type for the response, when no Accept header can be set by the client.
+  type: string
+  required: false
