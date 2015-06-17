@@ -3,7 +3,7 @@ package controllers
 import nosql.postgresql.PostgresqlRepository
 import play.api.mvc._
 import utilities.SupportedMediaTypes
-import config.ConfigurationValues.Format
+import config.ConfigurationValues.{Format, Version}
 
 import play.Logger
 import nosql.mongodb._
@@ -42,16 +42,25 @@ trait AbstractNoSqlController extends Controller with FutureInstrumented {
   def repositoryAction(action: Request[AnyContent] => Future[SimpleResult]): Action[AnyContent] =
     repositoryAction(BodyParsers.parse.anyContent)(action)
 
-  implicit def toSimpleResult[A <: RenderableResource](result: A)(implicit request: RequestHeader): SimpleResult = {
+  implicit def toSimpleResult[A <: RenderableResource](result: A)
+                                                      (implicit request: RequestHeader,
+                                                       format: Option[Format.Value] = None,
+                                                       version: Option[Version.Value] = None): SimpleResult = {
 
 
     implicit def toStr(js: JsObject): String = Json.stringify(js)
 
-    (result, request) match {
-      case (r: Jsonable, SupportedMediaTypes(Format.JSON, version)) => Ok(r.toJson).as(SupportedMediaTypes(Format.JSON, version).toString)
-      case (r: Csvable, SupportedMediaTypes(Format.CSV, version)) => Ok(r.toCsv).as(SupportedMediaTypes(Format.CSV, version).toString)
-      case (r: JsonStreamable, SupportedMediaTypes(Format.JSON, version)) => Ok.chunked(toStream(r.toJsonStream)).as(SupportedMediaTypes(Format.JSON, version).toString)
-      case (r: CsvStreamable, SupportedMediaTypes(Format.CSV, version)) => Ok.chunked(toStream(r.toCsvStream)).as(SupportedMediaTypes(Format.CSV, version).toString)
+    val (fmt, v) = (format, version, request) match {
+      case ( Some(f), Some(ve), _)              => (f,ve)
+      case (Some(f), None, _)                   => (f, Version.default)
+      case (_, _, SupportedMediaTypes(f, ve))   => (f,ve)
+    }
+
+    (result, fmt) match {
+      case (r: Jsonable, Format.JSON)         => Ok(r.toJson).as(SupportedMediaTypes(Format.JSON, v).toString)
+      case (r: Csvable, Format.CSV)           => Ok(r.toCsv).as(SupportedMediaTypes(Format.CSV, v).toString)
+      case (r: JsonStreamable, Format.JSON)   => Ok.chunked(toStream(r.toJsonStream)).as(SupportedMediaTypes(Format.JSON, v).toString)
+      case (r: CsvStreamable, Format.CSV)     => Ok.chunked(toStream(r.toCsvStream)).as(SupportedMediaTypes(Format.CSV, v).toString)
       case _ => UnsupportedMediaType("No supported media type: " + request.acceptedTypes.mkString(";"))
     }
   }
