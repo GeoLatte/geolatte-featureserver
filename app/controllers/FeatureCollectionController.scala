@@ -3,6 +3,8 @@ package controllers
 import org.supercsv.util.CsvContext
 import querylang.{BooleanAnd, QueryParser, BooleanExpr}
 
+import scala.collection.mutable.ListBuffer
+import scala.collection.parallel.mutable
 import scala.language.reflectiveCalls
 import scala.language.implicitConversions
 
@@ -117,9 +119,9 @@ object FeatureCollectionController extends AbstractNoSqlController with FutureIn
     }
 
 
-  def collectFeatures : Iteratee[JsObject, List[JsObject]] =
-    Iteratee.fold[JsObject, List[JsObject]]( List[JsObject]() ) ( (state, feature) =>
-      feature::state
+  def collectFeatures : Iteratee[JsObject, ListBuffer[JsObject]] =
+    Iteratee.fold[JsObject, ListBuffer[JsObject]]( ListBuffer[JsObject]() ) ( (state, feature) =>
+      {state.append(feature); state}
     )
 
   def list(db: String, collection: String) = repositoryAction(
@@ -133,7 +135,7 @@ object FeatureCollectionController extends AbstractNoSqlController with FutureIn
 
       repository.metadata(db, collection).flatMap(md =>
         doQuery(db, collection, md, Some(start), Some(limit)).flatMap {
-          case ( optTotal , enum) => (enum |>>> collectFeatures) map ( l => (optTotal, l))
+          case ( optTotal , enum) => (enum |>>> collectFeatures) map ( l => (optTotal, l.toList))
         }.map[SimpleResult]{
           case (optTotal, features) => toSimpleResult(FeaturesResource(optTotal, features))
         }
