@@ -136,16 +136,11 @@ object PostgresqlRepository extends Repository {
                      limit: Option[Int] = None): Future[CountedQueryResult] = {
 
     val projectingReads : Option[Reads[JsObject]] =
-      spatialQuery.projectionOpt
-        .map {
-        arr => jsArrayToJsPathList(arr)
-      }.map {
-        pathList => JsonHelper.mkProjection(pathList)
-      }
+      (toJsPathList _ andThen JsonHelper.mkProjection )(spatialQuery.projection)
 
-    val sortExpr: Option[String] = spatialQuery.sortOpt.map {
-      arr => jsArrayToSortExpr(arr)
-    }
+    val sortExpr: String = spatialQuery.sort.map {
+      arr => fldSortSpecToSortExpr(arr)
+    } mkString ","
 
     //get the count
     val stmtTotal = Sql.SELECT_TOTAL_IN_QUERY(database, collection, spatialQuery)
@@ -217,7 +212,7 @@ object PostgresqlRepository extends Repository {
      }
 
     val expr = QueryParser.parse(idq).get
-    val q = new SpatialQuery(None, Some(expr), None)
+    val q = new SpatialQuery(None, Some(expr))
 
     query(database, collection,q)
       .flatMap{ case ( _, e)  =>
@@ -401,15 +396,21 @@ object PostgresqlRepository extends Repository {
       .parse(text)
       .asOpt[JsObject](reads)
 
-  private def jsArrayToJsPathList(arr: JsArray) : List[JsPath] =  arr.as[List[String]].map {
-    spath => spath.split("\\.").foldLeft[JsPath]( __ )( (jsp, pe) => jsp \ pe )
-  } ++ List(( __ \ "type"), ( __ \ "geometry"))
+  private def toJsPathList(flds: List[String]) : List[JsPath] = {
 
-  private def jsArrayToSortExpr(arr: JsArray) : String = arr.as[List[String]].map{
-    //we use the #>> operator for 9.3 support, which extracts to text
-    // if we move to 9.4  or later with jsonb then we can use the #> operator because jsonb are ordered
-    path => s" json #>> '{${path.split("\\.") mkString ","}}' "
-  } mkString ","
+    val paths = flds.map {
+      spath => spath.split("\\.").foldLeft[JsPath](__)((jsp, pe) => jsp \ pe)
+    }
+
+    if (paths.isEmpty) paths
+    else paths ++ List(( __ \ "type"), ( __ \ "geometry"))
+  }
+
+  private def fldSortSpecToSortExpr(spec: FldSortSpec) : String = {
+      //we use the #>> operator for 9.3 support, which extracts to text
+      // if we move to 9.4  or later with jsonb then we can use the #> operator because jsonb are ordered
+      s" json #>> '{${spec.fld.split("\\.") mkString ","}}' ${spec.direction.toString}"
+  }
 
   private def first[T](rowF : RowData => Option[T])(qr: QueryResult) : Option[T] = qr.rows match {
     case Some(rs) if rs.size > 0 => rowF(rs.head)
@@ -479,7 +480,7 @@ object PostgresqlRepository extends Repository {
 
 
 
-    def SELECT_DATA(db: String, col: String, query: SpatialQuery, sort: Option[String] = None, start: Option[Int] = None, limit: Option[Int] = None): String = {
+    def SELECT_DATA(db: String, col: String, query: SpatialQuery, sortExpr: String, start: Option[Int] = None, limit: Option[Int] = None): String = {
 
       val cond = condition(query)
 
@@ -497,7 +498,7 @@ object PostgresqlRepository extends Repository {
        |SELECT json, ID
        |FROM ${quote(db)}.${quote(col)}
        |WHERE $cond
-       |ORDER BY ${ sort.getOrElse("ID") }
+       |ORDER BY ${ if (sortExpr.isEmpty) "ID" else sortExpr }
      """.stripMargin + offsetClause + limitClause
 
     }

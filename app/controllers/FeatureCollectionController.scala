@@ -25,9 +25,8 @@ import play.api.libs.json.JsBoolean
 
 import play.api.libs.json.JsNumber
 import utilities.{EnumeratorUtility, QueryParam}
-import nosql.InvalidQueryException
+import nosql._
 import play.api.libs.json.JsObject
-import nosql.{Metadata, SpatialQuery, FutureInstrumented}
 
 import scala.util.{Try, Failure, Success}
 
@@ -69,6 +68,16 @@ object FeatureCollectionController extends AbstractNoSqlController with FutureIn
     val SORT: QueryParam[JsArray] = QueryParam("sort", (s: String) =>
       if (s.isEmpty) throw InvalidQueryException("Empty SORT parameter")
       else Some(JsArray( s.split(',').toSeq.map(e => JsString(e)) ))
+    )
+
+    val SORTDIR: QueryParam[JsArray] = QueryParam("sort-direction", (s: String) =>
+      if (s.isEmpty) throw InvalidQueryException("Empty SORT-DIRECTION parameter")
+      else Some(JsArray( s.split(',').toSeq
+        .map(e => {
+        val dir = e.toUpperCase
+        if (dir != "ASC" && dir != "DESC") JsString("ASC")
+        else JsString(dir)
+      }) ))
     )
 
     val QUERY : QueryParam[BooleanExpr] = QueryParam("query", parseQueryExpr )
@@ -222,7 +231,10 @@ object FeatureCollectionController extends AbstractNoSqlController with FutureIn
     val windowOpt = Bbox(QueryParams.BBOX.extractOrElse(""), smd.envelope.getCrsId)
     val projectionOpt = QueryParams.PROJECTION.extract
     val queryParamOpt = QueryParams.QUERY.extract
-    val sortParamOpt  = QueryParams.SORT.extract
+
+    val sortParam  = QueryParams.SORT.extract.map(_.as[List[String]]).getOrElse(List())
+    val sortDirParam = QueryParams.SORTDIR.extract.map(_.as[List[String]]).getOrElse(List())
+
     val viewDef = QueryParams.WITH_VIEW.extract.map(vd => repository.getView(db, collection, vd))
       .getOrElse(Future {
       Json.obj()
@@ -234,8 +246,8 @@ object FeatureCollectionController extends AbstractNoSqlController with FutureIn
         SpatialQuery(
           windowOpt,
           selectorMerge(queryOpt, queryParamOpt),
-          projectionMerge(projOpt, projectionOpt),
-          sortParamOpt
+          toProjectList(projOpt, projectionOpt),
+          toFldSortSpecList(sortParam, sortDirParam)
         )
     }
 
@@ -253,13 +265,24 @@ object FeatureCollectionController extends AbstractNoSqlController with FutureIn
     res
   }
 
-  private def projectionMerge(viewProj: Option[JsArray], qProj: Option[JsArray]): Option[JsArray] = {
-    val vp1 = viewProj.getOrElse(Json.arr())
-    val vp2 = qProj.getOrElse(Json.arr())
-    val combined = vp1 ++ vp2
-    val result = if (combined.value.isEmpty) None else Some(combined)
+  private def toProjectList(viewProj: Option[JsArray], qProj: Option[JsArray]): List[String] = {
+    val vp1 = viewProj.flatMap( jsa => jsa.asOpt[List[String]] ).getOrElse(List())
+    val vp2 = qProj.flatMap( jsa => jsa.asOpt[List[String]] ).getOrElse(List())
+    val result = vp1 ++ vp2
     Logger.debug(s"Merging optional projectors of view and query to: $result")
     result
+  }
+
+  private def toFldSortSpecList(sortFldList: List[String], sortDirList: List[String]): List[FldSortSpec] = {
+    val fldDirStrings = if ( sortFldList.length < sortDirList.length) sortDirList.take(sortFldList.length) else sortDirList
+    //we are guaranteed that fldDirs is in length shorter or equal to sortFldList
+    val fldDirs = fldDirStrings.map{
+        case Direction(dir) => dir
+        case _ => ASC
+    }
+    sortFldList
+      .zipAll(fldDirs, "", ASC)
+      .map{ case(fld, dir) => FldSortSpec(fld, dir)}
   }
 
   object Bbox {

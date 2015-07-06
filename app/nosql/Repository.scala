@@ -56,11 +56,30 @@ case class MediaReader(id: String,
                        contentType: Option[String],
                        data: Array[Byte])
 
+sealed trait Direction
+
+object ASC extends Direction {
+  override def toString = "ASC"
+}
+
+object DESC extends Direction {
+  override def toString = "DESC"
+}
+
+object Direction {
+  def unapply(s: String) : Option[Direction] =
+    if (s.toUpperCase == "DESC") Some(DESC)
+    else if (s.toUpperCase == "ASC") Some(ASC)
+    else None
+}
+
+case class FldSortSpec(fld: String, direction: Direction)
+
 case class SpatialQuery (
                           windowOpt: Option[Envelope] = None,
                           queryOpt: Option[BooleanExpr] = None,
-                          projectionOpt: Option[JsArray] = None,
-                          sortOpt: Option[JsArray] = None)
+                          projection: List[String] = List(),
+                          sort: List[FldSortSpec] = List())
 
 trait MortonCodeQueryOptimizer {
 

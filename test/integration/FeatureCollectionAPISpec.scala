@@ -24,14 +24,17 @@ class FeatureCollectionAPISpec extends InCollectionSpecification {
 
      The FeatureCollection /list should:
        return the objects contained within the specified bbox as json object      $e3
-       respond to the start query-param                                           $e4
-       respond to the limit query-param                                           $e5
+       respond to the START query-param                                           $e4
+       respond to the LIMIT query-param                                           $e5
+       support the SORT parameter                                                 $e5b
+       support the SORT-DIRECTION parameter                                       $e5c
        support pagination                                                         $e6
 
      The FeatureCollection /query should:
       return the objects contained within the specified bbox as a stream          $e7
       support the PROJECTION parameter                                            $e8
       support the SORT parameter                                                  $e8b
+      support the SORT-DIRECTION parameter                                        $e8c
       support the QUERY parameter                                                 $e9
       support the WITH-VIEW query-param                                           $e14
       support the WITH-VIEW query-param and a view with no projection clause      $e15
@@ -97,6 +100,10 @@ class FeatureCollectionAPISpec extends InCollectionSpecification {
     )
   }
 
+  def e5b = pending
+
+  def e5c = pending
+
   def e6 = withTestFeatures(100, 10) {
       (bbox: String, featuresIn01: JsArray) => {
         val buffer = scala.collection.mutable.ListBuffer[JsValue]()
@@ -138,6 +145,8 @@ class FeatureCollectionAPISpec extends InCollectionSpecification {
       }
     }
   }
+
+  def e8c = pending
 
   def e9 = withTestFeatures(100, 200) {
     (bbox: String, featuresIn01: JsArray) => {

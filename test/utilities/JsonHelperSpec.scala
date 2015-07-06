@@ -49,7 +49,7 @@ class JsonHelperSpec extends Specification {
 
      "create a Reads[Object] that strips all non-mentioned properties from the json" in {
 
-       val projection = JsonHelper.mkProjection(pathList)
+       val projection = JsonHelper.mkProjection(pathList).get
 
        val obj = jsObj.as(projection)
 
@@ -60,7 +60,7 @@ class JsonHelperSpec extends Specification {
      "be robust w.r.t. to redundant path elements " in {
        val redundantPaths = __ \ "properties" \ "entity" \ "ident8" :: pathList
 
-       val projection = JsonHelper.mkProjection(redundantPaths)
+       val projection = JsonHelper.mkProjection(redundantPaths).get
 
        val obj = jsObj.as(projection)
 
@@ -72,7 +72,7 @@ class JsonHelperSpec extends Specification {
 
        val withNonExistentPath = pathList :+ (__ \ "properties" \ "entity" \ "doesntexist")
 
-       val projection = JsonHelper.mkProjection(withNonExistentPath)
+       val projection = JsonHelper.mkProjection(withNonExistentPath).get
 
        val obj = jsObj.asOpt(projection)
 
