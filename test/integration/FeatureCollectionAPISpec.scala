@@ -146,7 +146,22 @@ class FeatureCollectionAPISpec extends InCollectionSpecification {
     }
   }
 
-  def e8c = pending
+  def e8c = withTestFeatures(10, 10) {
+    (bbox: String, featuresIn01: JsArray) => {
+      val projection = "properties.foo,properties.num"
+      val sort = "properties.foo"
+      val sortdir = "DESC"
+      val projectedFeatures = project(projection)(featuresIn01)
+      val sortedFeatures = JsArray(projectedFeatures.value.sortBy[String](jsValue => (jsValue \ "properties" \ "foo").as[String]).reverse)
+      getQuery(testDbName, testColName, Map("bbox" -> bbox, "projection" -> projection, "sort" -> sort, "sort-direction" -> sortdir)) (
+        contentAsJsonStream
+      ).applyMatcher {
+        res => {
+          res.responseBody must beSomeFeatures(sortedFeatures, true)
+        }
+      }
+    }
+  }
 
   def e9 = withTestFeatures(100, 200) {
     (bbox: String, featuresIn01: JsArray) => {
