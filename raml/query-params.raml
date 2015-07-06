@@ -26,10 +26,17 @@ projection:
   example: properties.foo,properties.bar,properties.baz
 sort:
   description: |
-    specifies a comma-separated list of feature property paths. If this parameter is present, the output is sorted on the specified property paths (ascending, and in order).
+    specifies a comma-separated list of feature property paths. If this parameter is present, the output is sorted on the specified property
+    paths (according to the order specified in the 'sort-direction'-parameter).
   type: string
   required: false
   example: properties.foo,properties.bar,properties.baz
+sort-direction:
+  description: |
+    specifies a comma-separated list of sort directions (either 'asc' or 'desc') to use when sorting the corresponding property paths
+    specified in the sort parameter. If this parameter is absent, or does not specify a direction for a sort property, the ascending sort order will be used by default.
+  type: string
+  required: false
 with-view:
   description: | 
     The name of the ViewDef to apply. 
