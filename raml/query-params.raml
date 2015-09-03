@@ -54,3 +54,8 @@ fmt:
     Either "csv" or "json". Hack for specifying the Accepted media type for the response, when no Accept header can be set by the client.
   type: string
   required: false
+filename:
+  description: |
+    Hack to add a filename to content-disposition attachment header field to force browser to download the data with given filename.
+  type: string
+  required: false

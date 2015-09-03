@@ -45,6 +45,7 @@ trait AbstractNoSqlController extends Controller with FutureInstrumented {
   implicit def toSimpleResult[A <: RenderableResource](result: A)
                                                       (implicit request: RequestHeader,
                                                        format: Option[Format.Value] = None,
+                                                       filename: Option[String] = None,
                                                        version: Option[Version.Value] = None): SimpleResult = {
 
 
@@ -56,12 +57,18 @@ trait AbstractNoSqlController extends Controller with FutureInstrumented {
       case (_, _, SupportedMediaTypes(f, ve))   => (f,ve)
     }
 
+    val simpleresult =
     (result, fmt) match {
       case (r: Jsonable, Format.JSON)         => Ok(r.toJson).as(SupportedMediaTypes(Format.JSON, v).toString)
       case (r: Csvable, Format.CSV)           => Ok(r.toCsv).as(SupportedMediaTypes(Format.CSV, v).toString)
       case (r: JsonStreamable, Format.JSON)   => Ok.chunked(toStream(r.toJsonStream)).as(SupportedMediaTypes(Format.JSON, v).toString)
       case (r: CsvStreamable, Format.CSV)     => Ok.chunked(toStream(r.toCsvStream)).as(SupportedMediaTypes(Format.CSV, v).toString)
       case _ => UnsupportedMediaType("No supported media type: " + request.acceptedTypes.mkString(";"))
+    }
+
+    filename match {
+      case Some(fname) => simpleresult.withHeaders(headers = ("content-disposition", s"attachment; filename=$fname"))
+      case None        => simpleresult
     }
   }
 

@@ -86,6 +86,7 @@ object FeatureCollectionController extends AbstractNoSqlController with FutureIn
 
     val FMT : QueryParam[Format.Value] = QueryParam("fmt", parseFormat )
 
+    val FILENAME = QueryParam("filename", (s: String) => Some(s))
   }
 
 
@@ -98,6 +99,7 @@ object FeatureCollectionController extends AbstractNoSqlController with FutureIn
         val start : Option[Int] = QueryParams.START.extract
         val limit : Option[Int]= QueryParams.LIMIT.extract
         implicit val format = QueryParams.FMT.extract
+        implicit val filename = QueryParams.FILENAME.extract
 
         Logger.info(s"Query string $queryStr on $db, collection $collection")
           repository.metadata(db, collection).flatMap(md =>
@@ -116,7 +118,10 @@ object FeatureCollectionController extends AbstractNoSqlController with FutureIn
   def download(db: String, collection: String) = repositoryAction {
       implicit request => {
         Logger.info(s"Downloading $db/$collection.")
-        implicit val format = QueryParams.FMT.extract(request.queryString)
+        implicit val queryStr = request.queryString
+
+        implicit val format = QueryParams.FMT.extract
+        implicit val filename = QueryParams.FILENAME.extract
         repository.query(db, collection, SpatialQuery()).map {
           case (_, x) => enumJsonToResult(x)
         }.map{
