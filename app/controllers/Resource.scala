@@ -65,7 +65,7 @@ case class MediaReaderResource(mediaReader: MediaReader) extends Jsonable {
 
 case class FeaturesResource(total: Option[Long], features: List[JsObject]) extends Jsonable {
   def toJson: JsValue = Json.obj (
-    "total" -> total.getOrElse(1L),
+    "total" -> total.getOrElse(-1L),
     "count" -> features.length ,
     "features" -> features
   )
