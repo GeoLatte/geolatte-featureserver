@@ -25,8 +25,8 @@ object TxController extends AbstractNoSqlController {
 
   def insert(db: String, col: String) = {
     val parser = mkJsonWritingBodyParser(db, col)
-    Action(parser) {
-      request => Async {
+    Action.async (parser) {
+      request =>  {
         request.body.map(
             state =>  Ok(state.warnings.mkString("\n"))
         ).recover(commonExceptionHandler(db))

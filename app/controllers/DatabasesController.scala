@@ -28,40 +28,40 @@ object DatabasesController extends AbstractNoSqlController {
   )
 
   def getDb(db: String) = repositoryAction(
-    implicit request  => repository.listCollections(db).map[SimpleResult](colls => {
+    implicit request => repository.listCollections(db).map[SimpleResult](colls => {
       Logger.info("collections found: " + colls)
       DatabaseResource(db, colls)
     }).recover(commonExceptionHandler(db))
   )
 
 
-  def putDb(db: String) = repositoryAction (
-    implicit request => repository.createDb(db).map(_ => Created(s"database $db created") ).recover {
-          case ex : DatabaseAlreadyExistsException => Conflict(ex.getMessage)
-          case ex : DatabaseCreationException => {
-            Logger.error("Error: creating database", ex)
-            InternalServerError(ex.getMessage)
-          }
-          case t => {
-            Logger.error("Error: creating database", t)
-            InternalServerError(s"${t.getMessage}")
-          }
-        }
+  def putDb(db: String) = repositoryAction(
+    implicit request => repository.createDb(db).map(_ => Created(s"database $db created")).recover {
+      case ex: DatabaseAlreadyExistsException => Conflict(ex.getMessage)
+      case ex: DatabaseCreationException => {
+        Logger.error("Error: creating database", ex)
+        InternalServerError(ex.getMessage)
+      }
+      case t => {
+        Logger.error("Error: creating database", t)
+        InternalServerError(s"${t.getMessage}")
+      }
+    }
   )
 
 
-  def deleteDb(db: String) = repositoryAction ( implicit request =>
-    repository.dropDb(db).map( _ => Ok(s"database $db dropped") )
-          .recover{case DatabaseNotFoundException(_) =>  Ok(s"database $db doesn't exist") }
-          .recover (commonExceptionHandler(db))
+  def deleteDb(db: String) = repositoryAction(implicit request =>
+    repository.dropDb(db).map(_ => Ok(s"database $db dropped"))
+      .recover { case DatabaseNotFoundException(_) => Ok(s"database $db doesn't exist") }
+      .recover(commonExceptionHandler(db))
   )
 
-  def getCollection(db: String, collection: String) = repositoryAction ( implicit request =>
+  def getCollection(db: String, collection: String) = repositoryAction(implicit request =>
     repository.metadata(db, collection).map[SimpleResult](md => CollectionResource(md))
-          .recover(commonExceptionHandler(db,collection))
+      .recover(commonExceptionHandler(db, collection))
   )
 
-  def createCollection(db: String, col: String) = Action(BodyParsers.parse.tolerantJson) {
+  def createCollection(db: String, col: String) = Action.async(BodyParsers.parse.tolerantJson) {
     implicit request => {
 
       def parse(body: JsValue) = body match {
@@ -80,19 +80,19 @@ object DatabasesController extends AbstractNoSqlController {
         }
       }
 
-      Async {
-        parse(request.body) match {
-          case Right(spatialSpecOpt) => doCreate(spatialSpecOpt)
-          case Left(errs) => Future.successful(BadRequest("Invalid JSON format: " + errs))
-        }
 
+      parse(request.body) match {
+        case Right(spatialSpecOpt) => doCreate(spatialSpecOpt)
+        case Left(errs) => Future.successful(BadRequest("Invalid JSON format: " + errs))
       }
+
+
     }
   }
 
-  def deleteCollection(db: String, col: String) = repositoryAction (implicit request =>
+  def deleteCollection(db: String, col: String) = repositoryAction(implicit request =>
     repository.deleteCollection(db, col).map(_ => Ok(s"Collection $db/$col deleted."))
-          .recover{case CollectionNotFoundException(_) =>  Ok(s"Collection $db doesn't exist") }
-          .recover(commonExceptionHandler(db,col)))
+      .recover { case CollectionNotFoundException(_) => Ok(s"Collection $db doesn't exist") }
+      .recover(commonExceptionHandler(db, col)))
 
 }
