@@ -202,7 +202,7 @@ object FeatureCollectionController extends AbstractNoSqlController with FutureIn
       val toCsvRecord = (js: JsObject) => project(js)({
         case (k, v) => v
         case _ => "None"
-      }, g => g.asText).mkString(sep)
+      }, g => s""""${g.asText}"""").mkString(sep)
 
       val toCsvHeader = (js: JsObject) => project(js)({
         case (k, v) => k
