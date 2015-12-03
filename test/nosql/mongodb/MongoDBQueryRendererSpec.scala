@@ -77,6 +77,14 @@ class MongoDBQueryRendererSpec extends Specification {
         )
     }
 
+    "propertly render a like predicate" in {
+      val expr1 = QueryParser.parse(" a.b like 'd%ab_d.f'").get
+      renderer.render(expr1) ===
+        Json.obj("a.b" ->
+          Json.obj( "$regex" -> "d.*ab.d\\.f",  "$options" -> "i" )
+        )
+    }
+
   }
 
 }

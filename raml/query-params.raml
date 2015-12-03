@@ -18,15 +18,44 @@ limit:
   required: false
 projection:
   description: | 
-    specifies a comma-separated list of feature property paths. If this parameter is present, the output is garanteed to contains all and only the specified property paths. If the 
+    specifies a comma-separated list of feature property paths. If this parameter is present, the output contains all and only the specified property paths. If the
     input Json doesn't contain a specified property path, it will be add in the output with a value of null.
     
   type: string
   required: false
   example: properties.foo,properties.bar,properties.baz
+sort:
+  description: |
+    specifies a comma-separated list of feature property paths. If this parameter is present, the output is sorted on the specified property
+    paths (according to the order specified in the 'sort-direction'-parameter).
+  type: string
+  required: false
+  example: properties.foo,properties.bar,properties.baz
+sort-direction:
+  description: |
+    specifies a comma-separated list of sort directions (either 'asc' or 'desc') to use when sorting the corresponding property paths
+    specified in the sort parameter. If this parameter is absent, or does not specify a direction for a sort property, the ascending sort order will be used by default.
+  type: string
+  required: false
 with-view:
   description: | 
     The name of the ViewDef to apply. 
     A ViewDef has `query` and `projection` properties. The ViewDef `query` expression will be conjoined (AND-ed) to the `query` request parameter, and the ViewDef `projection` property will be concatenated to the `projection` request parameter.
+  type: string
+  required: false
+sep:
+  description: |
+    The separator to use in the CSV result
+    this parameter is ignored when the accepted media type is other than CSV
+  type: string
+  required: false
+fmt:
+  description: |
+    Either "csv" or "json". Hack for specifying the Accepted media type for the response, when no Accept header can be set by the client.
+  type: string
+  required: false
+filename:
+  description: |
+    Hack to add a filename to content-disposition attachment header field to force browser to download the data with given filename.
   type: string
   required: false

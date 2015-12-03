@@ -3,6 +3,8 @@ package controllers
 import org.supercsv.util.CsvContext
 import querylang.{BooleanAnd, QueryParser, BooleanExpr}
 
+import scala.collection.mutable.ListBuffer
+import scala.collection.parallel.mutable
 import scala.language.reflectiveCalls
 import scala.language.implicitConversions
 
@@ -10,7 +12,6 @@ import org.geolatte.geom.{Point, Geometry, Envelope}
 import org.geolatte.geom.crs.CrsId
 import play.api.mvc._
 import play.api.Logger
-import nosql.mongodb._
 import play.api.libs.iteratee._
 import config.AppExecutionContexts
 import play.api.libs.json._
@@ -18,16 +19,14 @@ import nosql.json.GeometryReaders._
 import org.supercsv.encoder.DefaultCsvEncoder
 import org.supercsv.prefs.CsvPreference
 import scala.concurrent.Future
-import play.api.Play._
 
 import play.api.libs.json.JsString
 import play.api.libs.json.JsBoolean
 
 import play.api.libs.json.JsNumber
 import utilities.{EnumeratorUtility, QueryParam}
-import nosql.InvalidQueryException
+import nosql._
 import play.api.libs.json.JsObject
-import nosql.{Metadata, SpatialQuery, FutureInstrumented}
 
 import scala.util.{Try, Failure, Success}
 
@@ -39,9 +38,15 @@ object FeatureCollectionController extends AbstractNoSqlController with FutureIn
   import config.ConfigurationValues._
   val COLLECTION_LIMIT = MaxReturnItems
 
-  def parse2Optional(s: String) : Option[BooleanExpr]= QueryParser.parse(s) match {
+
+  def parseQueryExpr(s: String) : Option[BooleanExpr]= QueryParser.parse(s) match {
     case Success(expr) => Some(expr)
     case Failure(t) => throw InvalidQueryException(t.getMessage)
+  }
+
+  def parseFormat(s: String) : Option[Format.Value] = s match {
+    case Format(fmt) => Some(fmt)
+    case _ => None
   }
 
   object QueryParams {
@@ -60,8 +65,28 @@ object FeatureCollectionController extends AbstractNoSqlController with FutureIn
       else Some(JsArray( s.split(',').toSeq.map(e => JsString(e)) ))
     )
 
-    val QUERY : QueryParam[BooleanExpr] = QueryParam("query", parse2Optional )
+    val SORT: QueryParam[JsArray] = QueryParam("sort", (s: String) =>
+      if (s.isEmpty) throw InvalidQueryException("Empty SORT parameter")
+      else Some(JsArray( s.split(',').toSeq.map(e => JsString(e)) ))
+    )
 
+    val SORTDIR: QueryParam[JsArray] = QueryParam("sort-direction", (s: String) =>
+      if (s.isEmpty) throw InvalidQueryException("Empty SORT-DIRECTION parameter")
+      else Some(JsArray( s.split(',').toSeq
+        .map(e => {
+        val dir = e.toUpperCase
+        if (dir != "ASC" && dir != "DESC") JsString("ASC")
+        else JsString(dir)
+      }) ))
+    )
+
+    val QUERY : QueryParam[BooleanExpr] = QueryParam("query", parseQueryExpr )
+
+    val SEP = QueryParam("sep", (s: String) => Some(s))
+
+    val FMT : QueryParam[Format.Value] = QueryParam("fmt", parseFormat )
+
+    val FILENAME = QueryParam("filename", (s: String) => Some(s))
   }
 
 
@@ -73,11 +98,15 @@ object FeatureCollectionController extends AbstractNoSqlController with FutureIn
 
         val start : Option[Int] = QueryParams.START.extract
         val limit : Option[Int]= QueryParams.LIMIT.extract
+        implicit val format = QueryParams.FMT.extract
+        implicit val filename = QueryParams.FILENAME.extract
 
         Logger.info(s"Query string $queryStr on $db, collection $collection")
           repository.metadata(db, collection).flatMap(md =>
-            doQuery(db, collection, md, start, limit).map[SimpleResult]{
-              case (_, x) => x
+            doQuery(db, collection, md, start, limit).map{
+              case (_, x) => enumJsonToResult(x)
+            }.map{
+              x => toSimpleResult(x)
             }
           ).recover {
             case ex: InvalidQueryException => BadRequest(s"${ex.getMessage}")
@@ -89,8 +118,14 @@ object FeatureCollectionController extends AbstractNoSqlController with FutureIn
   def download(db: String, collection: String) = repositoryAction {
       implicit request => {
         Logger.info(s"Downloading $db/$collection.")
-        repository.query(db, collection, SpatialQuery()).map[SimpleResult] {
-          case (_, x) => x
+        implicit val queryStr = request.queryString
+
+        implicit val format = QueryParams.FMT.extract
+        implicit val filename = QueryParams.FILENAME.extract
+        repository.query(db, collection, SpatialQuery()).map {
+          case (_, x) => enumJsonToResult(x)
+        }.map{
+          x => toSimpleResult(x)
         }.recover {
           commonExceptionHandler(db, collection)
         }
@@ -98,9 +133,9 @@ object FeatureCollectionController extends AbstractNoSqlController with FutureIn
     }
 
 
-  def collectFeatures : Iteratee[JsObject, List[JsObject]] =
-    Iteratee.fold[JsObject, List[JsObject]]( List[JsObject]() ) ( (state, feature) =>
-      feature::state
+  def collectFeatures : Iteratee[JsObject, ListBuffer[JsObject]] =
+    Iteratee.fold[JsObject, ListBuffer[JsObject]]( ListBuffer[JsObject]() ) ( (state, feature) =>
+      {state.append(feature); state}
     )
 
   def list(db: String, collection: String) = repositoryAction(
@@ -114,7 +149,7 @@ object FeatureCollectionController extends AbstractNoSqlController with FutureIn
 
       repository.metadata(db, collection).flatMap(md =>
         doQuery(db, collection, md, Some(start), Some(limit)).flatMap {
-          case ( optTotal , enum) => (enum |>>> collectFeatures) map ( l => (optTotal, l))
+          case ( optTotal , enum) => (enum |>>> collectFeatures) map ( l => (optTotal, l.toList))
         }.map[SimpleResult]{
           case (optTotal, features) => toSimpleResult(FeaturesResource(optTotal, features))
         }
@@ -133,16 +168,19 @@ object FeatureCollectionController extends AbstractNoSqlController with FutureIn
    * @param req
    * @return
    */
-  implicit def enumJsontoResult(enum: Enumerator[JsObject])(implicit req: RequestHeader): SimpleResult =
-    toSimpleResult(new JsonStreamable with CsvStreamable {
+  implicit def enumJsonToResult(enum: Enumerator[JsObject])(implicit req: RequestHeader) =
+    new JsonStreamable with CsvStreamable {
 
       val encoder = new DefaultCsvEncoder()
 
       val cc = new CsvContext(0,0,0)
-      def encode(v: JsString) = "\"" + encoder.encode(v.value, cc, CsvPreference.STANDARD_PREFERENCE) + "\""
+      def encode(v: JsString) = "\"" + encoder.encode(v.value, cc, CsvPreference.STANDARD_PREFERENCE).replaceAll("\n", "").replaceAll("\r", "") + "\""
 
 
-      def expand(v : JsObject) : Seq[(String, String)] = utilities.JsonHelper.flatten(v).map {
+      def expand(v : JsObject) : Seq[(String, String)] =
+        utilities.JsonHelper.flatten(v) sortBy {
+          case (k,v) => k
+        } map {
         case (k, v: JsString)   => (k, encode(v) )
         case (k, v: JsNumber)   => (k, Json.stringify(v) )
         case (k, v: JsBoolean)  => (k, Json.stringify(v) )
@@ -158,15 +196,18 @@ object FeatureCollectionController extends AbstractNoSqlController with FutureIn
         selector(idOpt) +: geom +: attributes
       }
 
+      implicit val queryStr = req.queryString
+      val sep = QueryParams.SEP.extract.filterNot( _.isEmpty ).getOrElse("|")
+
       val toCsvRecord = (js: JsObject) => project(js)({
         case (k, v) => v
         case _ => "None"
-      }, g => g.asText).mkString("|").replaceAll("\n", "").replaceAll("\r", "")
+      }, g => s""""${g.asText}"""").mkString(sep).replaceAll("\n", "").replaceAll("\r", "")
 
       val toCsvHeader = (js: JsObject) => project(js)({
         case (k, v) => k
         case _ => "None"
-      }, _ => "geometry-wkt").mkString("|")
+      }, _ => "geometry-wkt").mkString(sep)
 
       val toCsv : (Int, JsObject) => String = (i,js) => Try {
           if (i != 0) toCsvRecord(js)
@@ -181,9 +222,9 @@ object FeatureCollectionController extends AbstractNoSqlController with FutureIn
 
       def toJsonStream = enum
 
-      def toCsvStream = EnumeratorUtility.withIndex(enum).map[String]( toCsv.tupled).through(Enumeratee.filterNot(_.isEmpty))
+      override def toCsvStream: Enumerator[String] = EnumeratorUtility.withIndex(enum).map[String]( toCsv.tupled).through(Enumeratee.filterNot(_.isEmpty))
 
-    })
+    }
 
   private def doQuery(db: String, collection: String, smd: Metadata, start: Option[Int] = None, limit: Option[Int] = None)
                             (implicit queryStr: Map[String, Seq[String]]) : Future[(Option[Long], Enumerator[JsObject])] =
@@ -195,6 +236,10 @@ object FeatureCollectionController extends AbstractNoSqlController with FutureIn
     val windowOpt = Bbox(QueryParams.BBOX.extractOrElse(""), smd.envelope.getCrsId)
     val projectionOpt = QueryParams.PROJECTION.extract
     val queryParamOpt = QueryParams.QUERY.extract
+
+    val sortParam  = QueryParams.SORT.extract.map(_.as[List[String]]).getOrElse(List())
+    val sortDirParam = QueryParams.SORTDIR.extract.map(_.as[List[String]]).getOrElse(List())
+
     val viewDef = QueryParams.WITH_VIEW.extract.map(vd => repository.getView(db, collection, vd))
       .getOrElse(Future {
       Json.obj()
@@ -206,7 +251,9 @@ object FeatureCollectionController extends AbstractNoSqlController with FutureIn
         SpatialQuery(
           windowOpt,
           selectorMerge(queryOpt, queryParamOpt),
-          projectionMerge(projOpt, projectionOpt))
+          toProjectList(projOpt, projectionOpt),
+          toFldSortSpecList(sortParam, sortDirParam)
+        )
     }
 
   }
@@ -214,22 +261,33 @@ object FeatureCollectionController extends AbstractNoSqlController with FutureIn
   private def selectorMerge(viewQuery: Option[String], exprOpt : Option[BooleanExpr]) : Option[BooleanExpr] = {
 
     val res = (viewQuery, exprOpt) match {
-      case (Some(str), Some(e)) => parse2Optional(str).map(expr => BooleanAnd(expr, e))
+      case (Some(str), Some(e)) => parseQueryExpr(str).map(expr => BooleanAnd(expr, e))
       case (None, s @ Some(_)) => s
-      case (Some(str), _) => parse2Optional(str)
+      case (Some(str), _) => parseQueryExpr(str)
       case _ => None
     }
     Logger.debug(s"Merging optional selectors of view and query to: $res")
     res
   }
 
-  private def projectionMerge(viewProj: Option[JsArray], qProj: Option[JsArray]): Option[JsArray] = {
-    val vp1 = viewProj.getOrElse(Json.arr())
-    val vp2 = qProj.getOrElse(Json.arr())
-    val combined = vp1 ++ vp2
-    val result = if (combined.value.isEmpty) None else Some(combined)
+  private def toProjectList(viewProj: Option[JsArray], qProj: Option[JsArray]): List[String] = {
+    val vp1 = viewProj.flatMap( jsa => jsa.asOpt[List[String]] ).getOrElse(List())
+    val vp2 = qProj.flatMap( jsa => jsa.asOpt[List[String]] ).getOrElse(List())
+    val result = vp1 ++ vp2
     Logger.debug(s"Merging optional projectors of view and query to: $result")
     result
+  }
+
+  private def toFldSortSpecList(sortFldList: List[String], sortDirList: List[String]): List[FldSortSpec] = {
+    val fldDirStrings = if ( sortFldList.length < sortDirList.length) sortDirList.take(sortFldList.length) else sortDirList
+    //we are guaranteed that fldDirs is in length shorter or equal to sortFldList
+    val fldDirs = fldDirStrings.map{
+        case Direction(dir) => dir
+        case _ => ASC
+    }
+    sortFldList
+      .zipAll(fldDirs, "", ASC)
+      .map{ case(fld, dir) => FldSortSpec(fld, dir)}
   }
 
   object Bbox {

@@ -24,13 +24,17 @@ class FeatureCollectionAPISpec extends InCollectionSpecification {
 
      The FeatureCollection /list should:
        return the objects contained within the specified bbox as json object      $e3
-       respond to the start query-param                                           $e4
-       respond to the limit query-param                                           $e5
+       respond to the START query-param                                           $e4
+       respond to the LIMIT query-param                                           $e5
+       support the SORT parameter                                                 $e5b
+       support the SORT-DIRECTION parameter                                       $e5c
        support pagination                                                         $e6
 
      The FeatureCollection /query should:
       return the objects contained within the specified bbox as a stream          $e7
       support the PROJECTION parameter                                            $e8
+      support the SORT parameter                                                  $e8b
+      support the SORT-DIRECTION parameter                                        $e8c
       support the QUERY parameter                                                 $e9
       support the WITH-VIEW query-param                                           $e14
       support the WITH-VIEW query-param and a view with no projection clause      $e15
@@ -96,6 +100,10 @@ class FeatureCollectionAPISpec extends InCollectionSpecification {
     )
   }
 
+  def e5b = pending
+
+  def e5c = pending
+
   def e6 = withTestFeatures(100, 10) {
       (bbox: String, featuresIn01: JsArray) => {
         val buffer = scala.collection.mutable.ListBuffer[JsValue]()
@@ -120,6 +128,37 @@ class FeatureCollectionAPISpec extends InCollectionSpecification {
       val projectedFeatures = project(projection)(featuresIn01)
       getQuery(testDbName, testColName, Map("bbox" -> bbox, "projection" -> projection))(contentAsJsonStream).applyMatcher {
         res => res.responseBody must beSomeFeatures(projectedFeatures)
+      }
+    }
+  }
+
+  def e8b = withTestFeatures(10, 10) {
+    (bbox: String, featuresIn01: JsArray) => {
+      val projection = "properties.foo,properties.num"
+      val sort = "properties.foo"
+      val projectedFeatures = project(projection)(featuresIn01)
+      val sortedFeatures = JsArray(projectedFeatures.value.sortBy[String]( jsValue => (jsValue \ "properties" \ "foo").as[String] ))
+      getQuery(testDbName, testColName, Map("bbox" -> bbox, "projection" -> projection, "sort" -> sort))(contentAsJsonStream).applyMatcher {
+        res => {
+          res.responseBody must beSomeFeatures(sortedFeatures, true)
+        }
+      }
+    }
+  }
+
+  def e8c = withTestFeatures(10, 10) {
+    (bbox: String, featuresIn01: JsArray) => {
+      val projection = "properties.foo,properties.num"
+      val sort = "properties.foo"
+      val sortdir = "DESC"
+      val projectedFeatures = project(projection)(featuresIn01)
+      val sortedFeatures = JsArray(projectedFeatures.value.sortBy[String](jsValue => (jsValue \ "properties" \ "foo").as[String]).reverse)
+      getQuery(testDbName, testColName, Map("bbox" -> bbox, "projection" -> projection, "sort" -> sort, "sort-direction" -> sortdir)) (
+        contentAsJsonStream
+      ).applyMatcher {
+        res => {
+          res.responseBody must beSomeFeatures(sortedFeatures, true)
+        }
       }
     }
   }
@@ -188,7 +227,7 @@ class FeatureCollectionAPISpec extends InCollectionSpecification {
   
   def e13 = withTestFeatures(3, 6) {
     (bbox: String, featuresIn01: JsArray) => getQuery(testDbName, testColName, Map("bbox" -> bbox))(contentAsStringStream).applyMatcher(
-      res => (res.status must equalTo(OK)) and (res.responseBody must beSome( matchFeaturesInCsv("_id,geometry-wkt,foo,num,something,nestedprop.nestedfoo")))
+      res => (res.status must equalTo(OK)) and (res.responseBody must beSome( matchFeaturesInCsv("_id,geometry-wkt,foo,nestedprop.nestedfoo,num,something")))
     )
   }
 
@@ -207,7 +246,7 @@ class FeatureCollectionAPISpec extends InCollectionSpecification {
       val projection = "properties.foo,properties.bar"
       val projectedFeatures = project(projection)(featuresIn01)
       getQuery(testDbName, testColName, Map("bbox" -> bbox, "projection" -> projection))(contentAsStringStream).applyMatcher {
-        res => res.responseBody must beSome( matchFeaturesInCsv("_id,geometry-wkt,foo,bar") )
+        res => res.responseBody must beSome( matchFeaturesInCsv("_id,geometry-wkt,bar,foo") )
       }
     }
   }

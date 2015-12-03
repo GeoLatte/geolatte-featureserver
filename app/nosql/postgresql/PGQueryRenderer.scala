@@ -17,6 +17,7 @@ object PGQueryRenderer extends QueryRenderer[String] {
     case ComparisonPredicate(lhs, op, rhs ) => s" ${renderPropertyExpr(lhs,rhs)} ${sym(op)} ( ${renderValue(rhs)} )"
     case InPredicate(lhs, rhs) =>  s" ${renderPropertyExpr(lhs,rhs)} in ${renderValueList(rhs)}"
     case RegexPredicate(lhs, rhs) => s" ${renderPropertyExpr(lhs,rhs)} ~ '${rhs.pattern}'"
+    case LikePredicate(lhs, rhs) => s" ${renderPropertyExpr(lhs,rhs)} ilike '${rhs.pattern}'"
   }
 
   private def renderPropertyExpr(lhs: PropertyExpr, rhs: Expr): String = {
@@ -31,6 +32,8 @@ object PGQueryRenderer extends QueryRenderer[String] {
     case LiteralString(_)  => "text"
     case ValueListExpr( values ) => cast( values.head )
     case RegexExpr( _ ) => "text"
+    case LikeExpr( _ ) =>"text"
+    case _ => "text"
   }
 
   def path2VariadicList(propertyExpr: PropertyExpr): String = "'" + propertyExpr.path.replaceAll("\\.", "','") + "'"

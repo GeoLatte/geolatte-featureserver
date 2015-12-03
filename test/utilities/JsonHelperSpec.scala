@@ -49,7 +49,7 @@ class JsonHelperSpec extends Specification {
 
      "create a Reads[Object] that strips all non-mentioned properties from the json" in {
 
-       val projection = JsonHelper.mkProjection(pathList)
+       val projection = JsonHelper.mkProjection(pathList).get
 
        val obj = jsObj.as(projection)
 
@@ -60,7 +60,7 @@ class JsonHelperSpec extends Specification {
      "be robust w.r.t. to redundant path elements " in {
        val redundantPaths = __ \ "properties" \ "entity" \ "ident8" :: pathList
 
-       val projection = JsonHelper.mkProjection(redundantPaths)
+       val projection = JsonHelper.mkProjection(redundantPaths).get
 
        val obj = jsObj.as(projection)
 
@@ -68,15 +68,20 @@ class JsonHelperSpec extends Specification {
 
      }
 
-     "fails on non-existent (empty) paths" in {
+     "Projection puts JsNull for non-existent (empty) paths" in {
 
-       val withNonExistentPath = __ \ "properties" \ "entity" \ "doesntexist" :: pathList
+       val withNonExistentPath = pathList :+ (__ \ "properties" \ "entity" \ "doesntexist")
 
-       val projection = JsonHelper.mkProjection(withNonExistentPath)
+       val projection = JsonHelper.mkProjection(withNonExistentPath).get
 
        val obj = jsObj.asOpt(projection)
 
-       obj must_== None
+       val expected = Some(Json.obj("properties" ->
+                      Json.obj("entity" ->
+                        Json.obj("doesntexist" -> JsNull))).deepMerge(Json.parse(projectedJsonText).as[JsObject])
+       )
+
+       expected must_== obj
 
      }
 

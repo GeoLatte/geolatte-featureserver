@@ -110,11 +110,10 @@ abstract class MongoSpatialCollection(collection: JSONCollection, metadata: Meta
   }
 
   def projection(sq: SpatialQuery) =  {
-    val flds = sq.projectionOpt
-      //make sure we include  bbox and geometry property so that filtering works correctly
-      .map(proj =>  (proj ++ Json.arr(SpecialMongoProperties.BBOX, "geometry", "type") ))
-      .getOrElse( Json.arr() )
-    Json.obj(flds.value.collect{case f : JsString => f.value -> Json.toJsFieldJsValueWrapper(1)}:_*)
+    //make sure we include  bbox and geometry property so that filtering works correctly
+    val flds = sq.projection ++ List(SpecialMongoProperties.BBOX, "geometry", "type")
+    val fldPairs = flds.map{ f => (f -> Json.toJsFieldJsValueWrapper(1)) }
+    Json.obj(fldPairs:_*)
   }
 
   def run(query: SpatialQuery) : Enumerator[JsObject] = {
