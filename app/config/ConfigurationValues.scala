@@ -106,8 +106,8 @@ object ConfigurationValues {
   val MaxReturnItems = getConfigInt(MAXIMUM_RESULT_SIZE_KEY, DEFAULT_MAXIMUM_RESULT_SIZE)
 
   /**
-   * The separator to use between any two Json strings when streaming JSON
+   * The separator to use between any two chunks when using chunked response streaming
    */
-  val jsonSeparator = "\n"
+  val chunkSeparator = "\n"
 
 }

@@ -148,9 +148,7 @@ object FeatureCollectionController extends AbstractNoSqlController with FutureIn
       Logger.info(s"Query string $queryStr on $db, collection $collection")
 
       repository.metadata(db, collection).flatMap(md =>
-        doQuery(db, collection, md, Some(start), Some(limit)).flatMap {
-          case ( optTotal , enum) => (enum |>>> collectFeatures) map ( l => (optTotal, l.toList))
-        }.map[SimpleResult]{
+        doQuery(db, collection, md, Some(start), Some(limit)).map[SimpleResult] {
           case (optTotal, features) => toSimpleResult(FeaturesResource(optTotal, features))
         }
       ).recover {

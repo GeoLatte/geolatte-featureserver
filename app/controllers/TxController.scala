@@ -97,7 +97,7 @@ object TxController extends AbstractNoSqlController {
    */
   private def mkJsonWritingBodyParser(db: String, col: String): BodyParser[Future[State]] = {
     val writer = repository.writer(db, col)
-    ReactiveGeoJson.bodyParser(writer, config.ConfigurationValues.jsonSeparator)
+    ReactiveGeoJson.bodyParser(writer, config.ConfigurationValues.chunkSeparator)
   }
 
 

@@ -163,7 +163,7 @@ object RestApiDriver {
   def getList(dbName: String, colName: String, queryStr: String) = {
     Logger.info("Start /list on collection")
     val url = DATABASES / dbName / colName / FEATURECOLLECTION ? queryStr
-    FakeRequestResult.GET(url, contentAsJson)
+    FakeRequestResult.GET(url, contentAsJsonStringStream)
   }
 
   def postUpsert(dbName: String, colName: String, reqBody: JsObject) = {
@@ -270,7 +270,7 @@ object RestApiDriver {
   }
 
   def withFeatures[B, T](db: String, col: String, features: JsArray)(block: => T) = {
-    val data = features.value map (j => Json.stringify(j)) mkString ConfigurationValues.jsonSeparator getBytes ("UTF-8")
+    val data = features.value map (j => Json.stringify(j)) mkString ConfigurationValues.chunkSeparator getBytes ("UTF-8")
     loadData(db, col, data)
     try {
       block
@@ -368,6 +368,14 @@ with FutureAwaits {
     Await.result(f, timeout.duration)
     buf.toSeq
   }
+
+  def contentAsJsonStringStream (result: Future[SimpleResult])(implicit timeout: Timeout): JsObject =
+    header("Transfer-Encoding", result)(timeout) match {
+      case Some("chunked") => Json.parse(
+        (readChunked(result, s => s)(timeout)).foldLeft("")( (s, result) => s + result)
+      ).asInstanceOf[JsObject]
+      case _ => Json.parse(contentAsString(result)(timeout)).asInstanceOf[JsObject]
+    }
 
   def contentAsJsonStream(result: Future[SimpleResult])(implicit timeout: Timeout): JsArray =
     header("Transfer-Encoding", result)(timeout) match {

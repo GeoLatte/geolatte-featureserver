@@ -2,6 +2,7 @@ package controllers
 
 import nosql.{MetadataIdentifiers, MediaReader, Metadata}
 import play.api.data.validation.ValidationError
+import utilities.EnumeratorUtility.CommaSeparate
 
 import scala.language.implicitConversions
 
@@ -13,6 +14,8 @@ import org.geolatte.geom.Envelope
 import org.apache.commons.codec.binary.Base64
 import play.api.libs.functional.ContravariantFunctor
 import play.api.libs.iteratee.Enumerator
+
+import scala.concurrent.ExecutionContext.Implicits.global
 
 trait RenderableResource
 trait RenderableNonStreamingResource extends RenderableResource
@@ -29,6 +32,10 @@ trait Csvable extends RenderableNonStreamingResource {
 
 trait JsonStreamable extends RenderableStreamingResource {
   def toJsonStream : Enumerator[JsObject]
+}
+
+trait JsonStringStreamable extends RenderableStreamingResource {
+  def toJsonStringStream : Enumerator[String]
 }
 
 trait CsvStreamable extends RenderableStreamingResource {
@@ -63,14 +70,13 @@ case class MediaReaderResource(mediaReader: MediaReader) extends Jsonable {
   def toJson = Json.toJson(mediaReader)
 }
 
-case class FeaturesResource(totalOpt: Option[Long], features: List[JsObject]) extends Jsonable {
-  def toJson: JsValue = {
+case class FeaturesResource(totalOpt: Option[Long], features: Enumerator[JsObject]) extends JsonStringStreamable {
+  def toJsonStringStream: Enumerator[String] = {
     val total: Long = totalOpt.getOrElse(-1L)
-    Json.obj(
-      "total" -> total,
-      "count" -> features.length,
-      "features" -> features
-    )
+    val commaSeparate = new CommaSeparate(",")
+    Enumerator(s"""{ "total": $total, "features": [""") >>>
+      (features.map( Json.stringify ) &> commaSeparate) >>>
+      Enumerator("]}")
   }
 }
 

@@ -120,7 +120,7 @@ class TransactionAPISpec  extends InCollectionSpecification {
   def e5 = {
     val fs = featureArray(size=100).sample.get
     removeData(testDbName, testColName)
-    val data = fs.value map (j => Json.stringify(j)) mkString ConfigurationValues.jsonSeparator getBytes ("UTF-8")
+    val data = fs.value map (j => Json.stringify(j)) mkString ConfigurationValues.chunkSeparator getBytes ("UTF-8")
     val res1 = loadData(testDbName, testColName, data)
     val res2 = getList(testDbName, testColName, "")
 
@@ -160,7 +160,7 @@ class TransactionAPISpec  extends InCollectionSpecification {
   def e8 = {
     removeData(testDbName, testColName)
     val fs = featureArray(size=100).sample.get
-    val data = fs.value map (j => Json.stringify(j)) mkString ConfigurationValues.jsonSeparator getBytes ("UTF-8")
+    val data = fs.value map (j => Json.stringify(j)) mkString ConfigurationValues.chunkSeparator getBytes ("UTF-8")
     val res1 = postRemove(testDbName, testColName, Json.obj("query" -> "bla = ('we "))
 
     res1.applyMatcher { res =>

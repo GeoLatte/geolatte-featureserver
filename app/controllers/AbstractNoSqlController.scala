@@ -2,6 +2,7 @@ package controllers
 
 import nosql.postgresql.PostgresqlRepository
 import play.api.mvc._
+import utilities.EnumeratorUtility.CommaSeparate
 import utilities.SupportedMediaTypes
 import config.ConfigurationValues.{Format, Version}
 
@@ -63,6 +64,7 @@ trait AbstractNoSqlController extends Controller with FutureInstrumented {
       case (r: Csvable, Format.CSV)           => Ok(r.toCsv).as(SupportedMediaTypes(Format.CSV, v).toString)
       case (r: JsonStreamable, Format.JSON)   => Ok.chunked(toStream(r.toJsonStream)).as(SupportedMediaTypes(Format.JSON, v).toString)
       case (r: CsvStreamable, Format.CSV)     => Ok.chunked(toStream(r.toCsvStream)).as(SupportedMediaTypes(Format.CSV, v).toString)
+      case (r: JsonStringStreamable, Format.JSON) => Ok.chunked(toStream(r.toJsonStringStream)).as(SupportedMediaTypes(Format.JSON, v).toString)
       case _ => UnsupportedMediaType("No supported media type: " + request.acceptedTypes.mkString(";"))
     }
 
@@ -76,7 +78,7 @@ trait AbstractNoSqlController extends Controller with FutureInstrumented {
   // this code won't be called
   def toStream[A](features: Enumerator[A])(implicit toStr: A => String): Enumerator[Array[Byte]] = {
 
-    val finalSeparatorEnumerator = Enumerator.enumerate(List(ConfigurationValues.jsonSeparator.getBytes("UTF-8")))
+    val finalSeparatorEnumerator = Enumerator.enumerate(List(ConfigurationValues.chunkSeparator.getBytes( "UTF-8")))
 
     val startTime = System.nanoTime()
 
@@ -96,17 +98,8 @@ trait AbstractNoSqlController extends Controller with FutureInstrumented {
         }
     }
 
-    //this is due to James Roper (see https://groups.google.com/forum/#!topic/play-framework/PrPTIrLdPmY)
-    class CommaSeparate extends Enumeratee.CheckDone[String, String] {
-      val start = System.currentTimeMillis()
 
-      def continue[A](k: K[String, A]) = Cont {
-        case in@(Input.Empty) => this &> k(in)
-        case in: Input.El[String] => Enumeratee.map[String](ConfigurationValues.jsonSeparator + _) &> k(in)
-        case Input.EOF => Done(Cont(k), Input.EOF)
-      }
-    }
-    val commaSeparate = new CommaSeparate
+    val commaSeparate = new CommaSeparate(ConfigurationValues.chunkSeparator)
     val jsons = features.map(f => toStr(f)) &> commaSeparate
     val toBytes = Enumeratee.map[String](_.getBytes("UTF-8"))
     (jsons &> toBytes) andThen finalSeparatorEnumerator andThen enumInput(Input.EOF) //Enumerator.eof

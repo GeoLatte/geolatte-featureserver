@@ -89,14 +89,14 @@ class FeatureCollectionAPISpec extends InCollectionSpecification {
   def e4 = withTestFeatures(100, 10){
       (bbox: String, featuresIn01: JsArray) => getList(testDbName, testColName, Map("bbox" -> bbox, "start" -> 10)).applyMatcher(
         res => (res.status must equalTo(OK)) and (res.responseBody must beSome( (js: JsValue) =>
-          (if (configuredDatabase.equals("mongodb")) ok else js must matchTotalInJson(100) ) and (js must matchCountInJson(90))))
+          (if (configuredDatabase.equals("mongodb")) ok else js must matchTotalInJson(100) ) ))
       )
     }
 
   def e5 = withTestFeatures(100, 10) {
     (bbox: String, featuresIn01: JsArray) => getList(testDbName, testColName, Map("bbox" -> bbox, "limit" -> 10)).applyMatcher(
       res => (res.status must equalTo(OK)) and (res.responseBody must beSome((js: JsValue) =>
-        (if (configuredDatabase.equals("mongodb")) ok else js must matchTotalInJson(100) ) and (js must matchCountInJson(10))))
+        (if (configuredDatabase.equals("mongodb")) ok else js must matchTotalInJson(100) ) ))
     )
   }
 
