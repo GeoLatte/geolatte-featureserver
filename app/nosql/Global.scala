@@ -1,8 +1,6 @@
 package nosql
 
-import com.codahale.metrics.{Slf4jReporter, JmxReporter, MetricRegistry}
 import config.AppExecutionContexts
-import nl.grons.metrics.scala.InstrumentedBuilder
 import play.api._
 import mvc._
 import play.filters.gzip.GzipFilter
@@ -28,33 +26,33 @@ object Global extends GlobalSettings {
     Future { NotFound(s"Request ${request.path} not found.") }
   }
 
-  lazy val metricRegistry = new MetricRegistry()
-
-  lazy val jmxReporter = JmxReporter.forRegistry(metricRegistry).build()
-
-  lazy val logReporter = Slf4jReporter.forRegistry(metricRegistry)
-    .outputTo(LoggerFactory.getLogger("metrics"))
-    .convertRatesTo(TimeUnit.SECONDS)
-    .convertDurationsTo(TimeUnit.MILLISECONDS)
-    .build()
-
-  def startMetrics(app: Application) : Unit = {
-    if (app.mode == Mode.Prod) {
-      jmxReporter.start()
-      logReporter.start(1, TimeUnit.MINUTES)
-    }
-  }
-
-  def stopMetrics(app: Application) : Unit = {
-    if (app.mode == Mode.Prod) {
-      jmxReporter.stop()
-      logReporter.stop()
-    }
-  }
+//  lazy val metricRegistry = new {}
+//
+//  lazy val jmxReporter = JmxReporter.forRegistry(metricRegistry).build()
+//
+//  lazy val logReporter = Slf4jReporter.forRegistry(metricRegistry)
+//    .outputTo(LoggerFactory.getLogger("metrics"))
+//    .convertRatesTo(TimeUnit.SECONDS)
+//    .convertDurationsTo(TimeUnit.MILLISECONDS)
+//    .build()
+//
+//  def startMetrics(app: Application) : Unit = {
+//    if (app.mode == Mode.Prod) {
+//      jmxReporter.start()
+//      logReporter.start(1, TimeUnit.MINUTES)
+//    }
+//  }
+//
+//  def stopMetrics(app: Application) : Unit = {
+//    if (app.mode == Mode.Prod) {
+//      jmxReporter.stop()
+//      logReporter.stop()
+//    }
+//  }
 
 
   override def onStart(app: Application) {
-    startMetrics(app)
+//    startMetrics(app)
   }
 
   val requestLogger = LoggerFactory.getLogger("requests")
@@ -65,8 +63,8 @@ object Global extends GlobalSettings {
     nextFilter(requestHeader).map { result =>
       val endTime = System.currentTimeMillis
       val requestTime = endTime - startTime
-      val timer = metricRegistry.timer(s"requests.${requestHeader.path.tail.replaceAll("/", ".")}.${requestHeader.method.toLowerCase}")
-      timer.update(requestTime, TimeUnit.MILLISECONDS)
+//      val timer = metricRegistry.timer(s"requests.${requestHeader.path.tail.replaceAll("/", ".")}.${requestHeader.method.toLowerCase}")
+//      timer.update(requestTime, TimeUnit.MILLISECONDS)
       requestLogger.info(s"${requestHeader.method} ${requestHeader.uri} ; ${requestTime} ; ${result.header.status}")
       result.withHeaders("Request-Time" -> requestTime.toString)
 
@@ -74,7 +72,7 @@ object Global extends GlobalSettings {
   }
 
   override def onStop(app: Application): Unit = {
-    stopMetrics(app)
+//    stopMetrics(app)
     //TODO also stop repository connection pools (e.g. postgresql-async!)
   }
 
