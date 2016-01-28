@@ -1,7 +1,7 @@
 package controllers
 
 import play.api.libs.json._
-import play.api.mvc.{SimpleResult, Result, BodyParsers}
+import play.api.mvc.{Result, BodyParsers}
 import play.api.Logger
 import scala.concurrent.Future
 import config.AppExecutionContexts
@@ -27,7 +27,7 @@ object ViewController extends AbstractNoSqlController {
         }
         case JsSuccess(js, _) => {
           repository.saveView(db, collection, js++Json.obj("name" -> viewName))
-            .map[SimpleResult] (updatedExisting =>
+            .map[Result] (updatedExisting =>
                 if (updatedExisting ) Ok
                 else Created.withHeaders("Location" -> controllers.routes.ViewController.get(db, collection, viewName).url)
             ).recover(commonExceptionHandler(db, collection))
@@ -83,6 +83,6 @@ object ViewController extends AbstractNoSqlController {
     }
   }
 
-  private def viewDef2Result(db: String, col: String)(viewDef: JsObject): SimpleResult =
+  private def viewDef2Result(db: String, col: String)(viewDef: JsObject): Result =
     Ok(format(db: String, col: String)(viewDef)).as(SupportedMediaTypes(Format.JSON).toString())
 }

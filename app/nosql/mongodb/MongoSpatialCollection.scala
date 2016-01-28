@@ -111,9 +111,12 @@ abstract class MongoSpatialCollection(collection: JSONCollection, metadata: Meta
 
   def projection(sq: SpatialQuery) =  {
     //make sure we include  bbox and geometry property so that filtering works correctly
-    val flds = sq.projection ++ List(SpecialMongoProperties.BBOX, "geometry", "type")
-    val fldPairs = flds.map{ f => (f -> Json.toJsFieldJsValueWrapper(1)) }
-    Json.obj(fldPairs:_*)
+    if (sq.projection.isEmpty) Json.obj()
+    else {
+      val flds = sq.projection ++ List( SpecialMongoProperties.BBOX, "geometry", "type" )
+      val fldPairs = flds.map { f => (f -> Json.toJsFieldJsValueWrapper( 1 )) }
+      Json.obj( fldPairs: _* )
+    }
   }
 
   def run(query: SpatialQuery) : Enumerator[JsObject] = {

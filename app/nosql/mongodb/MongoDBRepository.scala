@@ -4,6 +4,8 @@ import controllers.IndexDef
 import org.geolatte.geom.Envelope
 import play.api.Logger
 import querylang.BooleanExpr
+import reactivemongo.api.collections.bson.BSONCollectionProducer
+import reactivemongo.api.commands.UpdateWriteResult
 import reactivemongo.api.gridfs.{DefaultFileToSave, GridFS}
 import reactivemongo.core.commands._
 import play.api.libs.iteratee._
@@ -25,11 +27,13 @@ import reactivemongo.api.indexes.Index
 import reactivemongo.api.indexes.IndexType.Ascending
 import nosql._
 
+import org.reactivemongo.play.json._
+
 
 object MongoDBRepository extends nosql.Repository with FutureInstrumented {
 
   type SpatialCollection = MongoSpatialCollection
-  type MediaStore = GridFS[BSONDocument, BSONDocumentReader, BSONDocumentWriter]
+  type MediaStore = GridFS[BSONSerializationPack.type]
 
   /**
    * combines the JSONCollection, Metadata and transformer.
@@ -55,7 +59,7 @@ object MongoDBRepository extends nosql.Repository with FutureInstrumented {
   private val systemDatabase = MongoSystemDB
 
   private val createdDBColl = {
-    connection.db(systemDatabase).collection[JSONCollection](DEFAULT_CREATED_DBS_COLLECTION)
+    connection(systemDatabase).collection[JSONCollection](DEFAULT_CREATED_DBS_COLLECTION)
   }
 
   def listDatabases: Future[List[String]] = {
@@ -188,7 +192,7 @@ object MongoDBRepository extends nosql.Repository with FutureInstrumented {
         IndexLevelField -> md.level,
         IdTypeField -> md.idType,
         CollectionField -> colName),
-        GetLastError(j = true, w = Some(BSONInteger(1)))
+        commands.WriteConcern.Journaled
       ).andThen {
         case Success(le) => Logger.info(s"Writing metadata for $colName has result: ${le.ok}")
         case Failure(t) => Logger.error(s"Writing metadata for $colName threw exception: ${t.getMessage}")
@@ -279,7 +283,7 @@ object MongoDBRepository extends nosql.Repository with FutureInstrumented {
 
 
   def getMediaStore(database: String, collection: String): Future[MediaStore] = {
-    import reactivemongo.api.collections.default._
+
     existsCollection(database, collection).map(exists =>
       if (exists) new GridFS(connection(database), "fs." + collection)(BSONCollectionProducer)
       else throw CollectionNotFoundException()
@@ -308,12 +312,15 @@ object MongoDBRepository extends nosql.Repository with FutureInstrumented {
     getMediaStore(database, collection).flatMap {
       gridFs => {
         Logger.info(s"Media object with id is searched: $id")
-        gridFs.find(BSONDocument("_id" -> new BSONObjectID(id)))
+        gridFs.find(BSONDocument("_id" -> BSONObjectID(id)))
           .headOption
           .filter(_.isDefined)
           .flatMap(file =>
           (gridFs.enumerate(file.get) |>>> Iteratee.fold[Array[Byte], Array[Byte]](Array[Byte]())((accu, part) => accu ++ part))
-            .map(binarydata => MediaReader(bson2String(file.get.id), file.get.md5, file.get.filename, file.get.length, file.get.contentType, binarydata))
+            .map(binarydata => MediaReader(
+              bson2String(file.get.id),
+              file.get.md5,
+              file.get.filename.getOrElse(""), file.get.length.toInt, file.get.contentType, binarydata))
           ).recover {
           case ex: Throwable => {
             Logger.warn(s"Media retrieval failed with exception ${ex.getMessage} of type: ${ex.getClass.getCanonicalName}")
@@ -341,17 +348,20 @@ object MongoDBRepository extends nosql.Repository with FutureInstrumented {
    * @return eventually true if this save resulted in the update of an existing view, false otherwise
    */
   def saveView(database: String, collection: String, viewDef: JsObject): Future[Boolean] = {
-    getViewDefs(database, collection).flatMap(c => {
-      val lastError = c.update(Json.obj("name" -> (viewDef \ "name").as[String]), viewDef,
-        awaitJournalCommit, upsert = true, multi = false)
-      lastError.map(le => (c, le))
-    }).flatMap { case (coll, lastError) =>
-      val indexLE = coll.indexesManager.ensure(Index(Seq(("name", Ascending)), unique = true))
-      indexLE.map(_ => lastError.updatedExisting)
-    }.andThen {
-      case Success(le) => Logger.info(s"Writing view $viewDef for $collection succeeded")
+    val result = for {
+      c <- getViewDefs(database, collection)
+      updateResult <- c.update(Json.obj("name" -> (viewDef \ "name").as[String]), viewDef,
+                               commands.WriteConcern.Journaled
+                               , upsert = true, multi = false)
+      _ <- c.indexesManager.ensure(Index(Seq(("name", Ascending)), unique = true))
+    } yield (updateResult.nModified == 1)
+
+
+    result.andThen {
+      case Success(_) => Logger.info(s"Writing view $viewDef for $collection succeeded")
       case Failure(t) => Logger.error(s"Writing metadata for $collection threw exception: ${t.getMessage}")
     }
+    result
   }
 
   def getViews(database: String, collection: String): Future[List[JsObject]] =
@@ -379,7 +389,7 @@ object MongoDBRepository extends nosql.Repository with FutureInstrumented {
   override def delete(database: String, collection: String, query: BooleanExpr): Future[Boolean] =
     getCollectionInfo(database, collection)
       .flatMap {
-      case (coll, _, _) => coll.remove(expr2JsObject(query), awaitJournalCommit)
+      case (coll, _, _) => coll.remove(expr2JsObject(query), commands.WriteConcern.Journaled)
     }.map(le => true)
 
   override def update(database: String, collection: String, query: BooleanExpr, updateSpec: JsObject): Future[Int] = {
@@ -387,9 +397,9 @@ object MongoDBRepository extends nosql.Repository with FutureInstrumented {
       .flatMap {
       case (coll, metadata, reads) => {
         val updateDoc = getUpdateDoc(reads, updateSpec)
-        coll.update(expr2JsObject(query), updateDoc, awaitJournalCommit, upsert = false, multi = true)
+        coll.update(expr2JsObject(query), updateDoc, commands.WriteConcern.Journaled, upsert = false, multi = true)
       }
-    }.map(le => le.updated)
+    }.map(le => le.n)
 
   }
 
@@ -403,7 +413,8 @@ object MongoDBRepository extends nosql.Repository with FutureInstrumented {
       case (coll, _, featureTransformer) => {
         val selectorDoc = Json.obj("id" -> (json \ "id").as[JsValue])
         val updateDoc = getUpdateDoc(featureTransformer, json)
-        coll.update(selectorDoc, updateDoc, awaitJournalCommit, upsert = true, multi = false)
+        Logger.debug(s"Upserting document in collection ${collection} : ${Json.stringify(json)}")
+        coll.update(selectorDoc, updateDoc, commands.WriteConcern.Journaled, upsert = true, multi = false)
       }
     }.map(le => true)
 

@@ -4,7 +4,7 @@ import config.AppExecutionContexts
 import controllers.Formats._
 import play.api.Logger
 import play.api.libs.json.{JsSuccess, JsError}
-import play.api.mvc.{SimpleResult, BodyParsers}
+import play.api.mvc.{Result, BodyParsers}
 
 import scala.concurrent.Future
 
@@ -21,7 +21,7 @@ object IndexController extends AbstractNoSqlController{
         }
         case JsSuccess(indexDef, _) => {
           repository.createIndex(db, collection, indexDef.copy(name = indexName))
-            .map[SimpleResult] (_ =>
+            .map[Result] (_ =>
                 Created.withHeaders("Location" -> controllers.routes.ViewController.get(db, collection, indexName).url)
           ).recover(commonExceptionHandler(db, collection))
         }
@@ -31,19 +31,19 @@ object IndexController extends AbstractNoSqlController{
 
   def list(db: String, collection: String) = repositoryAction {
     implicit req => {
-      repository.getIndices(db, collection).map[SimpleResult]{ indexNames => IndexDefsResource(db, collection, indexNames)  }
+      repository.getIndices(db, collection).map[Result]{ indexNames => IndexDefsResource(db, collection, indexNames)  }
     }.recover(commonExceptionHandler(db, collection))
   }
 
   def get(db: String, collection: String, index: String) = repositoryAction {
     implicit req => {
-      repository.getIndex(db, collection, index).map[SimpleResult]{ indexDef => IndexDefResource(db, collection, indexDef)  }
+      repository.getIndex(db, collection, index).map[Result]{ indexDef => IndexDefResource(db, collection, indexDef)  }
     }.recover(commonExceptionHandler(db, collection))
   }
 
   def delete(db: String, collection: String, index: String) = repositoryAction {
     implicit req => {
-      repository.dropIndex(db, collection, index).map[SimpleResult]{ _ => Ok  }
+      repository.dropIndex(db, collection, index).map[Result]{ _ => Ok  }
     }.recover(commonExceptionHandler(db, collection))
   }
 

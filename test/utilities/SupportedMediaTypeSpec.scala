@@ -14,7 +14,7 @@ class SupportedMediaTypeSpec extends Specification {
 
   def mkMediatype(mediatype: String, version: String = null) = if (version != null) mediatype + "; otherprop=1; version=\""  + version + "\";q=0.9" else s"$mediatype"
 
-  def mkHeader(mediatypeWithProps: String) = new FakeHeaders(List(("Accept", List("text/plain;q=0.8, " + mediatypeWithProps))))
+  def mkHeader(mediatypeWithProps: String) = new FakeHeaders(Seq(("Accept", "text/plain;q=0.8, " + mediatypeWithProps)))
 
   def mkRequest(mediatype: String, version: String = null) = {
     val mt : String = mkMediatype(mediatype, version)

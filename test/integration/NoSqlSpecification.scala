@@ -2,8 +2,9 @@ package integration
 
 import org.specs2._
 import org.specs2.matcher.{Expectable, Matcher}
-import org.specs2.specification.TagFragments.Tag
-import org.specs2.specification.{Fragments, Step}
+
+import org.specs2.specification.Step
+import org.specs2.specification.core.Fragments
 import play.api.{libs, Play}
 import play.api.Play._
 import play.api.libs.json.{Json, JsArray, JsObject, _}
@@ -22,9 +23,9 @@ abstract class NoSqlSpecification(app: FakeApplication = FakeApplication()) exte
   override def map(fs: =>Fragments) =
     sequential ^
       args(include = configuredDatabase) ^
-      Tag(configuredDatabase) ^ Step(Play.start(app)) ^
+      tag(configuredDatabase) ^ step(Play.start(app)) ^
         fs ^
-      Tag(configuredDatabase) ^ Step(Play.stop())
+      tag(configuredDatabase) ^ step(Play.stop(app))
 
 }
 
@@ -33,11 +34,11 @@ abstract class InDatabaseSpecification(app: FakeApplication = FakeApplication())
   override def map(fs: =>Fragments) =
     sequential ^
     args(include = configuredDatabase) ^
-      Tag(configuredDatabase) ^ Step(Play.start(app)) ^
-      Tag(configuredDatabase) ^ Step(makeDatabase(testDbName)) ^
+      tag(configuredDatabase) ^ step(Play.start(app)) ^
+      tag(configuredDatabase) ^ step(makeDatabase(testDbName)) ^
       fs ^
-      Tag(configuredDatabase) ^ Step(dropDatabase(testDbName)) ^
-      Tag(configuredDatabase) ^ Step(Play.stop())
+      tag(configuredDatabase) ^ step(dropDatabase(testDbName)) ^
+      tag(configuredDatabase) ^ step(Play.stop(app))
 }
 
 abstract class InCollectionSpecification(app: FakeApplication = FakeApplication()) extends NoSqlSpecification {
@@ -45,12 +46,12 @@ abstract class InCollectionSpecification(app: FakeApplication = FakeApplication(
   override def map(fs: =>Fragments) =
     sequential ^
     args(include = configuredDatabase) ^
-      Tag(configuredDatabase) ^ Step(Play.start(app)) ^
-      Tag(configuredDatabase) ^ Step(makeDatabase(testDbName)) ^
-      Tag(configuredDatabase) ^ Step(makeCollection(testDbName, testColName)) ^
+      tag(configuredDatabase) ^ step(Play.start(app)) ^
+      tag(configuredDatabase) ^ step(makeDatabase(testDbName)) ^
+      tag(configuredDatabase) ^ step(makeCollection(testDbName, testColName)) ^
       fs ^
-      Tag(configuredDatabase) ^ Step(dropDatabase(testDbName)) ^
-      Tag(configuredDatabase) ^ Step(Play.stop())
+      tag(configuredDatabase) ^ step(dropDatabase(testDbName)) ^
+      tag(configuredDatabase) ^ step(Play.stop(app))
 
   //utility and matcher definitions
 
@@ -81,13 +82,14 @@ abstract class InCollectionSpecification(app: FakeApplication = FakeApplication(
 
   def matchTotalInJson(expectedTotal: Int): Matcher[JsValue] = (
     (recJs: JsValue) => {
-      ((recJs \ "total").asOpt[Int] must beSome(expectedTotal)).isSuccess
-    }, "FeatureCollection Json doesn't have expected value for total field")
+      val optTotalReceived = (recJs \ "total").asOpt[Int]
+      ( optTotalReceived must beSome(expectedTotal)).isSuccess
+    }, s"FeatureCollection Json doesn't have expected value for total field ($expectedTotal).")
 
-  def matchCountInJson(expectedCount: Int): Matcher[JsValue] = (
-    (recJs: JsValue) => {
-      ((recJs \ "count").asOpt[Int] must beSome(expectedCount)).isSuccess
-    }, "FeatureCollection Json doesn't have expected value for count field")
+//  def matchCountInJson(expectedCount: Int): Matcher[JsValue] = (
+//    (recJs: JsValue) => {
+//      ((recJs \ "count").asOpt[Int] must beSome(expectedCount)).isSuccess
+//    }, "FeatureCollection Json doesn't have expected value for count field")
 
 
   def verify(rec: JsValue, expected: JsArray, sortMatters : Boolean = false) = rec match {

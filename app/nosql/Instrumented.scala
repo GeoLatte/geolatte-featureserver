@@ -11,7 +11,7 @@ import play.api.Logger
  */
 trait Instrumented  {
 
-  val metricRegistry = ???
+  val metricRegistry = null
 
 }
 

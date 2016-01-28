@@ -36,18 +36,18 @@ trait AbstractNoSqlController extends Controller with FutureInstrumented {
     case _ => sys.error("Configured with Unsupported database")
   }
 
-  def repositoryAction[T](bp: BodyParser[T])(action: Request[T] => Future[SimpleResult]) =
+  def repositoryAction[T](bp: BodyParser[T])(action: Request[T] => Future[Result]) =
     Action.async(bp) { request => action(request)}
 
 
-  def repositoryAction(action: Request[AnyContent] => Future[SimpleResult]): Action[AnyContent] =
+  def repositoryAction(action: Request[AnyContent] => Future[Result]): Action[AnyContent] =
     repositoryAction(BodyParsers.parse.anyContent)(action)
 
   implicit def toSimpleResult[A <: RenderableResource](result: A)
                                                       (implicit request: RequestHeader,
                                                        format: Option[Format.Value] = None,
                                                        filename: Option[String] = None,
-                                                       version: Option[Version.Value] = None): SimpleResult = {
+                                                       version: Option[Version.Value] = None): Result = {
 
 
     implicit def toStr(js: JsObject): String = Json.stringify(js)
@@ -105,7 +105,7 @@ trait AbstractNoSqlController extends Controller with FutureInstrumented {
     (jsons &> toBytes) andThen finalSeparatorEnumerator andThen enumInput(Input.EOF) //Enumerator.eof
   }
 
-  def commonExceptionHandler(db: String, col: String = ""): PartialFunction[Throwable, SimpleResult] = {
+  def commonExceptionHandler(db: String, col: String = ""): PartialFunction[Throwable, Result] = {
     case ex: DatabaseNotFoundException => NotFound(s"Database $db does not exist.")
     case ex: DatabaseAlreadyExistsException => Conflict(ex.getMessage)
     case ex: MediaObjectNotFoundException => NotFound(s"Media object does not exist.")

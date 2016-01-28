@@ -58,31 +58,31 @@ object ConfigurationValues {
     override def unapply (s: String): Option[Value] = values.find(_.toString == "v" + s.replace(".","_"))
   }
 
-  /**
-   * Provides acces to the current Play application.
-   *
-   * If Play itself hasn't started, we lazily create a default application so that all
-   * configuration information is accessible here.
-   */
-  lazy val currentApp = maybeApplication.getOrElse(
-    new DefaultApplication(new File("."), this.getClass.getClassLoader, None, Mode.Dev)
-  )
+//  /**
+//   * Provides acces to the current Play application.
+//   *
+//   * If Play itself hasn't started, we lazily create a default application so that all
+//   * configuration information is accessible here.
+//   */
+//  lazy val currentApp = maybeApplication.getOrElse(
+//    new DefaultApplication(new File("."), this.getClass.getClassLoader, None, Mode.Dev)
+//  )
 
   def getConfigString(key: String, default: String) : String =
-    currentApp.configuration.getString(key) match {
+    current.configuration.getString(key) match {
     case Some(value) => value
     case None => default
   }
 
   import scala.collection.JavaConversions._
   def getConfigStringList(key: String, default: List[String]) : List[String] =
-    currentApp.configuration.getStringList(key) match {
+    current.configuration.getStringList(key) match {
     case Some(value) => value.toList
     case None => default
   }
 
   def getConfigInt(key: String, default: Int) : Int =
-  currentApp.configuration.getInt(key) match {
+  current.configuration.getInt(key) match {
     case Some(value) => value
     case None => default
   }

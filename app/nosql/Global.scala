@@ -1,13 +1,12 @@
 package nosql
 
 import config.AppExecutionContexts
+import kamon.Kamon
 import play.api._
 import mvc._
-import play.filters.gzip.GzipFilter
 import mvc.Results._
 import scala.concurrent.Future
 import org.slf4j.LoggerFactory
-import java.util.concurrent.TimeUnit
 
 object Global extends GlobalSettings {
 
@@ -22,10 +21,11 @@ object Global extends GlobalSettings {
     Future { InternalServerError(views.html.defaultpages.error(useful)) }
   }
 
-  override def onHandlerNotFound(request: RequestHeader): Future[SimpleResult] = {
+  override def onHandlerNotFound(request: RequestHeader): Future[Result] = {
     Future { NotFound(s"Request ${request.path} not found.") }
   }
 
+//  Kamon.metrics.entity()
 //  lazy val metricRegistry = new {}
 //
 //  lazy val jmxReporter = JmxReporter.forRegistry(metricRegistry).build()
@@ -52,7 +52,7 @@ object Global extends GlobalSettings {
 
 
   override def onStart(app: Application) {
-//    startMetrics(app)
+      Kamon.start()
   }
 
   val requestLogger = LoggerFactory.getLogger("requests")
@@ -72,14 +72,10 @@ object Global extends GlobalSettings {
   }
 
   override def onStop(app: Application): Unit = {
-//    stopMetrics(app)
+    Kamon.shutdown()
     //TODO also stop repository connection pools (e.g. postgresql-async!)
   }
 
-
-  override def doFilter(next: EssentialAction) : EssentialAction = {
-    Filters(super.doFilter(next), loggingFilter, new GzipFilter())
-  }
 
 }
 

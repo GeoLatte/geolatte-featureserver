@@ -8,6 +8,9 @@ import play.api.libs.json._
 import nosql.mongodb.MongoDBRepository.CollectionInfo
 
 
+import org.reactivemongo.play.json._
+
+
 /**
  * @author Karel Maesen, Geovise BVBA
  *         creation-date: 9/13/13
@@ -25,12 +28,15 @@ case class MongoWriter(db: String, collection: String) extends FeatureWriter {
       fCollectionInfo.flatMap{ case (coll, smd, transfo) => {
         val docs = features.map(f => f.transform(transfo)).collect {
           case JsSuccess(transformed, _) => transformed
-        }
+        }.map(implicitly[coll.ImplicitlyDocumentProducer](_)) //for this last map see: https://groups.google.com/forum/#!topic/reactivemongo/dslaGJfxd6s
+
         Logger.debug(" Flushing data to mongodb (" + docs.size + " features)")
-        val fInt = coll.bulkInsert(Enumerator.enumerate(docs)).map(i => i.toLong)
+        val fInt = coll.bulkInsert(true)( docs:_* ).map(i => i.n.toLong)
+
         fInt.onSuccess {
           case num => Logger.info(s"Successfully inserted $num features")
         }
+
         fInt.recover {
           case t : Throwable => { Logger.warn(s"Insert failed with error: ${t.getMessage}"); 0L }
         }

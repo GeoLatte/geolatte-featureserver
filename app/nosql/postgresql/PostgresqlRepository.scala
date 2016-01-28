@@ -169,7 +169,7 @@ object PostgresqlRepository extends Repository {
       case _ => throw new IllegalArgumentException("No ID property of type String or Number")
     }
     val paramValues : Seq[Seq[Any]] = jsons.map{
-      case (json, env) =>  Seq( id(json \ "id") , unescapeJson(json), org.geolatte.geom.codec.Wkb.toWkb(env))
+      case (json, env) =>  Seq( id( (json \ "id").getOrElse(JsNull)) , unescapeJson(json), org.geolatte.geom.codec.Wkb.toWkb(env))
     }
     val numRowsAffected : Future[List[Long]] = executePreparedStmts(Sql.INSERT_DATA(database, collection),
       paramValues){_.rowsAffected}
@@ -205,7 +205,7 @@ object PostgresqlRepository extends Repository {
   override def upsert(database: String, collection: String, json: JsObject): Future[Boolean] = {
 
 
-    val idq = json \ "id" match {
+    val idq = (json \ "id").getOrElse(JsNull) match {
       case JsNumber(i) => s" id = ${i}"
       case JsString(i) => s" id = '${i}'"
       case _           => throw new IllegalArgumentException("Id neither string nor number in json.")
@@ -396,15 +396,12 @@ object PostgresqlRepository extends Repository {
       .parse(text)
       .asOpt[JsObject](reads)
 
-  private def toJsPathList(flds: List[String]) : List[JsPath] = {
-
-    val paths = flds.map {
-      spath => spath.split("\\.").foldLeft[JsPath](__)((jsp, pe) => jsp \ pe)
+  private def toJsPathList(flds: List[String]) : List[JsPath] =
+    if (flds.isEmpty) List()
+    else {
+      val paths = flds.map {_.split("\\.").foldLeft[JsPath](__)((jsp, pe) => jsp \ pe) }
+      paths ++ List(( __ \ "type"), ( __ \ "geometry"))
     }
-
-    if (paths.isEmpty) paths
-    else paths ++ List(( __ \ "type"), ( __ \ "geometry"))
-  }
 
   private def fldSortSpecToSortExpr(spec: FldSortSpec) : String = {
       //we use the #>> operator for 9.3 support, which extracts to text

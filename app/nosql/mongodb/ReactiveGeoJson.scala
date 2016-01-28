@@ -1,7 +1,7 @@
 package nosql.mongodb
 
 import nosql.FeatureWriter
-import play.api.mvc.{SimpleResult, BodyParser}
+import play.api.mvc.{BodyParser, Result}
 import play.api.libs.json._
 import play.api.libs.iteratee.Iteratee
 import play.Logger
@@ -25,6 +25,7 @@ object ReactiveGeoJson {
 
   /**
    * Result for the GeoJson parsing
+ *
    * @param msg the state message
    * @param warnings the list with Warning messages
    * @param dataRemaining the remaing data (unparseable final part of the previous chunk)
@@ -55,7 +56,7 @@ object ReactiveGeoJson {
     writer.add(fs).map( int => newState)
   }
 
-  def mkStreamingIteratee(writer: FeatureWriter, sep: String)(implicit ec: ExecutionContext) : Iteratee[Array[Byte], Either[SimpleResult, Future[State]]] =
+  def mkStreamingIteratee(writer: FeatureWriter, sep: String)(implicit ec: ExecutionContext) : Iteratee[Array[Byte], Either[Result, Future[State]]] =
     Iteratee.fold( Future{ State() } ) {
       (fState: Future[State], chunk: Array[Byte]) => fState.flatMap( state => processChunk(writer, state, chunk, sep))
     }.map( fstate => Right(fstate) )

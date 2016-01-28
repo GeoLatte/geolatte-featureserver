@@ -33,7 +33,7 @@ object MediaController extends AbstractNoSqlController {
           case JsSuccess(m, _) => {
             MongoDBRepository
               .saveMedia(db, collection, Enumerator.enumerate(List(m.data)), m.name, Some(m.contentType))
-              .map[SimpleResult](res => {
+              .map[Result](res => {
               val url = routes.MediaController.get(db, collection, res.id).url
               MediaMetadataResource(res.id, res.md5, url)
             })
@@ -50,7 +50,7 @@ object MediaController extends AbstractNoSqlController {
       if (repository != MongoDBRepository) {
         Future.successful(NotImplemented)
       } else {
-        MongoDBRepository.getMedia(db, collection, id).map[SimpleResult](res => MediaReaderResource(res))
+        MongoDBRepository.getMedia(db, collection, id).map[Result](res => MediaReaderResource(res))
           .recover(commonExceptionHandler(db, collection))
       }
   }

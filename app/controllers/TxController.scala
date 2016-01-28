@@ -79,7 +79,7 @@ object TxController extends AbstractNoSqlController {
   private def extract[T <: JsValue : ClassTag ](in : Option[JsValue], key: String) : Try[T] =
     Try {
       in.map {
-        js => js \ key
+        js => (js \ key).getOrElse(JsNull)
       } match {
         case Some(v: T) => v
         case _ => throw new InvalidParamsException(s"Request body $in isn't a Json with an  $key property of correct type")

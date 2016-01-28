@@ -1,6 +1,5 @@
 package integration
 
-import org.specs2.specification.Step
 import play.api.libs.json._
 import play.api.mvc.AnyContentAsEmpty
 
@@ -28,7 +27,7 @@ class DatabaseAPISpec extends NoSqlSpecification {
       OK on deleting the database                       ${e7}
       OK when deleting again (DELETE is Idempotent)     ${e7}
       array without name of db, after drop              ${e8}
-                                                        ${Step(cleanup)}
+                                                        ${step(cleanup)}
                                                         ${section("mongodb", "postgresql")}
 
   """
