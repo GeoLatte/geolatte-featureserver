@@ -1,10 +1,11 @@
 package integration
 
 import org.specs2._
+import org.specs2.main.{Arguments, ArgProperty}
 import org.specs2.matcher.{Expectable, Matcher}
 
 import org.specs2.specification.Step
-import org.specs2.specification.core.Fragments
+import org.specs2.specification.core.{Env, SpecStructure, Fragments}
 import play.api.{libs, Play}
 import play.api.Play._
 import play.api.libs.json.{Json, JsArray, JsObject, _}
@@ -20,38 +21,42 @@ abstract class NoSqlSpecification(app: FakeApplication = FakeApplication()) exte
 
   lazy val configuredDatabase  : String = app.configuration.getString("fs.db").getOrElse("mongodb")
 
+  //override decorate so we can inject 'include' en 'sequential' arguments
+  override def decorate(is: SpecStructure, env: Env) = {
+    val dec = super.decorate( is, env )
+    dec.setArguments(dec.arguments  <| args(include=configuredDatabase, sequential=true) )
+  }
+
   override def map(fs: =>Fragments) =
-    sequential ^
-      args(include = configuredDatabase) ^
-      tag(configuredDatabase) ^ step(Play.start(app)) ^
+      step(Play.start(app)) ^ tag(configuredDatabase) ^
         fs ^
-      tag(configuredDatabase) ^ step(Play.stop(app))
+      step(Play.stop(app)) ^ tag(configuredDatabase)
 
 }
 
 abstract class InDatabaseSpecification(app: FakeApplication = FakeApplication()) extends NoSqlSpecification {
   import integration.RestApiDriver._
-  override def map(fs: =>Fragments) =
-    sequential ^
-    args(include = configuredDatabase) ^
-      tag(configuredDatabase) ^ step(Play.start(app)) ^
-      tag(configuredDatabase) ^ step(makeDatabase(testDbName)) ^
+
+  override def map(fs: => Fragments) =
+      step( Play.start( app ) ) ^ tag( configuredDatabase ) ^
+      step( makeDatabase( testDbName ) ) ^ tag( configuredDatabase ) ^
       fs ^
-      tag(configuredDatabase) ^ step(dropDatabase(testDbName)) ^
-      tag(configuredDatabase) ^ step(Play.stop(app))
+      step( dropDatabase( testDbName ) ) ^ tag( configuredDatabase ) ^
+      step( Play.stop( app ) ) ^ tag(configuredDatabase)
 }
 
 abstract class InCollectionSpecification(app: FakeApplication = FakeApplication()) extends NoSqlSpecification {
   import integration.RestApiDriver._
-  override def map(fs: =>Fragments) =
-    sequential ^
-    args(include = configuredDatabase) ^
-      tag(configuredDatabase) ^ step(Play.start(app)) ^
-      tag(configuredDatabase) ^ step(makeDatabase(testDbName)) ^
-      tag(configuredDatabase) ^ step(makeCollection(testDbName, testColName)) ^
+
+  override def map(fs: => Fragments) =
+      step( Play.start( app ) ) ^ tag( configuredDatabase ) ^
+      step( makeDatabase( testDbName ) ) ^ tag( configuredDatabase ) ^
+      step( makeCollection( testDbName, testColName ) ) ^ tag( configuredDatabase ) ^
       fs ^
-      tag(configuredDatabase) ^ step(dropDatabase(testDbName)) ^
-      tag(configuredDatabase) ^ step(Play.stop(app))
+      step( dropDatabase( testDbName ) ) ^ tag( configuredDatabase ) ^
+      step( Play.stop( app ) ) ^ tag( configuredDatabase )
+
+
 
   //utility and matcher definitions
 
@@ -68,8 +73,7 @@ abstract class InCollectionSpecification(app: FakeApplication = FakeApplication(
     (js: JsValue) => {
       val receivedFeatureArray = (js \ "features").as[JsValue]
       (receivedFeatureArray must beFeatures(expected)).isSuccess
-
-    }, "Featurecollection Json doesn't contain expected features")
+    }, s"Featurecollection Json doesn't contain expected features (${Json.stringify(expected)})")
 
   def matchFeaturesInCsv(expectedColumnHeader: String): Matcher[Seq[String]] = (
     (received: Seq[String]) => {
@@ -85,12 +89,6 @@ abstract class InCollectionSpecification(app: FakeApplication = FakeApplication(
       val optTotalReceived = (recJs \ "total").asOpt[Int]
       ( optTotalReceived must beSome(expectedTotal)).isSuccess
     }, s"FeatureCollection Json doesn't have expected value for total field ($expectedTotal).")
-
-//  def matchCountInJson(expectedCount: Int): Matcher[JsValue] = (
-//    (recJs: JsValue) => {
-//      ((recJs \ "count").asOpt[Int] must beSome(expectedCount)).isSuccess
-//    }, "FeatureCollection Json doesn't have expected value for count field")
-
 
   def verify(rec: JsValue, expected: JsArray, sortMatters : Boolean = false) = rec match {
     case jsv: JsArray =>

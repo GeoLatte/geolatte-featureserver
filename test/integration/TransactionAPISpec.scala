@@ -62,6 +62,7 @@ class TransactionAPISpec  extends InCollectionSpecification {
   val idGen = Gen.id
   def feature(mc: String = "") = Gen.geoJsonFeature(idGen, geom(mc), prop)
   def featureWithStringId(mc : String = "") = Gen.geoJsonFeature(idString, geom(mc), prop)
+  def featureWithIntId(mc : String = "") = Gen.geoJsonFeature(id, geom(mc), prop)
   def featureArray(mc: String = "", size: Int = 10) = Gen.geoJsonFeatureArray(feature(mc), size)
 
   def e1 = {
@@ -143,8 +144,12 @@ class TransactionAPISpec  extends InCollectionSpecification {
   }
 
   def e63 = {
-    val f = featureWithStringId().sample.get
-    postUpsert(testDbName, testColName, f).status must equalTo(BAD_REQUEST)
+    val newColName = testColName + "2"
+    makeCollection(testDbName, newColName, metaWithTextIdType)
+    val f = featureWithIntId().sample.get
+    val res = postUpsert(testDbName, newColName, f).status must equalTo(BAD_REQUEST)
+    deleteCollection(testDbName, newColName)
+    res
   }
 
   def e7 = {

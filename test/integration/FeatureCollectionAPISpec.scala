@@ -47,11 +47,14 @@ class FeatureCollectionAPISpec extends InCollectionSpecification {
 
      The FeatureCollection /query in  CSV should:
         return the objects with all attributes within JSON Object tree            $e13
+                                                                                  ${section( "mongodb", "postgresql" )}
 
-     Projection may specify fields not in inputJson
+
+                                                                                  ${section( "postgresql" )}
+     Projection may specify fields not in inputJson (works only on postgresql)
             with Json output, fields are set to JsNull                            $e16
             with CSV output, fields are empty strings                             $e17
-                                                                                  ${section("mongodb", "postgresql")}
+                                                                                  ${section("postgresql")}
   """
 
   //import default values
