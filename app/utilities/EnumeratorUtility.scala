@@ -1,9 +1,8 @@
 package utilities
 
-import config.ConfigurationValues
 import play.api.libs.iteratee._
 
-import scala.concurrent.{ExecutionContext, Future}
+import scala.concurrent.ExecutionContext
 
 /**
   * Created by Karel Maesen, Geovise BVBA on 24/11/14.

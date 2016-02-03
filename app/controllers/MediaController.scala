@@ -1,12 +1,13 @@
 package controllers
 
-import play.api.mvc._
+import config.AppExecutionContexts
+import nosql.mongodb.MongoDBRepository
+import play.api.Logger
 import play.api.libs.iteratee._
 import play.api.libs.json._
+import play.api.mvc._
+
 import scala.concurrent.Future
-import config.AppExecutionContexts
-import play.api.{http, Logger}
-import nosql.mongodb.MongoDBRepository
 
 /**
  * @author Karel Maesen, Geovise BVBA
@@ -26,19 +27,18 @@ object MediaController extends AbstractNoSqlController {
         Future.successful(NotImplemented)
       } else {
         req.body.validate[MediaObjectIn] match {
-          case JsError(er) => {
+          case JsError(er) =>
             Logger.warn(er.mkString("\n"))
             Future.successful(BadRequest("Invalid media object"))
-          }
-          case JsSuccess(m, _) => {
+
+          case JsSuccess(m, _) =>
             MongoDBRepository
               .saveMedia(db, collection, Enumerator.enumerate(List(m.data)), m.name, Some(m.contentType))
               .map[Result](res => {
-              val url = routes.MediaController.get(db, collection, res.id).url
-              MediaMetadataResource(res.id, res.md5, url)
-            })
+                val url = routes.MediaController.get(db, collection, res.id).url
+                MediaMetadataResource(res.id, res.md5, url)
+              })
               .recover(commonExceptionHandler(db, collection))
-          }
         }
       }
     }

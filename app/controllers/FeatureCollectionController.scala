@@ -1,40 +1,30 @@
 package controllers
 
-import org.supercsv.util.CsvContext
-import querylang.{BooleanAnd, QueryParser, BooleanExpr}
-
-import scala.collection.mutable.ListBuffer
-import scala.collection.parallel.mutable
-import scala.language.reflectiveCalls
-import scala.language.implicitConversions
-
-import org.geolatte.geom.{Point, Geometry, Envelope}
-import org.geolatte.geom.crs.CrsId
-import play.api.mvc._
-import play.api.Logger
-import play.api.libs.iteratee._
+import Exceptions._
 import config.AppExecutionContexts
-import play.api.libs.json._
+import nosql._
 import nosql.json.GeometryReaders._
+import org.geolatte.geom.crs.CrsId
+import org.geolatte.geom.{Envelope, Geometry, Point}
 import org.supercsv.encoder.DefaultCsvEncoder
 import org.supercsv.prefs.CsvPreference
-import scala.concurrent.Future
-
-import play.api.libs.json.JsString
-import play.api.libs.json.JsBoolean
-
-import play.api.libs.json.JsNumber
+import org.supercsv.util.CsvContext
+import play.api.Logger
+import play.api.libs.iteratee._
+import play.api.libs.json.{JsBoolean, JsNumber, JsObject, JsString, _}
+import play.api.mvc._
+import querylang.{BooleanAnd, BooleanExpr, QueryParser}
 import utilities.{EnumeratorUtility, QueryParam}
-import nosql._
-import play.api.libs.json.JsObject
 
-import scala.util.{Try, Failure, Success}
+import scala.collection.mutable.ListBuffer
+import scala.concurrent.Future
+import scala.language.{implicitConversions, reflectiveCalls}
+import scala.util.{Failure, Success, Try}
 
 
 object FeatureCollectionController extends AbstractNoSqlController with FutureInstrumented {
 
   import AppExecutionContexts.streamContext
-
   import config.ConfigurationValues._
   val COLLECTION_LIMIT = MaxReturnItems
 
@@ -162,9 +152,9 @@ object FeatureCollectionController extends AbstractNoSqlController with FutureIn
    * converts a JsObject Enumerator to an RenderableStreamingResource supporting both Json and Csv output
    *
    * Limitations: when the passed Json is not a valid GeoJson object, this will pass a stream of empty points
-   * @param enum
-   * @param req
-   * @return
+   * @param enum GeoJSON enumerator
+   * @param req request header
+   * @return returns the Reponse Stream
    */
   implicit def enumJsonToResult(enum: Enumerator[JsObject])(implicit req: RequestHeader) =
     new JsonStreamable with CsvStreamable {
@@ -177,7 +167,7 @@ object FeatureCollectionController extends AbstractNoSqlController with FutureIn
 
       def expand(v : JsObject) : Seq[(String, String)] =
         utilities.JsonHelper.flatten(v) sortBy {
-          case (k,v) => k
+          case (k,_) => k
         } map {
         case (k, v: JsString)   => (k, encode(v) )
         case (k, v: JsNumber)   => (k, Json.stringify(v) )
@@ -212,10 +202,9 @@ object FeatureCollectionController extends AbstractNoSqlController with FutureIn
           else toCsvHeader(js)  + "\n" + toCsvRecord(js)
       } match {
         case Success(v) => v
-        case Failure(t) => {
+        case Failure(t) =>
           Logger.error(s"Failure to encode $js in CSV. Message is: ")
           ""
-        }
       }
 
       def toJsonStream = enum
@@ -294,7 +283,7 @@ object FeatureCollectionController extends AbstractNoSqlController with FutureIn
 
     def apply(s: String, crs: CrsId): Option[Envelope] = {
       s match {
-        case bbox_pattern(minx, miny, maxx, maxy) => {
+        case bbox_pattern(minx, miny, maxx, maxy) =>
           try {
             val env = new Envelope(minx.toDouble, miny.toDouble, maxx.toDouble, maxy.toDouble, crs)
             if (!env.isEmpty) Some(env)
@@ -302,7 +291,6 @@ object FeatureCollectionController extends AbstractNoSqlController with FutureIn
           } catch {
             case _: Throwable => None
           }
-        }
         case _ => None
       }
     }

@@ -1,12 +1,6 @@
 package config
 
-import java.io.File
-
-import nosql.mongodb.MongoDBRepository
-import play.api.{Mode, DefaultApplication}
-
 import scala.language.implicitConversions
-import play.api.Play._
 
 /**
  * @author Karel Maesen, Geovise BVBA

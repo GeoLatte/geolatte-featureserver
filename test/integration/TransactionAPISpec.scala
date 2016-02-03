@@ -29,15 +29,19 @@ class TransactionAPISpec  extends InCollectionSpecification {
      The transaction /insert should:
         return OK when the collection exists, and data is valid                   $e5
         metadata query returns the inserted number of objects                     $e6
-        accept Json values with string-value ID props if id-type is 'text'        $e62
-        refuses Json values with numerical ID props if id-type is 'text'          $e63
 
-     The transaction /delete should:
+      The transaction /delete should:
         deleting an element and return status OK                                  $e7
 
       The transaction /delete should:
         return status code BAD_REQUEST when query is malformed                    $e8
                                                                                   ${section("mongodb", "postgresql")}
+
+                                                                                  ${section("postgresql")}
+      The transaction /insert should:
+        accept Json values with string-value ID props if id-type is 'text'        $e62
+        refuses Json values with numerical ID props if id-type is 'text'          $e63
+                                                                                  ${section( "postgresql" )}
 
   """
 

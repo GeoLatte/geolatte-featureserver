@@ -1,24 +1,21 @@
 package controllers
 
+import config.AppExecutionContexts.streamContext
+import config.ConfigurationValues
+import config.ConfigurationValues.{Format, Version}
+import nosql._
+import Exceptions._
+import nosql.mongodb._
 import nosql.postgresql.PostgresqlRepository
+import play.Logger
+import play.api.libs.iteratee._
+import play.api.libs.json._
 import play.api.mvc._
 import utilities.EnumeratorUtility.CommaSeparate
 import utilities.SupportedMediaTypes
-import config.ConfigurationValues.{Format, Version}
-
-import play.Logger
-import nosql.mongodb._
 
 import scala.concurrent.Future
-import play.api.libs.iteratee._
-import play.api.libs.json._
-import config.ConfigurationValues
-
-import scala.language.implicitConversions
-import scala.language.reflectiveCalls
-
-import config.AppExecutionContexts.streamContext
-import nosql._
+import scala.language.{implicitConversions, reflectiveCalls}
 
 
 /**
@@ -26,8 +23,6 @@ import nosql._
  *         creation-date: 10/11/13
  */
 trait AbstractNoSqlController extends Controller with FutureInstrumented {
-
-  import play.api.Play.current
 
   //TODO the resolution belongs properly in ConfigurationValues, but then should be split (definitionsettings/defaults vs configured values)
   val repository: Repository = config.ConfigurationValues.configuredRepository match {
@@ -89,7 +84,7 @@ trait AbstractNoSqlController extends Controller with FutureInstrumented {
      *
      */
     def enumInput[E](e: Input[E]) = new Enumerator[E] {
-      def apply[A](i: Iteratee[E, A]): Future[Iteratee[E, A]] =
+      def apply[B](i: Iteratee[E, B]) =
         futureTimed("json-feature-enumerator", startTime) {
           i.fold {
             case Step.Cont(k) => Future(k(e))
@@ -114,10 +109,9 @@ trait AbstractNoSqlController extends Controller with FutureInstrumented {
     case ex: CollectionAlreadyExistsException => Conflict(ex.getMessage)
     case ex: ViewObjectNotFoundException => NotFound(s"View object does not exist.")
     case ex: InvalidParamsException => BadRequest(s"Invalid parameters: ${ex.getMessage}")
-    case ex: Throwable => {
+    case ex: Throwable =>
       Logger.error(s"Internal server error with message : ${ex.getMessage}", ex)
       InternalServerError(s"Internal server error ${ex.getClass.getCanonicalName} with message : ${ex.getMessage}")
-    }
   }
 
 }

@@ -1,21 +1,14 @@
 package nosql.mongodb
 
 import nosql.FeatureWriter
-import play.api.mvc.{BodyParser, Result}
-import play.api.libs.json._
-import play.api.libs.iteratee.Iteratee
 import play.Logger
-import reactivemongo.api._
-import reactivemongo.bson._
-import reactivemongo.bson.DefaultBSONHandlers._
-
-import play.modules.reactivemongo._
-import play.modules.reactivemongo.json.ImplicitBSONHandlers._
-import config.ConfigurationValues
-import scala.concurrent.{Future, ExecutionContext}
-import play.api.libs.json.JsSuccess
-import scala.util.Try
+import play.api.libs.iteratee.Iteratee
+import play.api.libs.json.{JsSuccess, _}
+import play.api.mvc.{BodyParser, Result}
 import utilities.JsonHelper
+
+import scala.concurrent.{ExecutionContext, Future}
+import scala.util.Try
 
 /**
  * @author Karel Maesen, Geovise BVBA

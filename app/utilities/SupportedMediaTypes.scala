@@ -1,9 +1,8 @@
 package utilities
 
 
-import config.ConfigurationValues.{Version, Format}
-import play.api.Logger
-import play.api.http.{MediaType, MediaRange}
+import config.ConfigurationValues.{Format, Version}
+import play.api.http.MediaType
 import play.api.mvc.RequestHeader
 
 
@@ -58,9 +57,9 @@ object SupportedMediaTypes {
    * @param header the RequestHeader from which to extract the Accepted format and versions
    * @return
    */
-  def unapply(header: RequestHeader): Option[(Format.Value, Version.Value)] = header.acceptedTypes.map {
+  def unapply(header: RequestHeader): Option[(Format.Value, Version.Value)] = header.acceptedTypes.flatMap {
     case SupportedMediaTypes(format, version) => Some(format, version)
     case _ => None
-  }.flatten.headOption
+  }.headOption
 
 }

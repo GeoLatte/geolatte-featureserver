@@ -2,8 +2,6 @@ package nosql.postgresql
 
 import querylang._
 
-import scala.util.{Failure, Success, Try}
-
 /**
 * Created by Karel Maesen, Geovise BVBA on 23/01/15.
 */

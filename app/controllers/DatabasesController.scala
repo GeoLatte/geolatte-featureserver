@@ -2,13 +2,11 @@ package controllers
 
 import nosql.Metadata
 import play.api.mvc._
-import play.api.libs.json.{Json, JsValue, JsError, JsNull}
-import play.modules.reactivemongo.json.collection.JSONCollection
+import play.api.libs.json._
 import scala.concurrent.Future
 import play.Logger
-import scala.Some
-import nosql._
-import nosql.mongodb.MongoDBRepository
+import Exceptions._
+
 
 
 /**
@@ -38,14 +36,12 @@ object DatabasesController extends AbstractNoSqlController {
   def putDb(db: String) = repositoryAction(
     implicit request => repository.createDb(db).map(_ => Created(s"database $db created")).recover {
       case ex: DatabaseAlreadyExistsException => Conflict(ex.getMessage)
-      case ex: DatabaseCreationException => {
+      case ex: DatabaseCreationException =>
         Logger.error("Error: creating database", ex)
         InternalServerError(ex.getMessage)
-      }
-      case t => {
+      case t =>
         Logger.error("Error: creating database", t)
         InternalServerError(s"${t.getMessage}")
-      }
     }
   )
 
@@ -67,7 +63,7 @@ object DatabasesController extends AbstractNoSqlController {
       def parse(body: JsValue) = body match {
         case JsNull => Left(Json.obj("error" -> "Received empty request body (null json)."))
         case js: JsValue => js.validate(Formats.CollectionFormat).fold(
-          invalid = errs => Left(JsError.toFlatJson(errs)),
+          invalid = (errors ) => Left(JsError.toFlatJson(errors)), //is deprecated, but can't use alternative because it's private
           valid = v => Right(v))
         case _ => Left(Json.obj("error" -> "Received no request body."))
       }

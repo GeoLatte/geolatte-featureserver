@@ -8,7 +8,7 @@ package nosql.json
 import scala.language.implicitConversions
 
 import play.api.libs.json._
-import play.api.libs.functional.syntax._
+//import play.api.libs.functional.syntax._
 import org.geolatte.geom._
 import org.geolatte.geom.crs.CrsId
 import play.api.data.validation.ValidationError
@@ -80,7 +80,7 @@ object GeometryReaders {
       if (array.value.isEmpty) JsSuccess(EmptyExtent)
       else
         Try{
-          val xmin = array.value(0).as[Double]
+          val xmin = array.head.as[Double]
           val ymin = array.value(1).as[Double]
           val xmax = array.value(2).as[Double]
           val ymax = array.value(3).as[Double]
@@ -105,11 +105,10 @@ object GeometryReaders {
     }
     seqPnts match {
       case Seq() => EmptyPointSequence.INSTANCE
-      case _ => {
+      case _ =>
         val fp = seqPnts.head
         val builder = PointSequenceBuilders.variableSized(fp.getDimensionalFlag, fp.getCrsId)
         seqPnts.foldLeft(builder)((b, p) => b.add(p)).toPointSequence
-      }
     }
   }
 
@@ -129,10 +128,9 @@ object GeometryReaders {
           Position(x.value.doubleValue(), y.value.doubleValue(), z.value.doubleValue())
         case Seq((x: JsNumber), (y: JsNumber), (z: JsNumber), (m:JsNumber)) =>
           Position(x.value.doubleValue(), y.value.doubleValue(), z.value.doubleValue(), m.value.doubleValue() )
-        case psv: Seq[_] => {
+        case psv: Seq[_] =>
           val pl = psv.foldLeft(ListBuffer[Positions]())( (result, el) => result :+ toPos(el) ).toList
           PositionList(pl)
-        }
       }
     }
 
@@ -154,14 +152,13 @@ object GeometryReaders {
     def toGeometry(typeKey: String, pos: Positions, geomcrs: Option[CrsId]): Geometry = {
       val crs = geomcrs.getOrElse(defaultCrs)
       (typeKey.toLowerCase, pos) match {
-        case ("point", pos) => new Point(positionList2PointSequence(Seq(pos))(crs))
+        case ("point", p) => new Point(positionList2PointSequence(Seq(p))(crs))
         case ("linestring", PositionList(list)) => mkLineString(list, crs)
-        case ("multilinestring", PositionList(list)) => {
+        case ("multilinestring", PositionList(list)) =>
           val linestrings: Array[LineString] = list.collect {
             case PositionList(l) => mkLineString(l, crs)
           }.toArray
           new MultiLineString(linestrings)
-        }
         case _ => throw new UnsupportedOperationException()
       }
     }
@@ -187,6 +184,7 @@ object GeometryReaders {
         case GeometryType.POLYGON => "Polygon"
         case GeometryType.MULTI_POLYGON => "MultiPolygon"
         case GeometryType.GEOMETRY_COLLECTION => "GeometryCollection"
+        case _ => sys.error("Unknown Geometry type")
       }
     )
   }
@@ -210,10 +208,9 @@ object GeometryReaders {
 
     def writes(col: PointCollection): JsArray = col match {
       case ps : PointSequence => write(ps)
-      case cc : ComplexPointCollection => {
+      case cc : ComplexPointCollection =>
         val buf = cc.getPointSets.foldLeft( ListBuffer[JsArray]() ) ( (buf, c) => {buf.append(writes(c)); buf} )
         JsArray(buf)
-      }
     }
   }
 

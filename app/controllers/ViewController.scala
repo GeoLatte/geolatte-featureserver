@@ -1,13 +1,13 @@
 package controllers
 
-import play.api.libs.json._
-import play.api.mvc.{Result, BodyParsers}
-import play.api.Logger
-import scala.concurrent.Future
 import config.AppExecutionContexts
-import utilities.{JsonHelper, QueryParam, SupportedMediaTypes}
 import config.ConfigurationValues.Format
-import nosql.mongodb.MongoDBRepository
+import play.api.Logger
+import play.api.libs.json._
+import play.api.mvc.{BodyParsers, Result}
+import utilities.{JsonHelper, QueryParam, SupportedMediaTypes}
+
+import scala.concurrent.Future
 
 object ViewController extends AbstractNoSqlController {
 
@@ -21,17 +21,16 @@ object ViewController extends AbstractNoSqlController {
   def put(db: String, collection: String, viewName: String) = repositoryAction(BodyParsers.parse.tolerantJson) {
     implicit req => {
       req.body.validate(ViewDefIn) match {
-        case JsError(er) => {
+        case JsError(er) =>
           Logger.warn(er.mkString("\n"))
           Future.successful(BadRequest("Invalid view definition: " + er.mkString("\n")))
-        }
-        case JsSuccess(js, _) => {
+
+        case JsSuccess(js, _) =>
           repository.saveView(db, collection, js++Json.obj("name" -> viewName))
             .map[Result] (updatedExisting =>
                 if (updatedExisting ) Ok
                 else Created.withHeaders("Location" -> controllers.routes.ViewController.get(db, collection, viewName).url)
             ).recover(commonExceptionHandler(db, collection))
-        }
       }
     }
   }

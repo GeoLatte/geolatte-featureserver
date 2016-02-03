@@ -1,9 +1,9 @@
 package nosql.postgresql
 
-import nosql.{FeatureTransformers, Metadata, FeatureWriter}
-import org.geolatte.geom.{Polygon, Envelope}
+import nosql.{FeatureTransformers, FeatureWriter, Metadata}
+import org.geolatte.geom.Polygon
 import play.api.Logger
-import play.api.libs.json.{JsSuccess, Reads, JsObject}
+import play.api.libs.json.{JsObject, Reads}
 
 import scala.concurrent.Future
 
@@ -36,8 +36,10 @@ case class PGWriter(db: String, collection: String) extends FeatureWriter {
         fLng.onSuccess {
           case num => Logger.info(s"Successfully inserted $num features")
         }
-        fLng.recover {
-          case t : Throwable => { Logger.warn(s"Insert failed with error: ${t.getMessage}"); 0l }
+        fLng.recover  {
+          case t : Throwable =>
+            Logger.warn(s"Insert failed with error: ${t.getMessage}")
+            0l
         }
         fLng
       }

@@ -1,33 +1,31 @@
 package nosql.mongodb
 
-import controllers.IndexDef
-import org.geolatte.geom.Envelope
-import play.api.Logger
-import querylang.BooleanExpr
-import reactivemongo.api.collections.bson.BSONCollectionProducer
-import reactivemongo.api.commands.UpdateWriteResult
-import reactivemongo.api.gridfs.{DefaultFileToSave, GridFS}
-import reactivemongo.core.commands._
-import play.api.libs.iteratee._
-import reactivemongo.api._
-import play.api.libs.json._
-import play.api.libs.functional.syntax._
-import utilities.JsonHelper
-import scala.concurrent.Future
-import nosql.json.GeometryReaders._
-import scala.util.Failure
-import scala.util.Success
-import play.modules.reactivemongo.json.collection.JSONCollection
-import reactivemongo.core.commands.GetLastError
-import reactivemongo.api.FailoverStrategy
-import reactivemongo.bson._
 import config.AppExecutionContexts.streamContext
-import scala.language.implicitConversions
+import controllers.IndexDef
+import nosql._
+import Exceptions._
+import nosql.json.GeometryReaders._
+import org.geolatte.geom.Envelope
+import org.reactivemongo.play.json._
+import play.api.Logger
+import play.api.libs.iteratee._
+import play.api.libs.json._
+import play.modules.reactivemongo.json.BSONFormats
+import play.modules.reactivemongo.json.collection.JSONCollection
+import querylang.BooleanExpr
+import reactivemongo.api.{FailoverStrategy, _}
+import reactivemongo.api.collections.bson.BSONCollectionProducer
+import reactivemongo.api.commands._
+import reactivemongo.api.gridfs.{DefaultFileToSave, GridFS}
 import reactivemongo.api.indexes.Index
 import reactivemongo.api.indexes.IndexType.Ascending
-import nosql._
+import reactivemongo.bson._
+import reactivemongo.core.commands.{GetLastError, _}
+import utilities.JsonHelper
 
-import org.reactivemongo.play.json._
+import scala.concurrent.Future
+import scala.language.implicitConversions
+import scala.util.{Failure, Success}
 
 
 object MongoDBRepository extends nosql.Repository with FutureInstrumented {
@@ -46,10 +44,8 @@ object MongoDBRepository extends nosql.Repository with FutureInstrumented {
   val awaitJournalCommit = GetLastError(j = true, w = Some(BSONInteger(1)))
 
 
-  import config.ConfigurationValues._
-
-
   import MetadataIdentifiers._
+  import config.ConfigurationValues._
 
   val driver = new MongoDriver
   val dbconStr = MongoConnnectionString
@@ -63,13 +59,13 @@ object MongoDBRepository extends nosql.Repository with FutureInstrumented {
   }
 
   def listDatabases: Future[List[String]] = {
-    val futureJsons = createdDBColl.find(Json.obj()).cursor[JsObject].collect[List]()
+    val futureJsons = createdDBColl.find(Json.obj()).cursor[JsObject](ReadPreference.primary).collect[List]()
     futureJsons.map(_.map(
       json => (json \ DEFAULT_CREATED_DB_PROP).as[String]))
 
   }
 
-  def getMetadata(dbName: String) = connection.db(dbName).collection[JSONCollection](MetadataCollection)
+  def getMetadata(dbName: String) = connection(dbName).collection[JSONCollection](MetadataCollection)
 
   private def isMetadata(name: String): Boolean = (name startsWith MetadataCollectionPrefix) || (name startsWith "system.")
 
@@ -85,27 +81,40 @@ object MongoDBRepository extends nosql.Repository with FutureInstrumented {
     }
   }
 
+  //this methods re-creates the previously supported 'save' semantics
+  private def save(collection: JSONCollection, json : JsObject) : Future[WriteResult] = {
+    import reactivemongo.bson.BSONObjectID
+    (json \ "_id").toOption match {
+      case None => collection.insert(json + ("_id" ->
+        BSONFormats.BSONObjectIDFormat.writes(BSONObjectID.generate)), WriteConcern.Default)
+
+      case Some(id) =>
+        collection.update(Json.obj("_id" -> id), json, WriteConcern.Default, upsert = true)
+    }
+  }
+
+
 
   def createDb(dbname: String) = {
 
     //Logs the database creation in the "created databases" collection in the systemDatabase
-    def registerDbCreation(dbname: String) = createdDBColl.save(Json.obj(DEFAULT_CREATED_DB_PROP -> dbname)).andThen {
+    def registerDbCreation(dbname: String) = save(createdDBColl, Json.obj(DEFAULT_CREATED_DB_PROP -> dbname)).andThen {
       case Success(le) => Logger.debug(s"Registering $dbname in created databases collections succeeded.")
       case Failure(le) => Logger.warn(s"Registering $dbname in created databases collections succeeded.")
     }
 
     existsDb(dbname).flatMap {
-      case false => {
+      case false =>
         val db = connection(dbname)
-        val cmd = new CreateCollection(name = MetadataCollection, autoIndexId = Some(true))
-        db.command(cmd)
+        val newColl = db.collection(name=MetadataCollection)
+        newColl.create(autoIndexId = true)
           .flatMap(_ => registerDbCreation(dbname))
           .map(le => true)
           .recover {
           case ex: BSONCommandError => throw new DatabaseCreationException(s"Failure to create $dbname: can't create metadatacollection")
           case ex: Throwable => throw new DatabaseCreationException(s"Unknown exception of type: ${ex.getClass.getCanonicalName} having message: ${ex.getMessage}")
         }
-      }
+
       case _ => throw new DatabaseAlreadyExistsException(s"Database $dbname already exists.")
     }
 
@@ -120,39 +129,35 @@ object MongoDBRepository extends nosql.Repository with FutureInstrumented {
 
     existsDb(dbname).flatMap {
       case true => connection(dbname).drop().flatMap(_ => removeLog(dbname)).map(le => true).recover {
-        case ex: Throwable => {
+        case ex: Throwable =>
           Logger.error(s"Problem deleting database $dbname", ex)
           throw new DatabaseDeleteException(s"Unknown exception of type: ${ex.getClass.getCanonicalName} having message: ${ex.getMessage}")
-        }
       }
       case _ => throw new DatabaseNotFoundException(s"No database $dbname")
     }
   }
 
-  def existsDb(dbname: String): Future[Boolean] = listDatabases.map(l => l.exists(_ == dbname))
+  def existsDb(dbname: String): Future[Boolean] = listDatabases.map(l => l.contains( dbname ))
 
 
   def listCollections(dbname: String): Future[List[String]] =
     existsDb(dbname).flatMap {
-      case true => connection.db(dbname).collectionNames.map(_.filterNot(isSpecialCollection))
+      case true => connection(dbname).collectionNames.map(_.filterNot(isSpecialCollection))
       case _ => throw new DatabaseNotFoundException(s"database $dbname doesn't exist")
     }
 
 
-  def count(database: String, collection: String): Future[Long] = {
-    val cmd = new Count(collection)
-    connection.db(database)
-      .command(cmd)
-      .map(i => i.toLong)
-  }
+  def count(database: String, collectionName: String): Future[Long] =
+    for { i <- connection(database).collection(collectionName).count() }
+        yield i.toLong
 
   def metadata(database: String, collection: String): Future[Metadata] = {
-    import MetadataIdentifiers._
     import Metadata._
+    import MetadataIdentifiers._
 
     def readMetadata() = {
       val metaCollection = connection(database).collection[JSONCollection](MetadataCollection)
-      val metadataCursor = metaCollection.find(Json.obj(CollectionField -> collection)).cursor[JsObject]
+      val metadataCursor = metaCollection.find(Json.obj(CollectionField -> collection)).cursor[JsObject](ReadPreference.primary)
       metadataCursor.headOption.map {
         case Some(doc) => doc.asOpt[Metadata]
         case _ => None
@@ -175,8 +180,8 @@ object MongoDBRepository extends nosql.Repository with FutureInstrumented {
 
   //we check also the "hidden" names (e.g. metadata collection) so that puts will fail
   def existsCollection(dbName: String, colName: String): Future[Boolean] = for {
-    names <- connection.db(dbName).collectionNames
-    found = names.exists(_ == colName)
+    names <- connection(dbName).collectionNames
+    found = names.contains( colName )
   } yield found
 
 
@@ -249,10 +254,9 @@ object MongoDBRepository extends nosql.Repository with FutureInstrumented {
       else throw new DatabaseNotFoundException()
     ).flatMap {
       case false => throw new CollectionNotFoundException()
-      case true => {
+      case true =>
         val col = connection(dbName).collection[JSONCollection](colName)
         metadata(dbName, colName).map(md => (col, md))
-      }
     }
 
 
@@ -302,7 +306,7 @@ object MongoDBRepository extends nosql.Repository with FutureInstrumented {
     import reactivemongo.bson._
 
     getMediaStore(database, collection).flatMap { gridFs =>
-      gridFs.save(producer, DefaultFileToSave(filename = fileName, contentType = contentType, id = BSONObjectID.generate))
+      gridFs.save(producer, DefaultFileToSave(filename = Some(fileName), contentType = contentType, id = BSONObjectID.generate))
         .map(fr => Media(bson2String(fr.id), fr.md5))
     }
   }
@@ -322,11 +326,10 @@ object MongoDBRepository extends nosql.Repository with FutureInstrumented {
               file.get.md5,
               file.get.filename.getOrElse(""), file.get.length.toInt, file.get.contentType, binarydata))
           ).recover {
-          case ex: Throwable => {
-            Logger.warn(s"Media retrieval failed with exception ${ex.getMessage} of type: ${ex.getClass.getCanonicalName}")
-            throw new MediaObjectNotFoundException()
+            case ex: Throwable =>
+              Logger.warn(s"Media retrieval failed with exception ${ex.getMessage} of type: ${ex.getClass.getCanonicalName}")
+              throw new MediaObjectNotFoundException()
           }
-        }
       }
     }
   }
@@ -354,7 +357,7 @@ object MongoDBRepository extends nosql.Repository with FutureInstrumented {
                                commands.WriteConcern.Journaled
                                , upsert = true, multi = false)
       _ <- c.indexesManager.ensure(Index(Seq(("name", Ascending)), unique = true))
-    } yield (updateResult.nModified == 1)
+    } yield updateResult.nModified == 1
 
 
     result.andThen {
@@ -365,7 +368,7 @@ object MongoDBRepository extends nosql.Repository with FutureInstrumented {
   }
 
   def getViews(database: String, collection: String): Future[List[JsObject]] =
-    getViewDefs(database, collection) flatMap (_.find(Json.obj()).cursor[JsObject].collect[List]())
+    getViewDefs(database, collection) flatMap (_.find(Json.obj()).cursor[JsObject](ReadPreference.Primary).collect[List]())
 
   /**
    *
@@ -374,7 +377,7 @@ object MongoDBRepository extends nosql.Repository with FutureInstrumented {
   private def mkViewSelector(id: String) = Json.obj("$or" -> Json.arr(Json.obj("_id" -> id), Json.obj("name" -> id)))
 
   def getView(database: String, collection: String, id: String): Future[JsObject] =
-    getViewDefs(database, collection) flatMap (_.find(mkViewSelector(id)).cursor[JsObject].headOption.collect {
+    getViewDefs(database, collection) flatMap (_.find(mkViewSelector(id)).cursor[JsObject](ReadPreference.Primary).headOption.collect {
       case Some(js) => js
       case None => throw new ViewObjectNotFoundException()
     })
@@ -395,10 +398,9 @@ object MongoDBRepository extends nosql.Repository with FutureInstrumented {
   override def update(database: String, collection: String, query: BooleanExpr, updateSpec: JsObject): Future[Int] = {
     getCollectionInfo(database, collection)
       .flatMap {
-      case (coll, metadata, reads) => {
+      case (coll, metadata, reads) =>
         val updateDoc = getUpdateDoc(reads, updateSpec)
         coll.update(expr2JsObject(query), updateDoc, commands.WriteConcern.Journaled, upsert = false, multi = true)
-      }
     }.map(le => le.n)
 
   }
@@ -410,19 +412,18 @@ object MongoDBRepository extends nosql.Repository with FutureInstrumented {
   override def upsert(database: String, collection: String, json: JsObject): Future[Boolean] =
     getCollectionInfo(database, collection)
       .flatMap {
-      case (coll, _, featureTransformer) => {
+      case (coll, _, featureTransformer) =>
         val selectorDoc = Json.obj("id" -> (json \ "id").as[JsValue])
         val updateDoc = getUpdateDoc(featureTransformer, json)
-        Logger.debug(s"Upserting document in collection ${collection} : ${Json.stringify(json)}")
+        Logger.debug(s"Upserting document in collection $collection : ${Json.stringify(json)}")
         coll.update(selectorDoc, updateDoc, commands.WriteConcern.Journaled, upsert = true, multi = false)
-      }
     }.map(le => true)
 
   private def isUpdateDocWithOnlyOperators(updateDoc: JsObject): Boolean =
-    updateDoc.keys.filterNot(k => k.startsWith("$")).isEmpty
+    updateDoc.keys.forall( k => k.startsWith( "$" ) )
 
   private def isUpdateDocWithOnlyFields(updateDoc: JsObject): Boolean =
-    updateDoc.keys.filter(k => k.startsWith("$")).isEmpty
+    !updateDoc.keys.exists( k => k.startsWith( "$" ) )
 
   private def getUpdateDoc(trans: Reads[JsObject], updateDoc: JsObject): JsObject = {
     if (isUpdateDocWithOnlyOperators(updateDoc)) updateDoc

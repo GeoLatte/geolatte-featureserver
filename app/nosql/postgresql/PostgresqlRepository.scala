@@ -1,19 +1,20 @@
 package nosql.postgresql
 
-import com.github.mauricio.async.db.{QueryResult, Connection, ResultSet, RowData}
-import com.github.mauricio.async.db.pool.{PoolConfiguration, ConnectionPool}
+import Exceptions._
+import com.github.mauricio.async.db.pool.{ConnectionPool, PoolConfiguration}
 import com.github.mauricio.async.db.postgresql.exceptions.GenericDatabaseException
 import com.github.mauricio.async.db.postgresql.pool.PostgreSQLConnectionFactory
 import com.github.mauricio.async.db.postgresql.util.URLParser
+import com.github.mauricio.async.db.{Connection, QueryResult, RowData}
 import config.{AppExecutionContexts, ConfigurationValues}
-import controllers.{IndexDef, Formats}
+import controllers.{Formats, IndexDef}
 import nosql._
 import nosql.json.GeometryReaders
-import org.geolatte.geom.codec.{Wkt, Wkb}
-import org.geolatte.geom.{Polygon, Envelope}
+import org.geolatte.geom.codec.{Wkb, Wkt}
+import org.geolatte.geom.{Envelope, Polygon}
 import play.api.Logger
-import play.api.libs.iteratee.{Iteratee, Enumerator}
-import querylang.{QueryParser, BooleanExpr}
+import play.api.libs.iteratee.{Enumerator, Iteratee}
+import querylang.{BooleanExpr, QueryParser}
 import utilities.JsonHelper
 
 import scala.concurrent.Future
@@ -26,8 +27,8 @@ import scala.concurrent.Future
 object PostgresqlRepository extends Repository {
 
   import AppExecutionContexts.streamContext
-  import play.api.libs.json._
   import GeometryReaders._
+  import play.api.libs.json._
 
   lazy val url = {
     val parsed = URLParser.parse(ConfigurationValues.PgConnectionString)
@@ -79,8 +80,9 @@ object PostgresqlRepository extends Repository {
 
   /**
    * Retrieves the collection metadata from the server, but does not count number of rows
-   * @param database
-   * @param collection
+ *
+   * @param database the database
+   * @param collection the collection (in fact table)
    * @return metadata, but row count is set to 0
    */
   def metadataFromDb(database: String, collection: String) : Future[Metadata] = {
@@ -96,7 +98,7 @@ object PostgresqlRepository extends Repository {
 
     def queryResult2Metadata(qr: QueryResult) =
       qr.rows match {
-        case Some(rs) if rs.size > 0 => mkMetadata(rs.head)
+        case Some(rs) if rs.nonEmpty => mkMetadata( rs.head)
         case _ => throw new CollectionNotFoundException()
       }
     executeStmt(Sql.SELECT_METADATA(database, collection))( queryResult2Metadata )
@@ -125,7 +127,7 @@ object PostgresqlRepository extends Repository {
     executeStmt(Sql.SELECT_COLLECTION_NAMES(dbName)) { qr =>
       qr.rows match {
         case Some(rs) =>
-          rs.filter( row => row(0).asInstanceOf[String].equalsIgnoreCase(colName)).nonEmpty
+          rs.exists( row => row( 0 ).asInstanceOf[String].equalsIgnoreCase( colName ) )
         case _ => throw new RuntimeException("Query failed to return a row set")
       }
     }
@@ -206,8 +208,8 @@ object PostgresqlRepository extends Repository {
 
 
     val idq = (json \ "id").getOrElse(JsNull) match {
-      case JsNumber(i) => s" id = ${i}"
-      case JsString(i) => s" id = '${i}'"
+      case JsNumber(i) => s" id = $i"
+      case JsString(i) => s" id = '$i'"
       case _           => throw new IllegalArgumentException("Id neither string nor number in json.")
      }
 
@@ -290,7 +292,7 @@ object PostgresqlRepository extends Repository {
     val castRegex = "::(\\w+)\\)\\)$".r
 
     val method = methodRegex.findFirstMatchIn(defText).map{ m => m group 1 }
-    val isForRegex = method.exists( _ == "gist" )
+    val isForRegex = method.contains( "gist" )
 
     val cast = castRegex.findFirstMatchIn(defText).map{ m => m group 1} match {
       case Some("boolean") => "bool"
@@ -400,7 +402,7 @@ object PostgresqlRepository extends Repository {
     if (flds.isEmpty) List()
     else {
       val paths = flds.map {_.split("\\.").foldLeft[JsPath](__)((jsp, pe) => jsp \ pe) }
-      paths ++ List(( __ \ "type"), ( __ \ "geometry"))
+      paths ++ List( __ \ "type",  __ \ "geometry")
     }
 
   private def fldSortSpecToSortExpr(spec: FldSortSpec) : String = {
@@ -410,7 +412,7 @@ object PostgresqlRepository extends Repository {
   }
 
   private def first[T](rowF : RowData => Option[T])(qr: QueryResult) : Option[T] = qr.rows match {
-    case Some(rs) if rs.size > 0 => rowF(rs.head)
+    case Some(rs) if rs.nonEmpty => rowF( rs.head)
     case _ => None  
   }
 
@@ -541,7 +543,7 @@ object PostgresqlRepository extends Repository {
 
     def CREATE_COLLECTION_ID_INDEX(dbname: String, tableName: String, idType: String) =
     s"""CREATE INDEX ${quote("idx_"+tableName+"_id")}
-       |ON ${quote(dbname)}.${quote(tableName)} ( (json_extract_path_text(json, 'id')::${idType}) )
+       |ON ${quote(dbname)}.${quote(tableName)} ( (json_extract_path_text(json, 'id')::$idType) )
      """.stripMargin
 
     def CREATE_COLLECTION_SPATIAL_INDEX(dbname: String, tableName: String) =
@@ -556,7 +558,7 @@ object PostgresqlRepository extends Repository {
 
     def DELETE_DATA(dbname: String, tableName: String, where: String) =
       s"""DELETE FROM ${quote(dbname)}.${quote(tableName)}
-        WHERE ${where}
+        WHERE $where
      """.stripMargin
 
 
@@ -648,7 +650,7 @@ object PostgresqlRepository extends Repository {
        el => single_quote(el)
       ).mkString(",")
       s"""CREATE INDEX ${quote(indexName)}
-          |ON ${quote(dbName)}.${quote(colName)} ( (json_extract_path_text(json, ${pathExp})::${cast}) )
+          |ON ${quote(dbName)}.${quote(colName)} ( (json_extract_path_text(json, $pathExp)::$cast) )
       """.stripMargin
     }
 
@@ -658,7 +660,7 @@ object PostgresqlRepository extends Repository {
       ).mkString(",")
       s"""CREATE INDEX ${quote(indexName)}
           |ON ${quote(dbName)}.${quote(colName)} using gist
-          |( (json_extract_path_text(json, ${pathExp})::${cast}) gist_trgm_ops)
+          |( (json_extract_path_text(json, $pathExp)::$cast) gist_trgm_ops)
       """.stripMargin
     }
 
@@ -684,13 +686,13 @@ object PostgresqlRepository extends Repository {
     def getStatus(dbe : GenericDatabaseException) = dbe.errorMessage.fields.get('C')
     def getMessage(dbe: GenericDatabaseException) = dbe.errorMessage.fields.getOrElse('M', "Database didn't return a message")
     def unapply(t : Throwable): Option[RuntimeException] =  t match {
-      case t: GenericDatabaseException if getStatus(t) == Some("42P06") =>
+      case t: GenericDatabaseException if getStatus( t ).contains( "42P06" ) =>
         Some(new DatabaseAlreadyExistsException(getMessage(t)))
-      case t: GenericDatabaseException if getStatus(t) == Some("42P07") =>
+      case t: GenericDatabaseException if getStatus( t ).contains( "42P07" ) =>
         Some(new CollectionAlreadyExistsException(getMessage(t)))
-      case t: GenericDatabaseException if getStatus(t) == Some("3F000") =>
+      case t: GenericDatabaseException if getStatus( t ).contains( "3F000" ) =>
         Some(new  DatabaseNotFoundException(getMessage(t)))
-      case t: GenericDatabaseException if getStatus(t) == Some("42P01") =>
+      case t: GenericDatabaseException if getStatus( t ).contains( "42P01" ) =>
         Some(new CollectionNotFoundException(getMessage(t)))
       case _ => None
     }

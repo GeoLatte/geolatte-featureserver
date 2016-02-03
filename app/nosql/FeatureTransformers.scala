@@ -4,9 +4,9 @@ import nosql.mongodb.SpecialMongoProperties._
 import org.geolatte.geom._
 import org.geolatte.geom.curve.{MortonCode, MortonContext}
 import play.api.data.validation.ValidationError
-import play.api.libs.json._
-import play.api.libs.json.Reads._
 import play.api.libs.functional.syntax._
+import play.api.libs.json.Reads._
+import play.api.libs.json._
 /**
  * @author Karel Maesen, Geovise BVBA
  *         creation-date: 10/18/13
@@ -45,7 +45,7 @@ object FeatureTransformers {
 
   /**
    * Extracts the Envelope from the GeoJson
-   * @param extent
+   * @param extent the spatial extent
    * @return
    */
   def envelopeTransformer(extent: Envelope) : Reads[Polygon] =
@@ -67,8 +67,8 @@ object FeatureTransformers {
   }
 
   def validator(idType: String) : Reads[JsObject] = idType match {
-    case "decimal" => (__ \ "id").read[Long] andKeep (__).read[JsObject]
-    case "text"  =>   (__ \ "id").read[String] andKeep (__).read[JsObject]
+    case "decimal" => (__ \ "id").read[Long] andKeep __.read[JsObject]
+    case "text"  =>   (__ \ "id").read[String] andKeep __.read[JsObject]
     case _ => throw new IllegalArgumentException("Invalid metadata")
   }
 

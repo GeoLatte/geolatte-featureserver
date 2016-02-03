@@ -1,12 +1,12 @@
 package nosql
 
-import config.AppExecutionContexts
 import kamon.Kamon
-import play.api._
-import mvc._
-import mvc.Results._
-import scala.concurrent.Future
 import org.slf4j.LoggerFactory
+import play.api._
+import play.api.mvc.Results._
+import play.api.mvc._
+
+import scala.concurrent.Future
 
 object Global extends GlobalSettings {
 
@@ -65,7 +65,7 @@ object Global extends GlobalSettings {
       val requestTime = endTime - startTime
 //      val timer = metricRegistry.timer(s"requests.${requestHeader.path.tail.replaceAll("/", ".")}.${requestHeader.method.toLowerCase}")
 //      timer.update(requestTime, TimeUnit.MILLISECONDS)
-      requestLogger.info(s"${requestHeader.method} ${requestHeader.uri} ; ${requestTime} ; ${result.header.status}")
+      requestLogger.info(s"${requestHeader.method} ${requestHeader.uri} ; $requestTime ; ${result.header.status}")
       result.withHeaders("Request-Time" -> requestTime.toString)
 
     }

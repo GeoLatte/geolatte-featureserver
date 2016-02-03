@@ -1,10 +1,9 @@
 package utilities
 
-import play.api.libs.json._
-import play.api.libs.json.Reads._ //note that this imports the required object reducer
-import play.api.libs.functional.syntax._ //note tha this import is required vor the functional composition of Reads
-
 import play.api.data.validation.ValidationError
+import play.api.libs.functional.syntax._
+import play.api.libs.json.Reads._
+import play.api.libs.json._
 
 import scala.collection.mutable.ListBuffer
 
@@ -22,7 +21,7 @@ object JsonHelper {
    * {'a' : 1, 'b' : { 'c' , 2}} is flattened to Seq( ('a', 1), ('b.c', 2))
    * Arrays are filtered out
    *
-   * @param jsObject
+   * @param jsObject object to flatten
    */
   def flatten(jsObject: JsObject) : Seq[(String, JsValue)]=  {
 

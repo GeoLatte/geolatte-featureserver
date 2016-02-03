@@ -1,17 +1,16 @@
 package controllers
 
-import play.api.mvc._
+import Exceptions._
 import config.AppExecutionContexts
-import querylang.{QueryParser, BooleanExpr}
-import scala.concurrent.Future
+import nosql.mongodb.ReactiveGeoJson
+import nosql.mongodb.ReactiveGeoJson._
 import play.api.libs.json._
-import play.api.libs.functional.syntax._
+import play.api.mvc._
+import querylang.{BooleanExpr, QueryParser}
 
+import scala.concurrent.Future
 import scala.reflect.ClassTag
 import scala.util.{Failure, Success, Try}
-import nosql.mongodb.ReactiveGeoJson._
-import nosql.InvalidParamsException
-import nosql.mongodb.ReactiveGeoJson
 
 //TODO -- this should use repository, rather than directly perform updates
 
@@ -45,7 +44,7 @@ object TxController extends AbstractNoSqlController {
         case Success(q) => repository.delete(db, col, q)
           .map( _ => Ok("Objects removed"))
           .recover(commonExceptionHandler(db))
-        case Failure(e) =>  Future.successful(BadRequest(s"Invalid parameters: ${e.getMessage()} "))
+        case Failure(e) =>  Future.successful(BadRequest(s"Invalid parameters: ${e.getMessage} "))
       }
     }
   }

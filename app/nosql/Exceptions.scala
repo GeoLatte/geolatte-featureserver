@@ -2,7 +2,7 @@
  * @author Karel Maesen, Geovise BVBA
  *         creation-date: 10/10/13
  */
-package object nosql {
+package object Exceptions {
 
   abstract class NoSqlException(msg: String) extends RuntimeException(msg)
 
