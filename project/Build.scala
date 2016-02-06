@@ -41,18 +41,17 @@ object GeolatteNoSqlBuild extends Build {
     "com.github.mauricio" %% "postgresql-async" % "0.2.18"
   )
 
-  val kamonVersion = "0.6.0-a9d5c5c61f7e5e189bf67baee2b13e21ebbaaf73" //sort-of snapshot release
+  val kamonVersion = "0.6.0-b23ea502a2589d569e6917b40e90b50dc2457e7a" //"0.6.0-a9d5c5c61f7e5e189bf67baee2b13e21ebbaaf73" //sort-of snapshot release
 
   lazy val kamonDependencies = Seq(
-    "io.kamon" %% "kamon-core" % kamonVersion,
-    "io.kamon" %% "kamon-jmx" % kamonVersion,
-    "io.kamon" %% "kamon-log-reporter" % kamonVersion
-//    ,
-//    "io.kamon" %% "kamon-system-metrics" % kamonVersion
+    "io.kamon" %% "kamon-core" % kamonVersion
+    ,"io.kamon" %% "kamon-autoweave" % kamonVersion
+    ,"io.kamon" %% "kamon-jmx" % kamonVersion
+    ,"io.kamon" %% "kamon-log-reporter" % kamonVersion
+//    ,"io.kamon" %% "kamon-system-metrics" % kamonVersion
   )
 
   lazy val testDependencies = Seq(
-//    "org.specs2" %% "specs2" % "2.4.1" % "test"
     specs2 % Test
   )
 

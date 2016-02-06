@@ -1,6 +1,7 @@
 package nosql
 
 import kamon.Kamon
+import metrics.RequestMetrics
 import org.slf4j.LoggerFactory
 import play.api._
 import play.api.mvc.Results._
@@ -25,37 +26,12 @@ object Global extends GlobalSettings {
     Future { NotFound(s"Request ${request.path} not found.") }
   }
 
-//  Kamon.metrics.entity()
-//  lazy val metricRegistry = new {}
-//
-//  lazy val jmxReporter = JmxReporter.forRegistry(metricRegistry).build()
-//
-//  lazy val logReporter = Slf4jReporter.forRegistry(metricRegistry)
-//    .outputTo(LoggerFactory.getLogger("metrics"))
-//    .convertRatesTo(TimeUnit.SECONDS)
-//    .convertDurationsTo(TimeUnit.MILLISECONDS)
-//    .build()
-//
-//  def startMetrics(app: Application) : Unit = {
-//    if (app.mode == Mode.Prod) {
-//      jmxReporter.start()
-//      logReporter.start(1, TimeUnit.MINUTES)
-//    }
-//  }
-//
-//  def stopMetrics(app: Application) : Unit = {
-//    if (app.mode == Mode.Prod) {
-//      jmxReporter.stop()
-//      logReporter.stop()
-//    }
-//  }
-
-
   override def onStart(app: Application) {
       Kamon.start()
   }
 
   val requestLogger = LoggerFactory.getLogger("requests")
+
 
   val loggingFilter = Filter { (nextFilter, requestHeader) =>
     val startTime = System.currentTimeMillis
@@ -63,8 +39,14 @@ object Global extends GlobalSettings {
     nextFilter(requestHeader).map { result =>
       val endTime = System.currentTimeMillis
       val requestTime = endTime - startTime
-//      val timer = metricRegistry.timer(s"requests.${requestHeader.path.tail.replaceAll("/", ".")}.${requestHeader.method.toLowerCase}")
-//      timer.update(requestTime, TimeUnit.MILLISECONDS)
+
+      val metrics = Kamon.metrics.entity(RequestMetrics, "featureserver-request")
+      metrics.requests.increment()
+      metrics.requestExecutionTime.record(requestTime)
+
+      val myCounter = Kamon.metrics.counter("my-counter")
+      myCounter.increment()
+
       requestLogger.info(s"${requestHeader.method} ${requestHeader.uri} ; $requestTime ; ${result.header.status}")
       result.withHeaders("Request-Time" -> requestTime.toString)
 
