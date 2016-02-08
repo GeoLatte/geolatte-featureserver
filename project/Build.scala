@@ -47,7 +47,7 @@ object GeolatteNoSqlBuild extends Build {
     "io.kamon" %% "kamon-core" % kamonVersion
     ,"io.kamon" %% "kamon-autoweave" % kamonVersion
     ,"io.kamon" %% "kamon-jmx" % kamonVersion
-    ,"io.kamon" %% "kamon-log-reporter" % kamonVersion
+//    ,"io.kamon" %% "kamon-log-reporter" % kamonVersion
 //    ,"io.kamon" %% "kamon-system-metrics" % kamonVersion
   )
 

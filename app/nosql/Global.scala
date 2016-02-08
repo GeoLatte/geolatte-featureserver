@@ -1,7 +1,8 @@
 package nosql
 
+import akka.actor.Props
 import kamon.Kamon
-import metrics.RequestMetrics
+import metrics.{SimplePrinter, RequestMetrics}
 import org.slf4j.LoggerFactory
 import play.api._
 import play.api.mvc.Results._
@@ -28,6 +29,10 @@ object Global extends GlobalSettings {
 
   override def onStart(app: Application) {
       Kamon.start()
+
+      val subscriber = app.actorSystem.actorOf(Props[SimplePrinter], "kamon-stdout-reporter")
+      Kamon.metrics.subscribe("request", "**", subscriber)
+
   }
 
   val requestLogger = LoggerFactory.getLogger("requests")
