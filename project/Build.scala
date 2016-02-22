@@ -29,6 +29,7 @@ object GeolatteNoSqlBuild extends Build {
     "commons-codec" % "commons-codec" % "1.8",
     "net.sf.supercsv" % "super-csv" % "2.1.0",
     "org.parboiled" %% "parboiled" % "2.0.1",
+    "net.logstash.logback" % "logstash-logback-encoder" % "4.6",
     filters
   )
 
@@ -46,8 +47,8 @@ object GeolatteNoSqlBuild extends Build {
 
   lazy val kamonDependencies = Seq(
     "io.kamon" %% "kamon-core" % kamonVersion
-//    ,"io.kamon" %% "kamon-autoweave" % kamonVersion
     , "com.monsanto.arch" %% "kamon-prometheus" % "0.1.2b-SNAPSHOT"
+//    ,"io.kamon" %% "kamon-autoweave" % kamonVersion
 //    ,"io.kamon" %% "kamon-jmx" % kamonVersion
 //    ,"io.kamon" %% "kamon-log-reporter" % kamonVersion
 //    ,"io.kamon" %% "kamon-system-metrics" % kamonVersion

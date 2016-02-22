@@ -31,10 +31,8 @@ object Global extends GlobalSettings {
 
   override def onStart(app: Application) {
       Kamon.start()
-
-      val subscriber = app.actorSystem.actorOf(Props[SimplePrinter], "kamon-stdout-reporter")
-      Kamon.metrics.subscribe("request", "**", subscriber)
-
+//      val subscriber = app.actorSystem.actorOf(Props[SimplePrinter], "kamon-stdout-reporter")
+//      Kamon.metrics.subscribe("request", "**", subscriber)
   }
 
   val requestLogger = LoggerFactory.getLogger("requests")
