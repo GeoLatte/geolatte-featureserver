@@ -16,10 +16,12 @@ object Global extends GlobalSettings {
   import play.api.libs.concurrent.Execution.Implicits.defaultContext
 
   override def onError(request: RequestHeader, ex: Throwable) = {
+
     val useful = ex match {
       case e: UsefulException => e
       case _ => UnexpectedException(unexpected = Some(ex))
     }
+    Logger.error(s"Error on request", useful)
     Future { InternalServerError(views.html.defaultpages.error(useful)) }
   }
 
@@ -42,19 +44,21 @@ object Global extends GlobalSettings {
     val startTime = System.currentTimeMillis
 
     nextFilter(requestHeader).map { result =>
-      val endTime = System.currentTimeMillis
-      val requestTime = endTime - startTime
+      if (requestHeader.path.contains("metrics"))
+        result
+      else {
+        val endTime = System.currentTimeMillis
+        val requestTime = endTime - startTime
 
-      val metrics = Kamon.metrics.entity(RequestMetrics, "featureserver-request")
-      metrics.requests.increment()
-      metrics.requestExecutionTime.record(requestTime)
+        val metrics = Kamon.metrics.entity( RequestMetrics, "featureserver-request" )
+        metrics.requests.increment( )
+        metrics.requestExecutionTime.record( requestTime )
 
-      val myCounter = Kamon.metrics.counter("my-counter")
-      myCounter.increment()
+        if ( result.header.status != 200 ) metrics.errors.increment( )
 
-      requestLogger.info(s"${requestHeader.method} ${requestHeader.uri} ; $requestTime ; ${result.header.status}")
-      result.withHeaders("Request-Time" -> requestTime.toString)
-
+        requestLogger.info( s"${requestHeader.method} ${requestHeader.uri} ; $requestTime ; ${result.header.status}" )
+        result.withHeaders( "Request-Time" -> requestTime.toString )
+      }
     }
   }
 

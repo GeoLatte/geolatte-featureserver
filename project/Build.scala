@@ -17,6 +17,7 @@ object GeolatteNoSqlBuild extends Build {
     "Typesafe Repository" at "http://repo.typesafe.com/typesafe/releases/",
     "sbt-idea-repo" at "http://mpeltonen.github.com/maven/",
     "scalaz-bintray" at "https://dl.bintray.com/scalaz/releases",
+    Resolver.jcenterRepo,
       Resolver.url( "artifactory", url( "http://scalasbt.artifactoryonline.com/scalasbt/sbt-plugin-releases" ) )(
       Resolver
         .ivyStylePatterns
@@ -41,12 +42,13 @@ object GeolatteNoSqlBuild extends Build {
     "com.github.mauricio" %% "postgresql-async" % "0.2.18"
   )
 
-  val kamonVersion = "0.6.0-b23ea502a2589d569e6917b40e90b50dc2457e7a" //"0.6.0-a9d5c5c61f7e5e189bf67baee2b13e21ebbaaf73" //sort-of snapshot release
+  val kamonVersion = "0.5.2" //"0.6.0-b23ea502a2589d569e6917b40e90b50dc2457e7a" //"0.6.0-a9d5c5c61f7e5e189bf67baee2b13e21ebbaaf73" //sort-of snapshot release
 
   lazy val kamonDependencies = Seq(
     "io.kamon" %% "kamon-core" % kamonVersion
-    ,"io.kamon" %% "kamon-autoweave" % kamonVersion
-    ,"io.kamon" %% "kamon-jmx" % kamonVersion
+//    ,"io.kamon" %% "kamon-autoweave" % kamonVersion
+    , "com.monsanto.arch" %% "kamon-prometheus" % "0.1.2b-SNAPSHOT"
+//    ,"io.kamon" %% "kamon-jmx" % kamonVersion
 //    ,"io.kamon" %% "kamon-log-reporter" % kamonVersion
 //    ,"io.kamon" %% "kamon-system-metrics" % kamonVersion
   )

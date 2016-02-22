@@ -42,6 +42,9 @@ GET  /api/databases/:db/:collection/indexes              controllers.IndexContro
 GET /api/databases/:db/:collection/indexes/:idx          controllers.IndexController.get(db: String, collection: String, idx: String)
 DELETE /api/databases/:db/:collection/indexes/:idx       controllers.IndexController.delete(db: String, collection: String, idx: String)
 
+#Metrics
+GET /metrics                                              controllers.MetricsController.get
+
 # Map static resources from the /public folder to the /assets URL path
 GET     /assets/*file               controllers.Assets.at(path="/public", file)
 #GET     /*file                      controllers.Assets.at(path="/public", file)
