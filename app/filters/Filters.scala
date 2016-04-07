@@ -3,7 +3,7 @@ package filters
 import javax.inject.Inject
 
 import kamon.Kamon
-import metrics.RequestMetrics
+import metrics.KamonUserMetrics$
 import nosql.Global
 import play.api.http.HttpFilters
 import play.api.mvc.Filter

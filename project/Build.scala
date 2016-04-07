@@ -54,6 +54,13 @@ object GeolatteNoSqlBuild extends Build {
 //    ,"io.kamon" %% "kamon-system-metrics" % kamonVersion
   )
 
+  lazy val prometheusClientVersion = "0.0.13"
+
+  lazy val prometheusDependencies = Seq(
+    "io.prometheus" % "simpleclient" % prometheusClientVersion,
+    "io.prometheus" % "simpleclient_hotspot" % prometheusClientVersion
+  )
+
   lazy val testDependencies = Seq(
     specs2 % Test
   )
@@ -64,6 +71,7 @@ object GeolatteNoSqlBuild extends Build {
     mongoDependencies ++
     psqlDependencies ++
     kamonDependencies ++
+    prometheusDependencies ++
     testDependencies
 
   //Build Settings applied to all projects

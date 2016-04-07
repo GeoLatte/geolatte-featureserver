@@ -58,7 +58,7 @@
         <appender-ref ref="FILE"/>
     </root>
 
-    <logger name="application" level="WARN" additivity="false">
+    <logger name="application" level="INFO" additivity="false">
         <appender-ref ref="STDOUT"/>
         <appender-ref ref="FILE"/>
     </logger>

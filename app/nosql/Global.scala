@@ -2,7 +2,7 @@ package nosql
 
 import akka.actor.Props
 import kamon.Kamon
-import metrics.{SimplePrinter, RequestMetrics}
+import metrics.{PrometheusMetrics, SimplePrinter, KamonUserMetrics}
 import org.slf4j.LoggerFactory
 import play.api._
 import play.api.mvc.Results._
@@ -14,6 +14,8 @@ object Global extends GlobalSettings {
 
 
   import play.api.libs.concurrent.Execution.Implicits.defaultContext
+
+  lazy val prometheusMetrics = new PrometheusMetrics
 
   override def onError(request: RequestHeader, ex: Throwable) = {
 
@@ -30,29 +32,37 @@ object Global extends GlobalSettings {
   }
 
   override def onStart(app: Application) {
+
       Kamon.start()
+      prometheusMetrics.start()
+
 //      val subscriber = app.actorSystem.actorOf(Props[SimplePrinter], "kamon-stdout-reporter")
 //      Kamon.metrics.subscribe("request", "**", subscriber)
   }
 
   val requestLogger = LoggerFactory.getLogger("requests")
 
-
   val loggingFilter = Filter { (nextFilter, requestHeader) =>
     val startTime = System.currentTimeMillis
+    val timer = prometheusMetrics.requestLatency.startTimer()
 
     nextFilter(requestHeader).map { result =>
       if (requestHeader.path.contains("metrics"))
         result
       else {
         val endTime = System.currentTimeMillis
-        val requestTime = endTime - startTime
+        val requestTime = (endTime - startTime)
 
-        val metrics = Kamon.metrics.entity( RequestMetrics, "featureserver-request" )
+        val metrics = Kamon.metrics.entity( KamonUserMetrics, "featureserver-request" )
         metrics.requests.increment( )
         metrics.requestExecutionTime.record( requestTime )
+        prometheusMetrics.totalRequests.inc()
+        timer.observeDuration()
 
-        if ( result.header.status != 200 ) metrics.errors.increment( )
+        if ( result.header.status != 200 ) {
+          metrics.errors.increment( )
+          prometheusMetrics.failedRequests.inc()
+        }
 
         requestLogger.info( s"${requestHeader.method} ${requestHeader.uri} ; $requestTime ; ${result.header.status}" )
         result.withHeaders( "Request-Time" -> requestTime.toString )
