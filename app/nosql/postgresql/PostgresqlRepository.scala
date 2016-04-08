@@ -1,19 +1,19 @@
 package nosql.postgresql
 
-import com.github.mauricio.async.db.{QueryResult, Connection, ResultSet, RowData}
-import com.github.mauricio.async.db.pool.{PoolConfiguration, ConnectionPool}
+import com.github.mauricio.async.db.{Connection, QueryResult, RowData}
+import com.github.mauricio.async.db.pool.{ConnectionPool, PoolConfiguration}
 import com.github.mauricio.async.db.postgresql.exceptions.GenericDatabaseException
 import com.github.mauricio.async.db.postgresql.pool.PostgreSQLConnectionFactory
 import com.github.mauricio.async.db.postgresql.util.URLParser
 import config.{AppExecutionContexts, ConfigurationValues}
-import controllers.{IndexDef, Formats}
+import controllers.{Formats, IndexDef}
 import nosql._
 import nosql.json.GeometryReaders
-import org.geolatte.geom.codec.{Wkt, Wkb}
-import org.geolatte.geom.{Polygon, Envelope}
+import org.geolatte.geom.codec.{Wkb, Wkt}
+import org.geolatte.geom.{ByteBuffer, Envelope, Geometry, Polygon}
 import play.api.Logger
-import play.api.libs.iteratee.{Iteratee, Enumerator}
-import querylang.{QueryParser, BooleanExpr}
+import play.api.libs.iteratee.{Enumerator, Iteratee}
+import querylang.{BooleanExpr, QueryParser}
 import utilities.JsonHelper
 
 import scala.concurrent.Future
@@ -48,6 +48,16 @@ object PostgresqlRepository extends Repository {
 
   lazy val pool = new ConnectionPool(factory, poolConfig)
 
+  var migrationsStatus: Option[Boolean] = None
+
+  {
+    import Utils._
+    val result : Future[Boolean] = listDatabases.flatMap { dbs => sequence(dbs)( s => Migrations.executeOn(s) )}
+    result.onSuccess {
+      case b => migrationsStatus = Some(b)
+    }
+  }
+
   override def createDb(dbname: String): Future[Boolean] = executeStmtsInTransaction(
     s"${Sql.CREATE_SCHEMA(dbname)}; ${Sql.CREATE_METADATA_TABLE_IN(dbname)}; ${Sql.CREATE_VIEW_TABLE_IN(dbname)}"
   ).map( _ => true)
@@ -72,6 +82,8 @@ object PostgresqlRepository extends Repository {
     executeStmtsInTransaction( stmts :_*) map ( _ => true )
   }
 
+  override def registerCollection(db: String, collection: String): Future[Boolean] = ???
+
   override def listCollections(dbname: String): Future[List[String]] =
     executeStmt(Sql.SELECT_COLLECTION_NAMES(dbname)){
       toList(_)(row => Some(row(0).asInstanceOf[String]))
@@ -79,8 +91,9 @@ object PostgresqlRepository extends Repository {
 
   /**
    * Retrieves the collection metadata from the server, but does not count number of rows
-   * @param database
-   * @param collection
+    *
+    * @param database the database (schema)
+   * @param collection the collection (table)
    * @return metadata, but row count is set to 0
    */
   def metadataFromDb(database: String, collection: String) : Future[Metadata] = {
@@ -96,7 +109,7 @@ object PostgresqlRepository extends Repository {
 
     def queryResult2Metadata(qr: QueryResult) =
       qr.rows match {
-        case Some(rs) if rs.size > 0 => mkMetadata(rs.head)
+        case Some(rs) if rs.nonEmpty => mkMetadata(rs.head)
         case _ => throw new CollectionNotFoundException()
       }
     executeStmt(Sql.SELECT_METADATA(database, collection))( queryResult2Metadata )
@@ -125,7 +138,7 @@ object PostgresqlRepository extends Repository {
     executeStmt(Sql.SELECT_COLLECTION_NAMES(dbName)) { qr =>
       qr.rows match {
         case Some(rs) =>
-          rs.filter( row => row(0).asInstanceOf[String].equalsIgnoreCase(colName)).nonEmpty
+          rs.exists( row => row(0).asInstanceOf[String].equalsIgnoreCase(colName))
         case _ => throw new RuntimeException("Query failed to return a row set")
       }
     }
@@ -157,6 +170,20 @@ object PostgresqlRepository extends Repository {
       (Some(cnt),enum)
     }
 
+  }
+
+  //this method is there for testing purposes only
+  //TODO -- remove this method
+  protected def doSelect(sql: String) : Future[List[RowData]] = {
+
+    executeStmt(sql) { _.rows match {
+      case Some(rs) =>
+        val buf = new Array[RowData](rs.size)
+        rs.copyToArray(buf)
+        buf.toList
+
+      case _ => List[RowData]()
+    }}
   }
 
   override def delete(database: String, collection: String, query: BooleanExpr): Future[Boolean] =
@@ -206,8 +233,8 @@ object PostgresqlRepository extends Repository {
 
 
     val idq = json \ "id" match {
-      case JsNumber(i) => s" id = ${i}"
-      case JsString(i) => s" id = '${i}'"
+      case JsNumber(i) => s" id = $i"
+      case JsString(i) => s" id = '$i'"
       case _           => throw new IllegalArgumentException("Id neither string nor number in json.")
      }
 
@@ -331,6 +358,12 @@ object PostgresqlRepository extends Repository {
   //Private Utility methods
   //************************************************************************
 
+  private def guardReady[T](block: => T) : T = this.migrationsStatus match {
+    case Some(b) => block
+//    case Some(false) => throw NotReadyException("Migrations failed, check the logs")
+    case _ => throw NotReadyException("Busy migrating databases")
+  }
+
   private def  sendstatement[T](stmt: String)(implicit resultHandler: QueryResult => T, c: Connection) : Future[T] = {
     Logger.debug("SQL IN TRANSACTION: " + stmt)
     c.sendQuery(stmt).map(qr => resultHandler(qr))
@@ -374,14 +407,15 @@ object PostgresqlRepository extends Repository {
       sendprepared(sql, values).map( resultHandler)
     }
 
-  private def doInTransaction[T](block : Connection => Future[T]) : Future[T] =
+  private def doInTransaction[T](block : Connection => Future[T]) : Future[T] = guardReady{
     pool.inTransaction { implicit c =>
       block(c)
     }.recover {
       case MappableException(mappedException) => throw mappedException
     }
+  }
 
-  def executeStmt[T](sql: String)(resultHandler: QueryResult => T): Future[T] = {
+  def executeStmt[T](sql: String)(resultHandler: QueryResult => T): Future[T] = guardReady {
     Logger.debug("SQL : " + sql)
     pool.sendQuery(sql)
       .map {
@@ -403,7 +437,7 @@ object PostgresqlRepository extends Repository {
     }
 
     if (paths.isEmpty) paths
-    else paths ++ List(( __ \ "type"), ( __ \ "geometry"))
+    else paths ++ List( __ \ "type",  __ \ "geometry")
   }
 
   private def fldSortSpecToSortExpr(spec: FldSortSpec) : String = {
@@ -413,7 +447,7 @@ object PostgresqlRepository extends Repository {
   }
 
   private def first[T](rowF : RowData => Option[T])(qr: QueryResult) : Option[T] = qr.rows match {
-    case Some(rs) if rs.size > 0 => rowF(rs.head)
+    case Some(rs) if rs.nonEmpty => rowF(rs.head)
     case _ => None  
   }
 
@@ -452,6 +486,17 @@ object PostgresqlRepository extends Repository {
   private def single_quote(str: String) : String = "'" + str + "'"
   private def unescapeJson(js: JsObject):String = Json.stringify(js).replaceAll("'", "''")
   private def toColName(str: String) : String = str.replaceAll("-", "_")
+  private def toGeometry(str: String) : Geometry = Wkb.fromWkb(ByteBuffer.from(str))
+
+//  private def rowData2Properties(rd: RowData, columnNames: Seq[String]) : JsObject = {
+//    val props : Seq[(String, JsValueWrapper)] = for {
+//      c <- columnNames if c != "geometry" && c != "id"
+//      vs <- rd(c)
+//    } yield (c, vs)
+//    Json.obj("properties" -> Json.obj(props:_*))
+//  }
+
+
 
   //These are the SQL statements for managing and retrieving data
   object Sql {
@@ -495,7 +540,7 @@ object PostgresqlRepository extends Repository {
       }
 
       s"""
-       |SELECT json, ID
+       |SELECT json, ID, geometry
        |FROM ${quote(db)}.${quote(col)}
        |WHERE $cond
        |ORDER BY ${ if (sortExpr.isEmpty) "ID" else sortExpr }
@@ -544,7 +589,7 @@ object PostgresqlRepository extends Repository {
 
     def CREATE_COLLECTION_ID_INDEX(dbname: String, tableName: String, idType: String) =
     s"""CREATE INDEX ${quote("idx_"+tableName+"_id")}
-       |ON ${quote(dbname)}.${quote(tableName)} ( (json_extract_path_text(json, 'id')::${idType}) )
+       |ON ${quote(dbname)}.${quote(tableName)} ( (json_extract_path_text(json, 'id')::$idType) )
      """.stripMargin
 
     def CREATE_COLLECTION_SPATIAL_INDEX(dbname: String, tableName: String) =
@@ -559,7 +604,7 @@ object PostgresqlRepository extends Repository {
 
     def DELETE_DATA(dbname: String, tableName: String, where: String) =
       s"""DELETE FROM ${quote(dbname)}.${quote(tableName)}
-        WHERE ${where}
+        WHERE $where
      """.stripMargin
 
 
@@ -651,7 +696,7 @@ object PostgresqlRepository extends Repository {
        el => single_quote(el)
       ).mkString(",")
       s"""CREATE INDEX ${quote(indexName)}
-          |ON ${quote(dbName)}.${quote(colName)} ( (json_extract_path_text(json, ${pathExp})::${cast}) )
+          |ON ${quote(dbName)}.${quote(colName)} ( (json_extract_path_text(json, $pathExp)::$cast) )
       """.stripMargin
     }
 
@@ -661,7 +706,7 @@ object PostgresqlRepository extends Repository {
       ).mkString(",")
       s"""CREATE INDEX ${quote(indexName)}
           |ON ${quote(dbName)}.${quote(colName)} using gist
-          |( (json_extract_path_text(json, ${pathExp})::${cast}) gist_trgm_ops)
+          |( (json_extract_path_text(json, $pathExp)::$cast) gist_trgm_ops)
       """.stripMargin
     }
 
