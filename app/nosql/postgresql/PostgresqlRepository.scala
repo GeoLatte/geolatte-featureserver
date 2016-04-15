@@ -17,17 +17,14 @@ import querylang.{BooleanExpr, QueryParser}
 import utilities.JsonHelper
 
 import scala.concurrent.Future
+import scala.util.Try
 
-/**
- * A NoSQL feature store repository for Postgresql/Postgis
- *
- * Created by Karel Maesen, Geovise BVBA on 11/12/14.
- */
 object PostgresqlRepository extends Repository {
 
   import AppExecutionContexts.streamContext
   import play.api.libs.json._
   import GeometryReaders._
+  import Utils._
 
   lazy val url = {
     val parsed = URLParser.parse(ConfigurationValues.PgConnectionString)
@@ -52,17 +49,21 @@ object PostgresqlRepository extends Repository {
 
   {
     import Utils._
-    val result : Future[Boolean] = listDatabases.flatMap { dbs => sequence(dbs)( s => Migrations.executeOn(s) )}
+    val result : Future[Boolean] = listDatabases.flatMap { dbs => sequence(dbs)( s => Migrations.executeOn(s)(pool) )}
     result.onSuccess {
       case b => migrationsStatus = Some(b)
     }
   }
 
   override def createDb(dbname: String): Future[Boolean] = executeStmtsInTransaction(
-    s"${Sql.CREATE_SCHEMA(dbname)}; ${Sql.CREATE_METADATA_TABLE_IN(dbname)}; ${Sql.CREATE_VIEW_TABLE_IN(dbname)}"
+    s"""
+       |${Sql.CREATE_SCHEMA(dbname)};
+       |${Sql.CREATE_METADATA_TABLE_IN(dbname)};
+       |${Sql.CREATE_VIEW_TABLE_IN(dbname)};
+       |""".stripMargin
   ).map( _ => true)
 
-  override def listDatabases: Future[List[String]] = executeStmt(Sql.LIST_SCHEMA){
+  override def listDatabases: Future[List[String]] = executeStmtUnGuarded(Sql.LIST_SCHEMA){
     qr => qr.rows.map( rs => rs.foldLeft(List[String]())( (ac, data) => data(0).asInstanceOf[String]::ac))
         .getOrElse(List[String]())
   }
@@ -75,14 +76,31 @@ object PostgresqlRepository extends Repository {
   override def createCollection(dbName: String, colName: String, md: Metadata): Future[Boolean] = {
     val stmts = List(
       Sql.CREATE_COLLECTION_TABLE(dbName, colName),
-      Sql.INSERT_METADATA(dbName, colName, md),
+      Sql.INSERT_METADATA_JSON_COLLECTION(dbName, colName, md),
       Sql.CREATE_COLLECTION_SPATIAL_INDEX(dbName, colName),
       Sql.CREATE_COLLECTION_ID_INDEX(dbName, colName, md.idType)
     )
     executeStmtsInTransaction( stmts :_*) map ( _ => true )
   }
 
-  override def registerCollection(db: String, collection: String): Future[Boolean] = ???
+  override def registerCollection(db: String, collection: String, spec: Metadata): Future[Boolean] =
+    withInfo(s"Starting with Registration of $db / $collection "){
+
+    def reg(db: String, meta: Metadata):Future[Boolean] = executeStmtsInTransaction(
+      Sql.INSERT_METADATA_REGISTERED(db, collection, meta)
+    )(_ => true).map(_.head)
+
+    for {
+      exists <- existsCollection(db, collection) flatMap { b =>
+        if (b) Future.failed(new CollectionAlreadyExistsException(s"Collection $db/$collection already exists"))
+        else Future.successful(b)
+      }
+      (pkey, idType) <- getPrimaryKey(db, collection)
+      cnt <- count(db, collection)
+      finalMd = Metadata(collection, spec.envelope, spec.level, idType, cnt, spec.geometryColumn, pkey, false)
+      result <- reg(db, finalMd)
+    } yield result
+  }
 
   override def listCollections(dbname: String): Future[List[String]] =
     executeStmt(Sql.SELECT_COLLECTION_NAMES(dbname)){
@@ -99,12 +117,17 @@ object PostgresqlRepository extends Repository {
   def metadataFromDb(database: String, collection: String) : Future[Metadata] = {
 
     def mkMetadata(row: RowData) : Metadata = {
-      val jsEnv = Json.parse(row(0).asInstanceOf[String])
+      val jsEnv = json(row(0))
       val env = Json.fromJson[Envelope](jsEnv) match {
         case JsSuccess(value, _) => value
-        case _ => throw new RuntimeException("Invalid envellopre JSON format.")
+        case _ => throw new RuntimeException("Invalid envelope JSON format.")
       }
-      Metadata(collection, env, row(1).asInstanceOf[Int], row(2).asInstanceOf[String])
+
+      if (row(4) == null )
+        Metadata(collection, env, int(row(1)), string(row(2)))
+      else // so this is a registered collection
+        Metadata(collection, env, int(row(1)), string(row(2)), 0, string(row(4)), string(row(5)), false)
+
     }
 
     def queryResult2Metadata(qr: QueryResult) =
@@ -114,6 +137,7 @@ object PostgresqlRepository extends Repository {
       }
     executeStmt(Sql.SELECT_METADATA(database, collection))( queryResult2Metadata )
   }
+
 
 
   override def metadata(database: String, collection: String): Future[Metadata] =
@@ -142,6 +166,7 @@ object PostgresqlRepository extends Repository {
         case _ => throw new RuntimeException("Query failed to return a row set")
       }
     }
+
 
   override def writer(database: String, collection: String): FeatureWriter = new PGWriter(database, collection)
 
@@ -415,13 +440,39 @@ object PostgresqlRepository extends Repository {
     }
   }
 
-  def executeStmt[T](sql: String)(resultHandler: QueryResult => T): Future[T] = guardReady {
+
+  def executeStmtUnGuarded[T](sql: String)(resultHandler: QueryResult => T): Future[T] = {
     Logger.debug("SQL : " + sql)
     pool.sendQuery(sql)
       .map {
-      resultHandler
-    }.recover {
+        resultHandler
+      }.recover {
       case MappableException(mappedException) => throw mappedException
+    }
+  }
+
+  def executeStmt[T](sql: String)(resultHandler: QueryResult => T): Future[T] = guardReady {
+    executeStmtUnGuarded(sql)(resultHandler)
+  }
+
+
+
+  private def getPrimaryKey(db: String, coll: String) : Future[(String, String)] = {
+    type PKeyData = (String, String)
+
+    def determinePkeyType(s: String) : String = {
+      val us = s.toLowerCase
+      if (us.contains("text") || us.contains("char")) "text"
+      else "decimal"
+    }
+
+    def toPKeyData(row : RowData) : Option[PKeyData] =  Try {
+      (string(row(0)), determinePkeyType(string(row(1))))
+    }.toOption
+
+    executeStmt[Option[PKeyData]](Sql.GET_TABLE_PRIMARY_KEY(db, coll)) { qr => first( toPKeyData )(qr)}.map {
+      case Some(pk) => pk
+      case None => throw new InvalidPrimaryKeyException(s"Can't determine pkey configuration")
     }
   }
 
@@ -448,7 +499,7 @@ object PostgresqlRepository extends Repository {
 
   private def first[T](rowF : RowData => Option[T])(qr: QueryResult) : Option[T] = qr.rows match {
     case Some(rs) if rs.nonEmpty => rowF(rs.head)
-    case _ => None  
+    case _ => None
   }
 
 
@@ -565,9 +616,23 @@ object PostgresqlRepository extends Repository {
           | ${toColName(ExtentField)} JSON,
           | ${toColName(IndexLevelField)} INT,
           | ${toColName(IdTypeField)} VARCHAR(120),
-          | ${toColName(CollectionField)} VARCHAR(255) PRIMARY KEY
-          | )
+          | ${toColName(CollectionField)} VARCHAR(255) PRIMARY KEY,
+          | geometry_col VARCHAR(255),
+          | pkey VARCHAR(255)
+          | );
        """.stripMargin
+
+//    def CREATE_REGISTRY_TABLE_IN(dbname : String) =
+//      s"""
+//         |CREATE TABLE $dbname.geolatte_nosql_registered (
+//         |  table_name varchar(255),
+//         |  pkey varchar(255),
+//         |  pkey_type varchar(120),
+//         |  geometry varchar(255)
+//         |   );
+//       """.stripMargin
+
+
 
     def CREATE_VIEW_TABLE_IN(dbname: String) =
       s"""CREATE TABLE ${quote(dbname)}.${quote(ViewCollection)} (
@@ -586,6 +651,18 @@ object PostgresqlRepository extends Repository {
           | json JSON
           | )
        """.stripMargin
+
+    def GET_TABLE_PRIMARY_KEY(dbname: String, tableName: String) = {
+      val relname = s"$dbname.$tableName"
+      s"""
+         |SELECT a.attname, format_type(a.atttypid, a.atttypmod) AS data_type
+         |FROM   pg_index i
+         |JOIN   pg_attribute a ON a.attrelid = i.indrelid
+         |                     AND a.attnum = ANY(i.indkey)
+         |WHERE  i.indrelid = ${single_quote(relname)}::regclass
+         |AND    i.indisprimary;
+       """.stripMargin
+    }
 
     def CREATE_COLLECTION_ID_INDEX(dbname: String, tableName: String, idType: String) =
     s"""CREATE INDEX ${quote("idx_"+tableName+"_id")}
@@ -617,7 +694,7 @@ object PostgresqlRepository extends Repository {
        """.stripMargin
     }
 
-    def INSERT_METADATA(dbname: String, tableName: String, md: Metadata) =
+    def INSERT_METADATA_JSON_COLLECTION(dbname: String, tableName: String, md: Metadata) =
       s"""insert into ${quote(dbname)}.${quote(MetadataCollection)} values(
        | ${single_quote(Json.stringify(Json.toJson(md.envelope)))}::json,
        | ${md.level},
@@ -625,6 +702,28 @@ object PostgresqlRepository extends Repository {
        | ${single_quote(tableName)}
        | )
      """.stripMargin
+
+    def INSERT_METADATA_REGISTERED(dbname: String, tableName: String, md: Metadata) =
+      s"""insert into ${quote(dbname)}.${quote(MetadataCollection)} values(
+          | ${single_quote(Json.stringify(Json.toJson(md.envelope)))}::json,
+          | ${md.level},
+          | ${single_quote(md.idType)},
+          | ${single_quote(tableName)},
+          | ${single_quote(md.geometryColumn)},
+          | ${single_quote(md.pkey)}
+          | )
+     """.stripMargin
+
+
+    //    def INSERT_REGISTRATION_INFO(dbname: String, registration: TableRegistration) =
+//      s"""
+//         |INSERT INTO ${quote(dbname)}.geolatte_nosql_registered VALUES (
+//         |  ${single_quote(registration.tableName)},
+//         |  ${single_quote(registration.pkey)},
+//         |  ${single_quote(registration.idType)},
+//         |  ${single_quote(registration.geometryColumn)}
+//         |)
+//       """.stripMargin
 
     def SELECT_COLLECTION_NAMES(dbname: String) =
       s"""select $CollectionField

@@ -54,8 +54,7 @@ case class DatabaseResource(db: String, collections: Traversable[String]) extend
 }
 
 case class CollectionResource(md: Metadata) extends Jsonable {
-  import Formats.CollectionFormat
-  def toJson = Json.toJson(md)
+  def toJson = Json.toJson(md)(Formats.CollectionWrites)
 }
 
 case class MediaMetadataResource(id: String, md5: Option[String], url: String) extends Jsonable {
@@ -110,27 +109,40 @@ object Formats {
     )(unlift(MediaMetadataResource.unapply))
 
 
-  def mkMetadata(extent: Envelope, level: Int, idtype: String) =
+  def newCollectionMetadata(extent: Envelope, level: Int, idtype: String) =
       Metadata.fromReads("", extent, level, idtype)
 
-  val CollectionReads: Reads[Metadata] = (
+  def registerTableMetadata(collection: String, extent: Envelope, geometryCol: String) =
+    Metadata(collection, extent, 0, "decimal", 0, geometryCol, "", false)
+
+  /**
+    * This is the format  for the PUT resource when creating a Json table
+    */
+  val CollectionReadsForJsonTable: Reads[Metadata] = (
             (__ \ MetadataIdentifiers.ExtentField).read(EnvelopeFormats) and
             (__ \ MetadataIdentifiers.IndexLevelField).read[Int](min(0)) and
             (__ \ MetadataIdentifiers.IdTypeField).read[String](
               Reads.filter[String]( ValidationError("Requires 'text' or 'decimal") )
               ( tpe => tpe == "text" || tpe == "decimal" )
             )
-       ) ( mkMetadata _ )
+       ) ( newCollectionMetadata _ )
+
+  val CollectionReadsForRegisteredTable: Reads[Metadata] = (
+    (__ \ MetadataIdentifiers.CollectionField).read[String] and
+      (__ \ MetadataIdentifiers.ExtentField).read(EnvelopeFormats) and
+      (__ \ MetadataIdentifiers.GeometryColumnField).read[String]
+    ) (registerTableMetadata _)
 
   val CollectionWrites :  Writes[Metadata] = (
         ( __ \ MetadataIdentifiers.CollectionField).write[String] and
         ( __ \ MetadataIdentifiers.ExtentField).write[Envelope] and
         ( __ \ MetadataIdentifiers.IndexLevelField).write[Int] and
         ( __ \ MetadataIdentifiers.IdTypeField).write[String] and
-        ( __ \ MetadataIdentifiers.CountField).write[Long]
+        ( __ \ MetadataIdentifiers.CountField).write[Long] and
+        ( __ \ MetadataIdentifiers.GeometryColumnField).write[String] and
+        ( __ \ MetadataIdentifiers.PkeyField).write[String] and
+        ( __ \ MetadataIdentifiers.IsJsonField).write[Boolean]
    )(unlift(Metadata.unapply))
-
-  implicit val CollectionFormat : Format[Metadata]  = Format(CollectionReads, CollectionWrites)
 
   implicit val MediaReaderWrites : Writes[MediaReader] = (
       (__ \ "id").write[String] and

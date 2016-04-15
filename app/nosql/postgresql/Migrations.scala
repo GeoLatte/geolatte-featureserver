@@ -14,6 +14,7 @@ case class Migration(version: Int, statement: String, schema: String)
 object Migrations {
 
   import Utils._
+  import PostgresqlRepository.Sql
 
   private def statements(schema: String) = List(
 
@@ -22,12 +23,9 @@ object Migrations {
     """.stripMargin,
 
     s"""
-       |CREATE TABLE $schema.geolatte_nosql_registered (
-       |  name varchar(255),
-       |  pkey varchar(255),
-       |  geometry varchar(255)
-       |   );
-       """.stripMargin
+       |alter table $schema.geolatte_nosql_collections ADD COLUMN  geometry_col VARCHAR(255);
+       |alter table $schema.geolatte_nosql_collections ADD COLUMN  pkey VARCHAR(255);
+     """.stripMargin
 
   )
 
@@ -55,6 +53,7 @@ object Migrations {
     }
 
   private def applyMigration(migration: Migration)(implicit c: Connection): Future[Boolean] = {
+    Logger.info(s"Starting migration ${migration.version} on ${migration.schema}")
     val stmt = migration.statement + "\n" +registerMigrationStmt(migration)
     c.inTransaction(implicit c =>
       c.sendQuery(stmt)

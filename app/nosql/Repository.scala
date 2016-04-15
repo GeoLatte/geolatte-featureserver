@@ -15,7 +15,17 @@ import scala.concurrent.Future
 import scala.util.{Failure, Success}
 
 
-case class Metadata(name: String, envelope: Envelope, level : Int, idType: String, count: Long = 0)
+case class Metadata(
+                     name: String,
+                     envelope: Envelope,
+                     level : Int,
+                     idType: String,
+                     count: Long = 0,
+                     geometryColumn: String = "GEOMETRY",
+                     pkey: String = "id",
+                     jsonTable: Boolean = true // is table defined by nosql Server? or registered
+                   )
+
 
 object MetadataIdentifiers {
   val MetadataCollectionPrefix = "geolatte_nosql_"
@@ -26,6 +36,9 @@ object MetadataIdentifiers {
   val CollectionField = "collection"
   val IdTypeField = "id-type"
   val CountField = "count"
+  val GeometryColumnField  = "geometry-column"
+  val PkeyField = "primary-key"
+  val IsJsonField = "is-json"
 }
 
 object Metadata {
@@ -34,7 +47,7 @@ object Metadata {
 
   //added so that MetadataReads compiles
   def fromReads(name: String, envelope:Envelope, level: Int, idType: String): Metadata =
-      this(name, envelope,level, idType, 0)
+      this(name, envelope,level, idType)
 
   implicit val MetadataReads = (
       (__ \ CollectionField).read[String] and
@@ -127,6 +140,8 @@ trait Repository {
   def existsCollection(dbName: String, colName: String): Future[Boolean]
 
   def createCollection(dbName: String, colName: String, spatialSpec: Metadata) : Future[Boolean]
+
+  def registerCollection(db: String, collection: String, metadata: Metadata) : Future[Boolean]
 
   def deleteCollection(dbName: String, colName: String) : Future[Boolean]
 
