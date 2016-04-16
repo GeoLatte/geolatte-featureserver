@@ -219,7 +219,7 @@ object PostgresqlRepository extends Repository {
   }
 
   override def delete(database: String, collection: String, query: BooleanExpr): Future[Boolean] =
-    executeStmt(Sql.DELETE_DATA(database, collection, PGQueryRenderer.render(query))){ _ => true}
+    executeStmt(Sql.DELETE_DATA(database, collection, PGJsonQueryRenderer.render(query))){ _ => true}
 
   def batchInsert(database: String, collection: String, jsons: Seq[(JsObject, Polygon)] ): Future[Long] = {
     def id(json: JsValue) : Any = json match {
@@ -247,7 +247,7 @@ object PostgresqlRepository extends Repository {
     }
 
   def update(database: String, collection: String, query: BooleanExpr, newValue: JsObject, envelope: Polygon) : Future[Int] = {
-    val whereExpr = PGQueryRenderer.render(query)
+    val whereExpr = PGJsonQueryRenderer.render(query)
     val stmt = Sql.UPDATE_DATA(database, collection, whereExpr)
     executePreparedStmt(stmt, Seq(newValue, Wkb.toWkb(envelope))){ _.rowsAffected.toInt }
   }
@@ -494,7 +494,7 @@ object PostgresqlRepository extends Repository {
     }
 
     if (paths.isEmpty) paths
-    else paths ++ List( __ \ "type",  __ \ "geometry")
+    else paths ++ List( __ \ "type",  __ \ "geometry", __ \ "id")
   }
 
   private def fldSortSpecToSortExpr(spec: FldSortSpec) : String = {
@@ -533,12 +533,14 @@ object PostgresqlRepository extends Repository {
 
     val LIST_SCHEMA = "select schema_name from information_schema.schemata"
 
-    def condition(query : SpatialQuery) : String = {
+     def condition(query : SpatialQuery) : String = {
+      val renderer = if(query.metadata.jsonTable) PGJsonQueryRenderer else PGRegularQueryRenderer
       val windowOpt = query.windowOpt.map( env => Wkt.toWkt(FeatureTransformers.toPolygon(env)))
-      val attOpt = query.queryOpt.map( PGQueryRenderer.render )
+      val geomCol = if (query.metadata.jsonTable) "geometry" else query.metadata.geometryColumn
+      val attOpt = query.queryOpt.map( renderer.render )
       (windowOpt, attOpt) match {
-        case (Some(w),Some(q)) => s"geometry && ${single_quote(w)}::geometry and $q"
-        case (Some(w), _ ) => s"geometry && ${single_quote(w)}::geometry"
+        case (Some(w),Some(q)) => s"$geomCol && ${single_quote(w)}::geometry and $q"
+        case (Some(w), _ ) => s"$geomCol && ${single_quote(w)}::geometry"
         case (_, Some(q)) => q
         case _ => "true"
       }

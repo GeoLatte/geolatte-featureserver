@@ -11,9 +11,9 @@ import scala.util.Try
 */
 class PGQueryRenderSpec extends Specification {
 
-  "The PGQueryRenderer " should {
+  "The PGJsonQueryRenderer " should {
 
-    val renderer = PGQueryRenderer
+    val renderer = PGJsonQueryRenderer
 
     "properly render boolean expressions containing equality expresssions " in {
       val expr: BooleanExpr = QueryParser.parse("ab.cd = 12").get

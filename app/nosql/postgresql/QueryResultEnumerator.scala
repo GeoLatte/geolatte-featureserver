@@ -35,7 +35,7 @@ class TableQueryResultEnumerator(md: Metadata) extends QueryResultEnumerator {
     }
 
   private def enumerate(resultSet: ResultSet, optProj: Option[Reads[JsObject]]) : Enumerator[JsObject] = {
-    val colnames = Utils.withInfo(s"Colnames are : ${resultSet.columnNames}")(resultSet.columnNames)
+    val colnames = resultSet.columnNames
     val mapF = QueryResultUtils.toMap(colnames) _
 
     val project : JsObject => JsObject = optProj match {
