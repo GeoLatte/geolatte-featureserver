@@ -1,9 +1,14 @@
 package nosql
 
+import com.github.mauricio.async.db.{QueryResult, RowData}
+import org.geolatte.geom.ByteBuffer
+import org.geolatte.geom.codec.Wkb
 import play.api.Logger
+import play.api.libs.json.Json.JsValueWrapper
 import play.api.libs.json._
 
 import scala.concurrent.Future
+import scala.util.{Success, Try}
 
 /**
   * Created by Karel Maesen, Geovise BVBA on 08/04/16.
@@ -30,6 +35,11 @@ object Utils {
 
   def withError[T](msg: String)(t: => T) = {
     Logger.error(msg)
+    t
+  }
+
+  def withDebug[T](msg: String)(t: => T) = {
+    Logger.debug(msg)
     t
   }
 
@@ -74,3 +84,68 @@ object Utils {
 
 
 }
+
+object JsonUtils {
+
+  def toJsValue(value: Any) : JsValue = value match {
+    case v if v == null => JsNull
+    case v : String => JsString(v)
+    case v : Int => JsNumber(v)
+    case v : Long => JsNumber(v)
+    case b : Boolean => JsBoolean(b)
+    case f : Float => JsNumber(BigDecimal(f))
+    case d : Double => JsNumber(BigDecimal(d))
+    case b : BigDecimal => JsNumber(b)
+    case e => Utils.withDebug(s"Converting value $e (${e.getClass.getCanonicalName}) by toString method") (
+      Try { JsString(e.toString) }.toOption.getOrElse(JsNull)
+    )
+  }
+
+  def toGeoJson(idColumn: String, geomCol: String, propertyMap: Map[String, Any]) : JsObject = {
+    val props = for {
+      (key, value) <- propertyMap if key != idColumn && key != geomCol && key != "__geojson"
+    } yield (key -> toJsValue(value))
+
+    val flds : Seq[(String, JsValue)]  = Seq(
+      "id" -> toJsValue(propertyMap(idColumn)),
+      "geometry" -> Json.parse(Utils.string(propertyMap("__geojson"))),
+      "type" -> JsString("Feature"),
+      "properties" -> JsObject(props.toSeq)
+    )
+    JsObject(flds)
+  }
+
+  def toJson(text : String)(implicit reads : Reads[JsObject]) : Option[JsObject] =
+    Json
+      .parse(text)
+      .asOpt[JsObject](reads)
+}
+
+object QueryResultUtils {
+
+  def first[T](rowF : RowData => Option[T])(qr: QueryResult) : Option[T] = qr.rows match {
+    case Some(rs) if rs.nonEmpty => rowF(rs.head)
+    case _ => None
+  }
+
+  def toList[T](qr: QueryResult)(rowF : RowData => Option[T]): List[T] = qr.rows match {
+    case Some(rs) =>
+      rs.map(rowF).collect{case Some(v) => v}.toList
+    case _ => List[T]()
+  }
+
+  def toProjectedJsonList(qr: QueryResult, optProj : Option[Reads[JsObject]]) : List[JsObject] = {
+    def json(row : RowData) : Option[JsObject] = JsonUtils.toJson(row(0).asInstanceOf[String])
+    def project(reads : Reads[JsObject])(jsOpt : Option[JsObject]) : Option[JsObject] = jsOpt flatMap (_.asOpt(reads))
+    val transformFunc = optProj match {
+      case Some(reads) => json _ andThen project(reads)
+      case _ => json _
+    }
+    toList(qr)(transformFunc)
+  }
+
+  def toMap(colnames: IndexedSeq[String])(row: RowData): Map[String, Any] =
+    colnames.map { c => (c,row(c)) } toMap
+
+}
+

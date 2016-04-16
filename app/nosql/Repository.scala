@@ -92,7 +92,9 @@ case class SpatialQuery (
                           windowOpt: Option[Envelope] = None,
                           queryOpt: Option[BooleanExpr] = None,
                           projection: List[String] = List(),
-                          sort: List[FldSortSpec] = List())
+                          sort: List[FldSortSpec] = List(),
+                          metadata: Metadata
+                        )
 
 trait MortonCodeQueryOptimizer {
 

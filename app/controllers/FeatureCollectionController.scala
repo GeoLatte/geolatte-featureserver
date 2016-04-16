@@ -4,7 +4,6 @@ import org.supercsv.util.CsvContext
 import querylang.{BooleanAnd, QueryParser, BooleanExpr}
 
 import scala.collection.mutable.ListBuffer
-import scala.collection.parallel.mutable
 import scala.language.reflectiveCalls
 import scala.language.implicitConversions
 
@@ -122,11 +121,11 @@ object FeatureCollectionController extends AbstractNoSqlController with FutureIn
 
         implicit val format = QueryParams.FMT.extract
         implicit val filename = QueryParams.FILENAME.extract
-        repository.query(db, collection, SpatialQuery()).map {
-          case (_, x) => enumJsonToResult(x)
-        }.map{
-          x => toSimpleResult(x)
-        }.recover {
+        (for {
+          md <- repository.metadata(db, collection)
+          (_, x) <- repository.query(db, collection, SpatialQuery( metadata = md ))
+        } yield toSimpleResult(enumJsonToResult(x)))
+        .recover {
           commonExceptionHandler(db, collection)
         }
       }
@@ -162,8 +161,9 @@ object FeatureCollectionController extends AbstractNoSqlController with FutureIn
    * converts a JsObject Enumerator to an RenderableStreamingResource supporting both Json and Csv output
    *
    * Limitations: when the passed Json is not a valid GeoJson object, this will pass a stream of empty points
-   * @param enum
-   * @param req
+    *
+    * @param enum enumerator
+   * @param req requestHeader
    * @return
    */
   implicit def enumJsonToResult(enum: Enumerator[JsObject])(implicit req: RequestHeader) =
@@ -177,7 +177,7 @@ object FeatureCollectionController extends AbstractNoSqlController with FutureIn
 
       def expand(v : JsObject) : Seq[(String, String)] =
         utilities.JsonHelper.flatten(v) sortBy {
-          case (k,v) => k
+          case (k,_) => k
         } map {
         case (k, v: JsString)   => (k, encode(v) )
         case (k, v: JsNumber)   => (k, Json.stringify(v) )
@@ -212,10 +212,8 @@ object FeatureCollectionController extends AbstractNoSqlController with FutureIn
           else toCsvHeader(js)  + "\n" + toCsvRecord(js)
       } match {
         case Success(v) => v
-        case Failure(t) => {
-          Logger.error(s"Failure to encode $js in CSV. Message is: ")
-          ""
-        }
+        case Failure(t) =>
+          Utils.withError(s"Failure to encode $js in CSV. Message is: ")("")
       }
 
       def toJsonStream = enum
@@ -250,7 +248,8 @@ object FeatureCollectionController extends AbstractNoSqlController with FutureIn
           windowOpt,
           selectorMerge(queryOpt, queryParamOpt),
           toProjectList(projOpt, projectionOpt),
-          toFldSortSpecList(sortParam, sortDirParam)
+          toFldSortSpecList(sortParam, sortDirParam),
+          smd
         )
     }
 
@@ -294,7 +293,7 @@ object FeatureCollectionController extends AbstractNoSqlController with FutureIn
 
     def apply(s: String, crs: CrsId): Option[Envelope] = {
       s match {
-        case bbox_pattern(minx, miny, maxx, maxy) => {
+        case bbox_pattern(minx, miny, maxx, maxy) =>
           try {
             val env = new Envelope(minx.toDouble, miny.toDouble, maxx.toDouble, maxy.toDouble, crs)
             if (!env.isEmpty) Some(env)
@@ -302,7 +301,6 @@ object FeatureCollectionController extends AbstractNoSqlController with FutureIn
           } catch {
             case _: Throwable => None
           }
-        }
         case _ => None
       }
     }

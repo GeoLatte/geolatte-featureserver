@@ -25,6 +25,8 @@ object PostgresqlRepository extends Repository {
   import play.api.libs.json._
   import GeometryReaders._
   import Utils._
+  import JsonUtils._
+  import QueryResultUtils._
 
   lazy val url = {
     val parsed = URLParser.parse(ConfigurationValues.PgConnectionString)
@@ -167,8 +169,11 @@ object PostgresqlRepository extends Repository {
       }
     }
 
-
   override def writer(database: String, collection: String): FeatureWriter = new PGWriter(database, collection)
+
+  private def selectEnumerator(md: Metadata) : QueryResultEnumerator =
+    if (md.jsonTable) JsonQueryResultEnumerator
+    else new TableQueryResultEnumerator(md)
 
   override def query(database: String, collection: String, spatialQuery: SpatialQuery, start : Option[Int] = None,
                      limit: Option[Int] = None): Future[CountedQueryResult] = {
@@ -180,13 +185,15 @@ object PostgresqlRepository extends Repository {
       arr => fldSortSpecToSortExpr(arr)
     } mkString ","
 
+    //get the enumerator
+    val enumerator = selectEnumerator(spatialQuery.metadata)
     //get the count
     val stmtTotal = Sql.SELECT_TOTAL_IN_QUERY(database, collection, spatialQuery)
     val fCnt = executeStmt(stmtTotal){ first(rd => Some(rd(0).asInstanceOf[Long]))(_).get }
 
     //get the data
     val dataStmt = Sql.SELECT_DATA(database, collection, spatialQuery, sortExpr, start, limit)
-    val fEnum = executeStmt(dataStmt){ enumerate(_,projectingReads) }
+    val fEnum = executeStmt(dataStmt){ enumerator.enumerate(_,projectingReads) }
 
     {for{
       cnt <- fCnt
@@ -264,11 +271,15 @@ object PostgresqlRepository extends Repository {
      }
 
     val expr = QueryParser.parse(idq).get
-    val q = new SpatialQuery(None, Some(expr))
 
-    query(database, collection,q)
-      .flatMap{ case ( _, e)  =>
-      e(Iteratee.head[JsObject])
+    //TOODO -- simpliy this by doing upsert in SQL like here http://www.the-art-of-web.com/sql/upsert/
+    // to be later replaced by postgresql 9.5 upsert behavior
+    metadata(database, collection).map{ md =>
+      new SpatialQuery(None, Some(expr), metadata = md)
+    }.flatMap { q =>
+      query(database, collection, q)
+    }.flatMap{ case ( _, e)  =>
+        e(Iteratee.head[JsObject])
     }.flatMap{ i =>
       i.run
     }.flatMap{
@@ -476,11 +487,6 @@ object PostgresqlRepository extends Repository {
     }
   }
 
-  private def toJson(text : String)(implicit reads : Reads[JsObject]) : Option[JsObject] =
-    Json
-      .parse(text)
-      .asOpt[JsObject](reads)
-
   private def toJsPathList(flds: List[String]) : List[JsPath] = {
 
     val paths = flds.map {
@@ -495,35 +501,6 @@ object PostgresqlRepository extends Repository {
       //we use the #>> operator for 9.3 support, which extracts to text
       // if we move to 9.4  or later with jsonb then we can use the #> operator because jsonb are ordered
       s" json #>> '{${spec.fld.split("\\.") mkString ","}}' ${spec.direction.toString}"
-  }
-
-  private def first[T](rowF : RowData => Option[T])(qr: QueryResult) : Option[T] = qr.rows match {
-    case Some(rs) if rs.nonEmpty => rowF(rs.head)
-    case _ => None
-  }
-
-
-  private def toList[T](qr: QueryResult)(rowF : RowData => Option[T]): List[T] = qr.rows match {
-    case Some(rs) =>
-      rs.map(rowF).collect{case Some(v) => v}.toList
-    case _ => List[T]()
-  }
-
-  private def toProjectedJsonList(qr: QueryResult, optProj : Option[Reads[JsObject]]) : List[JsObject] = {
-
-    def json(row : RowData) : Option[JsObject] = toJson(row(0).asInstanceOf[String])
-
-    def project(reads : Reads[JsObject])(jsOpt : Option[JsObject]) : Option[JsObject] = jsOpt flatMap (_.asOpt(reads))
-
-    val transformFunc = optProj match {
-      case Some(reads) => json _ andThen project(reads)
-      case _ => json _
-    }
-    toList(qr)(transformFunc)
-  }
-
-  private def enumerate(qr: QueryResult, optProj : Option[Reads[JsObject]]) : Enumerator[JsObject] = {
-    Enumerator.enumerate(toProjectedJsonList(qr, optProj))
   }
 
 //
@@ -590,11 +567,21 @@ object PostgresqlRepository extends Repository {
         case _ => ""
       }
 
+      val projection =
+        if (query.metadata.jsonTable) "json, ID, geometry"
+        else s" ST_AsGeoJson( ${query.metadata.geometryColumn}, 15, 3 ) as __geojson, * "
+
+      val orderBy =
+        if (sortExpr.isEmpty ){
+          if (query.metadata.jsonTable) "ID" else query.metadata.pkey
+        } else sortExpr
+
+
       s"""
-       |SELECT json, ID, geometry
+       |SELECT $projection
        |FROM ${quote(db)}.${quote(col)}
        |WHERE $cond
-       |ORDER BY ${ if (sortExpr.isEmpty) "ID" else sortExpr }
+       |ORDER BY ${orderBy}
      """.stripMargin + offsetClause + limitClause
 
     }
@@ -621,18 +608,6 @@ object PostgresqlRepository extends Repository {
           | pkey VARCHAR(255)
           | );
        """.stripMargin
-
-//    def CREATE_REGISTRY_TABLE_IN(dbname : String) =
-//      s"""
-//         |CREATE TABLE $dbname.geolatte_nosql_registered (
-//         |  table_name varchar(255),
-//         |  pkey varchar(255),
-//         |  pkey_type varchar(120),
-//         |  geometry varchar(255)
-//         |   );
-//       """.stripMargin
-
-
 
     def CREATE_VIEW_TABLE_IN(dbname: String) =
       s"""CREATE TABLE ${quote(dbname)}.${quote(ViewCollection)} (
@@ -713,17 +688,6 @@ object PostgresqlRepository extends Repository {
           | ${single_quote(md.pkey)}
           | )
      """.stripMargin
-
-
-    //    def INSERT_REGISTRATION_INFO(dbname: String, registration: TableRegistration) =
-//      s"""
-//         |INSERT INTO ${quote(dbname)}.geolatte_nosql_registered VALUES (
-//         |  ${single_quote(registration.tableName)},
-//         |  ${single_quote(registration.pkey)},
-//         |  ${single_quote(registration.idType)},
-//         |  ${single_quote(registration.geometryColumn)}
-//         |)
-//       """.stripMargin
 
     def SELECT_COLLECTION_NAMES(dbname: String) =
       s"""select $CollectionField
