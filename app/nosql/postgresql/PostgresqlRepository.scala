@@ -181,10 +181,6 @@ object PostgresqlRepository extends Repository {
     val projectingReads : Option[Reads[JsObject]] =
       (toJsPathList _ andThen JsonHelper.mkProjection )(spatialQuery.projection)
 
-    val sortExpr: String = spatialQuery.sort.map {
-      arr => fldSortSpecToSortExpr(arr)
-    } mkString ","
-
     //get the enumerator
     val enumerator = selectEnumerator(spatialQuery.metadata)
     //get the count
@@ -192,7 +188,7 @@ object PostgresqlRepository extends Repository {
     val fCnt = executeStmt(stmtTotal){ first(rd => Some(rd(0).asInstanceOf[Long]))(_).get }
 
     //get the data
-    val dataStmt = Sql.SELECT_DATA(database, collection, spatialQuery, sortExpr, start, limit)
+    val dataStmt = Sql.SELECT_DATA(database, collection, spatialQuery, start, limit)
     val fEnum = executeStmt(dataStmt){ enumerator.enumerate(_,projectingReads) }
 
     {for{
@@ -497,12 +493,6 @@ object PostgresqlRepository extends Repository {
     else paths ++ List( __ \ "type",  __ \ "geometry", __ \ "id")
   }
 
-  private def fldSortSpecToSortExpr(spec: FldSortSpec) : String = {
-      //we use the #>> operator for 9.3 support, which extracts to text
-      // if we move to 9.4  or later with jsonb then we can use the #> operator because jsonb are ordered
-      s" json #>> '{${spec.fld.split("\\.") mkString ","}}' ${spec.direction.toString}"
-  }
-
 //
 //    SQL Statements and utility functions.
 //
@@ -533,6 +523,19 @@ object PostgresqlRepository extends Repository {
 
     val LIST_SCHEMA = "select schema_name from information_schema.schemata"
 
+    private def fldSortSpecToSortExpr(spec: FldSortSpec) : String = {
+      //we use the #>> operator for 9.3 support, which extracts to text
+      // if we move to 9.4  or later with jsonb then we can use the #> operator because jsonb are ordered
+      s" json #>> '{${spec.fld.split("\\.") mkString ","}}' ${spec.direction.toString}"
+    }
+    def sort(query:SpatialQuery) : String = query.metadata.jsonTable match {
+      case true =>
+        if (query.sort.isEmpty) "ID"
+        else query.sort.map { arr => fldSortSpecToSortExpr(arr) } mkString ","
+      case _    => if (query.sort.isEmpty) query.metadata.pkey else query.sort.map(f => s"${f.fld} ${f.direction} ") mkString ","
+    }
+
+
      def condition(query : SpatialQuery) : String = {
       val renderer = if(query.metadata.jsonTable) PGJsonQueryRenderer else PGRegularQueryRenderer
       val windowOpt = query.windowOpt.map( env => Wkt.toWkt(FeatureTransformers.toPolygon(env)))
@@ -555,7 +558,7 @@ object PostgresqlRepository extends Repository {
 
 
 
-    def SELECT_DATA(db: String, col: String, query: SpatialQuery, sortExpr: String, start: Option[Int] = None, limit: Option[Int] = None): String = {
+    def SELECT_DATA(db: String, col: String, query: SpatialQuery, start: Option[Int] = None, limit: Option[Int] = None): String = {
 
       val cond = condition(query)
 
@@ -573,17 +576,11 @@ object PostgresqlRepository extends Repository {
         if (query.metadata.jsonTable) "json, ID, geometry"
         else s" ST_AsGeoJson( ${query.metadata.geometryColumn}, 15, 3 ) as __geojson, * "
 
-      val orderBy =
-        if (sortExpr.isEmpty ){
-          if (query.metadata.jsonTable) "ID" else query.metadata.pkey
-        } else sortExpr
-
-
       s"""
        |SELECT $projection
        |FROM ${quote(db)}.${quote(col)}
        |WHERE $cond
-       |ORDER BY ${orderBy}
+       |ORDER BY ${sort(query)}
      """.stripMargin + offsetClause + limitClause
 
     }

@@ -14,7 +14,8 @@ class MetadataFormatSpec extends Specification {
 
     "validate " in {
 
-      import Formats.CollectionFormat
+      import Formats.CollectionWrites
+      import Formats.CollectionReadsForJsonTable
 
       val jsMd = Json.obj("extent" -> Json.obj(
         "crs" -> 31370,
