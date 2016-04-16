@@ -50,7 +50,7 @@ object JsonHelper {
     if (paths.isEmpty) None
     else {
       val r = paths.foldLeft[Reads[JsObject]](NoObjReads) {
-        (r1, path) => (r1 and path.json.pickBranch) reduce
+        (r1, path) => (r1 and path.json.pickBranch.orElse(path.json.put(JsNull))) reduce
       }
       Some(r)
     }

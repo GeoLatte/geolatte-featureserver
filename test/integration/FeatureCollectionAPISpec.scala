@@ -4,8 +4,9 @@ import nosql.json.Gen
 import nosql.json.Gen._
 import play.api.libs.json._
 import org.geolatte.geom.Envelope
-
 import java.net.URLEncoder._
+
+import nosql.Utils
 
 /**
  * @author Karel Maesen, Geovise BVBA
@@ -275,7 +276,7 @@ class FeatureCollectionAPISpec extends InCollectionSpecification {
 
     val pruner : Reads[JsObject] = {
 
-      val p1 = fieldsToPrune.foldLeft((__ \ "id").json.prune) {
+      val p1 = fieldsToPrune.foldLeft((__ \ "properties" \ "id").json.prune) {
         (p, field) => p andThen ((__ \ "properties" \ field).json.prune)
       }
 

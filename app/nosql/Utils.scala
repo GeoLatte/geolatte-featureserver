@@ -44,7 +44,7 @@ object Utils {
   }
 
   def debug[T](t: => T) : T= {
-    println(t.toString)
+    println("DEBUG: " + t.toString)
     t
   }
 
