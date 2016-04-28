@@ -43,6 +43,11 @@ object Utils {
     t
   }
 
+  def withTrace[T](msg: String)(t: => T) = {
+    Logger.trace(msg)
+    t
+  }
+
   def debug[T](t: => T) : T= {
     println("DEBUG: " + t.toString)
     t
@@ -96,7 +101,7 @@ object JsonUtils {
     case f : Float => JsNumber(BigDecimal(f))
     case d : Double => JsNumber(BigDecimal(d))
     case b : BigDecimal => JsNumber(b)
-    case e => Utils.withDebug(s"Converting value $e (${e.getClass.getCanonicalName}) by toString method") (
+    case e => Utils.withTrace(s"Converting value $e (${e.getClass.getCanonicalName}) by toString method") (
       Try { JsString(e.toString) }.toOption.getOrElse(JsNull)
     )
   }
@@ -108,7 +113,9 @@ object JsonUtils {
 
     val flds : Seq[(String, JsValue)]  = Seq(
       "id" -> toJsValue(propertyMap(idColumn)),
-      "geometry" -> Json.parse(Utils.string(propertyMap("__geojson"))),
+      "geometry" -> Try{
+        Json.parse(Utils.string(propertyMap("__geojson")))
+        }.getOrElse(Utils.withWarning(s"Failed to parse ${Utils.string(propertyMap("__geojson"))}")(JsNull)),
       "type" -> JsString("Feature"),
       "properties" -> JsObject(props.toSeq)
     )
