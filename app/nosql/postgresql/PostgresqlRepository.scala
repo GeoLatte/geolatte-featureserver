@@ -532,7 +532,10 @@ object PostgresqlRepository extends Repository {
       case true =>
         if (query.sort.isEmpty) "ID"
         else query.sort.map { arr => fldSortSpecToSortExpr(arr) } mkString ","
-      case _    => if (query.sort.isEmpty) query.metadata.pkey else query.sort.map(f => s"${f.fld} ${f.direction} ") mkString ","
+      case _    => {
+        def colName(s: String) : String = if (s.trim.startsWith("properties.")) s.trim.substring(11) else s.trim
+        if (query.sort.isEmpty) query.metadata.pkey else query.sort.map(f => s"${colName(f.fld)} ${f.direction} ") mkString ","
+      }
     }
 
 
