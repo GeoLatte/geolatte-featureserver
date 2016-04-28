@@ -18,6 +18,9 @@ object PGRegularQueryRenderer extends AbstractPGQueryRenderer{
     case LikePredicate(lhs, rhs) => s" ${renderPropertyExpr(lhs)} ilike '${rhs.pattern}'"
   }
 
-  protected def renderPropertyExpr(lhs: PropertyExpr): String = lhs.path
+  protected def renderPropertyExpr(lhs: PropertyExpr): String =
+      if (lhs.path.trim.startsWith("properties.")) lhs.path.trim.substring(11)
+      else lhs.path
+
 
 }
