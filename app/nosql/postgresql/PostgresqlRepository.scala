@@ -1,6 +1,8 @@
 package nosql.postgresql
 
+
 import Exceptions._
+import com.github.mauricio.async.db.{Connection, QueryResult, RowData}
 import com.github.mauricio.async.db.pool.{ConnectionPool, PoolConfiguration}
 import com.github.mauricio.async.db.postgresql.exceptions.GenericDatabaseException
 import com.github.mauricio.async.db.postgresql.pool.PostgreSQLConnectionFactory
@@ -11,24 +13,24 @@ import controllers.{Formats, IndexDef}
 import nosql._
 import nosql.json.GeometryReaders
 import org.geolatte.geom.codec.{Wkb, Wkt}
-import org.geolatte.geom.{Envelope, Polygon}
+import org.geolatte.geom.{ByteBuffer, Envelope, Geometry, Polygon}
 import play.api.Logger
 import play.api.libs.iteratee.{Enumerator, Iteratee}
+import play.api.libs.json._
 import querylang.{BooleanExpr, QueryParser}
 import utilities.JsonHelper
 
 import scala.concurrent.Future
+import scala.util.Try
 
-/**
- * A NoSQL feature store repository for Postgresql/Postgis
- *
- * Created by Karel Maesen, Geovise BVBA on 11/12/14.
- */
 object PostgresqlRepository extends Repository {
 
   import AppExecutionContexts.streamContext
   import GeometryReaders._
-  import play.api.libs.json._
+  import Utils._
+  import JsonUtils._
+  import QueryResultUtils._
+
 
   lazy val url = {
     val parsed = URLParser.parse(ConfigurationValues.PgConnectionString)
@@ -49,11 +51,25 @@ object PostgresqlRepository extends Repository {
 
   lazy val pool = new ConnectionPool(factory, poolConfig)
 
+  var migrationsStatus: Option[Boolean] = None
+
+  {
+    import Utils._
+    val result : Future[Boolean] = listDatabases.flatMap { dbs => sequence(dbs)( s => Migrations.executeOn(s)(pool) )}
+    result.onSuccess {
+      case b => migrationsStatus = Some(b)
+    }
+  }
+
   override def createDb(dbname: String): Future[Boolean] = executeStmtsInTransaction(
-    s"${Sql.CREATE_SCHEMA(dbname)}; ${Sql.CREATE_METADATA_TABLE_IN(dbname)}; ${Sql.CREATE_VIEW_TABLE_IN(dbname)}"
+    s"""
+       |${Sql.CREATE_SCHEMA(dbname)};
+       |${Sql.CREATE_METADATA_TABLE_IN(dbname)};
+       |${Sql.CREATE_VIEW_TABLE_IN(dbname)};
+       |""".stripMargin
   ).map( _ => true)
 
-  override def listDatabases: Future[List[String]] = executeStmt(Sql.LIST_SCHEMA){
+  override def listDatabases: Future[List[String]] = executeStmtUnGuarded(Sql.LIST_SCHEMA){
     qr => qr.rows.map( rs => rs.foldLeft(List[String]())( (ac, data) => data(0).asInstanceOf[String]::ac))
         .getOrElse(List[String]())
   }
@@ -66,11 +82,30 @@ object PostgresqlRepository extends Repository {
   override def createCollection(dbName: String, colName: String, md: Metadata): Future[Boolean] = {
     val stmts = List(
       Sql.CREATE_COLLECTION_TABLE(dbName, colName),
-      Sql.INSERT_METADATA(dbName, colName, md),
+      Sql.INSERT_METADATA_JSON_COLLECTION(dbName, colName, md),
       Sql.CREATE_COLLECTION_SPATIAL_INDEX(dbName, colName),
       Sql.CREATE_COLLECTION_ID_INDEX(dbName, colName, md.idType)
     )
     executeStmtsInTransaction( stmts :_*) map ( _ => true )
+  }
+
+  override def registerCollection(db: String, collection: String, spec: Metadata): Future[Boolean] =
+    withInfo(s"Starting with Registration of $db / $collection "){
+
+    def reg(db: String, meta: Metadata):Future[Boolean] = executeStmtsInTransaction(
+      Sql.INSERT_METADATA_REGISTERED(db, collection, meta)
+    )(_ => true).map(_.head)
+
+    for {
+      exists <- existsCollection(db, collection) flatMap { b =>
+        if (b) Future.failed(new CollectionAlreadyExistsException(s"Collection $db/$collection already exists"))
+        else Future.successful(b)
+      }
+      (pkey, idType) <- getPrimaryKey(db, collection)
+      cnt <- count(db, collection)
+      finalMd = Metadata(collection, spec.envelope, spec.level, idType, cnt, spec.geometryColumn, pkey, false)
+      result <- reg(db, finalMd)
+    } yield result
   }
 
   override def listCollections(dbname: String): Future[List[String]] =
@@ -80,7 +115,7 @@ object PostgresqlRepository extends Repository {
 
   /**
    * Retrieves the collection metadata from the server, but does not count number of rows
- *
+   *
    * @param database the database
    * @param collection the collection (in fact table)
    * @return metadata, but row count is set to 0
@@ -88,21 +123,27 @@ object PostgresqlRepository extends Repository {
   def metadataFromDb(database: String, collection: String) : Future[Metadata] = {
 
     def mkMetadata(row: RowData) : Metadata = {
-      val jsEnv = Json.parse(row(0).asInstanceOf[String])
+      val jsEnv = json(row(0))
       val env = Json.fromJson[Envelope](jsEnv) match {
         case JsSuccess(value, _) => value
-        case _ => throw new RuntimeException("Invalid envellopre JSON format.")
+        case _ => throw new RuntimeException("Invalid envelope JSON format.")
       }
-      Metadata(collection, env, row(1).asInstanceOf[Int], row(2).asInstanceOf[String])
+
+      if (row(4) == null )
+        Metadata(collection, env, int(row(1)), string(row(2)))
+      else // so this is a registered collection
+        Metadata(collection, env, int(row(1)), string(row(2)), 0, string(row(4)), string(row(5)), false)
+
     }
 
     def queryResult2Metadata(qr: QueryResult) =
       qr.rows match {
-        case Some(rs) if rs.nonEmpty => mkMetadata( rs.head)
+        case Some(rs) if rs.nonEmpty => mkMetadata(rs.head)
         case _ => throw new CollectionNotFoundException()
       }
     executeStmt(Sql.SELECT_METADATA(database, collection))( queryResult2Metadata )
   }
+
 
 
   override def metadata(database: String, collection: String): Future[Metadata] =
@@ -127,12 +168,16 @@ object PostgresqlRepository extends Repository {
     executeStmt(Sql.SELECT_COLLECTION_NAMES(dbName)) { qr =>
       qr.rows match {
         case Some(rs) =>
-          rs.exists( row => row( 0 ).asInstanceOf[String].equalsIgnoreCase( colName ) )
+          rs.exists( row => row(0).asInstanceOf[String].equalsIgnoreCase(colName))
         case _ => throw new RuntimeException("Query failed to return a row set")
       }
     }
 
   override def writer(database: String, collection: String): FeatureWriter = new PGWriter(database, collection)
+
+  private def selectEnumerator(md: Metadata) : QueryResultEnumerator =
+    if (md.jsonTable) JsonQueryResultEnumerator
+    else new TableQueryResultEnumerator(md)
 
   override def query(database: String, collection: String, spatialQuery: SpatialQuery, start : Option[Int] = None,
                      limit: Option[Int] = None): Future[CountedQueryResult] = {
@@ -140,17 +185,15 @@ object PostgresqlRepository extends Repository {
     val projectingReads : Option[Reads[JsObject]] =
       (toJsPathList _ andThen JsonHelper.mkProjection )(spatialQuery.projection)
 
-    val sortExpr: String = spatialQuery.sort.map {
-      arr => fldSortSpecToSortExpr(arr)
-    } mkString ","
-
+    //get the enumerator
+    val enumerator = selectEnumerator(spatialQuery.metadata)
     //get the count
     val stmtTotal = Sql.SELECT_TOTAL_IN_QUERY(database, collection, spatialQuery)
     val fCnt = executeStmt(stmtTotal){ first(rd => Some(rd(0).asInstanceOf[Long]))(_).get }
 
     //get the data
-    val dataStmt = Sql.SELECT_DATA(database, collection, spatialQuery, sortExpr, start, limit)
-    val fEnum = executeStmt(dataStmt){ enumerate(_,projectingReads) }
+    val dataStmt = Sql.SELECT_DATA(database, collection, spatialQuery, start, limit)
+    val fEnum = executeStmt(dataStmt){ enumerator.enumerate(_,projectingReads) }
 
     {for{
       cnt <- fCnt
@@ -161,8 +204,22 @@ object PostgresqlRepository extends Repository {
 
   }
 
+  //this method is there for testing purposes only
+  //TODO -- remove this method
+  protected def doSelect(sql: String) : Future[List[RowData]] = {
+
+    executeStmt(sql) { _.rows match {
+      case Some(rs) =>
+        val buf = new Array[RowData](rs.size)
+        rs.copyToArray(buf)
+        buf.toList
+
+      case _ => List[RowData]()
+    }}
+  }
+
   override def delete(database: String, collection: String, query: BooleanExpr): Future[Boolean] =
-    executeStmt(Sql.DELETE_DATA(database, collection, PGQueryRenderer.render(query))){ _ => true}
+    executeStmt(Sql.DELETE_DATA(database, collection, PGJsonQueryRenderer.render(query))){ _ => true}
 
   def batchInsert(database: String, collection: String, jsons: Seq[(JsObject, Polygon)] ): Future[Long] = {
     def id(json: JsValue) : Any = json match {
@@ -190,7 +247,7 @@ object PostgresqlRepository extends Repository {
     }
 
   def update(database: String, collection: String, query: BooleanExpr, newValue: JsObject, envelope: Polygon) : Future[Int] = {
-    val whereExpr = PGQueryRenderer.render(query)
+    val whereExpr = PGJsonQueryRenderer.render(query)
     val stmt = Sql.UPDATE_DATA(database, collection, whereExpr)
     executePreparedStmt(stmt, Seq(newValue, Wkb.toWkb(envelope))){ _.rowsAffected.toInt }
   }
@@ -214,11 +271,15 @@ object PostgresqlRepository extends Repository {
      }
 
     val expr = QueryParser.parse(idq).get
-    val q = new SpatialQuery(None, Some(expr))
 
-    query(database, collection,q)
-      .flatMap{ case ( _, e)  =>
-      e(Iteratee.head[JsObject])
+    //TOODO -- simpliy this by doing upsert in SQL like here http://www.the-art-of-web.com/sql/upsert/
+    // to be later replaced by postgresql 9.5 upsert behavior
+    metadata(database, collection).map{ md =>
+      new SpatialQuery(None, Some(expr), metadata = md)
+    }.flatMap { q =>
+      query(database, collection, q)
+    }.flatMap{ case ( _, e)  =>
+        e(Iteratee.head[JsObject])
     }.flatMap{ i =>
       i.run
     }.flatMap{
@@ -333,6 +394,12 @@ object PostgresqlRepository extends Repository {
   //Private Utility methods
   //************************************************************************
 
+  private def guardReady[T](block: => T) : T = this.migrationsStatus match {
+    case Some(b) => block
+//    case Some(false) => throw NotReadyException("Migrations failed, check the logs")
+    case _ => throw NotReadyException("Busy migrating databases")
+  }
+
   private def  sendstatement[T](stmt: String)(implicit resultHandler: QueryResult => T, c: Connection) : Future[T] = {
     Logger.debug("SQL IN TRANSACTION: " + stmt)
     c.sendQuery(stmt).map(qr => resultHandler(qr))
@@ -376,68 +443,59 @@ object PostgresqlRepository extends Repository {
       sendprepared(sql, values).map( resultHandler)
     }
 
-  private def doInTransaction[T](block : Connection => Future[T]) : Future[T] =
+  private def doInTransaction[T](block : Connection => Future[T]) : Future[T] = guardReady{
     pool.inTransaction { implicit c =>
       block(c)
     }.recover {
       case MappableException(mappedException) => throw mappedException
     }
+  }
 
-  def executeStmt[T](sql: String)(resultHandler: QueryResult => T): Future[T] = {
+
+  def executeStmtUnGuarded[T](sql: String)(resultHandler: QueryResult => T): Future[T] = {
     Logger.debug("SQL : " + sql)
     pool.sendQuery(sql)
       .map {
-      resultHandler
-    }.recover {
+        resultHandler
+      }.recover {
       case MappableException(mappedException) => throw mappedException
     }
   }
 
-  private def toJson(text : String)(implicit reads : Reads[JsObject]) : Option[JsObject] =
-    Json
-      .parse(text)
-      .asOpt[JsObject](reads)
 
-  private def toJsPathList(flds: List[String]) : List[JsPath] =
-    if (flds.isEmpty) List()
-    else {
-      val paths = flds.map {_.split("\\.").foldLeft[JsPath](__)((jsp, pe) => jsp \ pe) }
-      paths ++ List( __ \ "type",  __ \ "geometry")
+  def executeStmt[T](sql: String)(resultHandler: QueryResult => T): Future[T] = guardReady {
+    executeStmtUnGuarded(sql)(resultHandler)
+  }
+
+
+
+  private def getPrimaryKey(db: String, coll: String) : Future[(String, String)] = {
+    type PKeyData = (String, String)
+
+    def determinePkeyType(s: String) : String = {
+      val us = s.toLowerCase
+      if (us.contains("text") || us.contains("char")) "text"
+      else "decimal"
     }
 
-  private def fldSortSpecToSortExpr(spec: FldSortSpec) : String = {
-      //we use the #>> operator for 9.3 support, which extracts to text
-      // if we move to 9.4  or later with jsonb then we can use the #> operator because jsonb are ordered
-      s" json #>> '{${spec.fld.split("\\.") mkString ","}}' ${spec.direction.toString}"
-  }
+    def toPKeyData(row : RowData) : Option[PKeyData] =  Try {
+      (string(row(0)), determinePkeyType(string(row(1))))
+    }.toOption
 
-  private def first[T](rowF : RowData => Option[T])(qr: QueryResult) : Option[T] = qr.rows match {
-    case Some(rs) if rs.nonEmpty => rowF( rs.head)
-    case _ => None  
-  }
-
-
-  private def toList[T](qr: QueryResult)(rowF : RowData => Option[T]): List[T] = qr.rows match {
-    case Some(rs) =>
-      rs.map(rowF).collect{case Some(v) => v}.toList
-    case _ => List[T]()
-  }
-
-  private def toProjectedJsonList(qr: QueryResult, optProj : Option[Reads[JsObject]]) : List[JsObject] = {
-
-    def json(row : RowData) : Option[JsObject] = toJson(row(0).asInstanceOf[String])
-
-    def project(reads : Reads[JsObject])(jsOpt : Option[JsObject]) : Option[JsObject] = jsOpt flatMap (_.asOpt(reads))
-
-    val transformFunc = optProj match {
-      case Some(reads) => json _ andThen project(reads)
-      case _ => json _
+    executeStmt[Option[PKeyData]](Sql.GET_TABLE_PRIMARY_KEY(db, coll)) { qr => first( toPKeyData )(qr)}.map {
+      case Some(pk) => pk
+      case None => throw new InvalidPrimaryKeyException(s"Can't determine pkey configuration")
     }
-    toList(qr)(transformFunc)
   }
 
-  private def enumerate(qr: QueryResult, optProj : Option[Reads[JsObject]]) : Enumerator[JsObject] = {
-    Enumerator.enumerate(toProjectedJsonList(qr, optProj))
+  private def toJsPathList(flds: List[String]) : List[JsPath] = {
+
+    val paths = flds.map {
+      spath => spath.split("\\.").foldLeft[JsPath](__)((jsp, pe) => jsp \ pe)
+    }
+
+    if (paths.isEmpty) paths
+    else paths ++ List( __ \ "type",  __ \ "geometry", __ \ "id")
   }
 
 //
@@ -451,6 +509,17 @@ object PostgresqlRepository extends Repository {
   private def single_quote(str: String) : String = "'" + str + "'"
   private def unescapeJson(js: JsObject):String = Json.stringify(js).replaceAll("'", "''")
   private def toColName(str: String) : String = str.replaceAll("-", "_")
+  private def toGeometry(str: String) : Geometry = Wkb.fromWkb(ByteBuffer.from(str))
+
+//  private def rowData2Properties(rd: RowData, columnNames: Seq[String]) : JsObject = {
+//    val props : Seq[(String, JsValueWrapper)] = for {
+//      c <- columnNames if c != "geometry" && c != "id"
+//      vs <- rd(c)
+//    } yield (c, vs)
+//    Json.obj("properties" -> Json.obj(props:_*))
+//  }
+
+
 
   //These are the SQL statements for managing and retrieving data
   object Sql {
@@ -459,12 +528,30 @@ object PostgresqlRepository extends Repository {
 
     val LIST_SCHEMA = "select schema_name from information_schema.schemata"
 
-    def condition(query : SpatialQuery) : String = {
+    private def fldSortSpecToSortExpr(spec: FldSortSpec) : String = {
+      //we use the #>> operator for 9.3 support, which extracts to text
+      // if we move to 9.4  or later with jsonb then we can use the #> operator because jsonb are ordered
+      s" json #>> '{${spec.fld.split("\\.") mkString ","}}' ${spec.direction.toString}"
+    }
+    def sort(query:SpatialQuery) : String = query.metadata.jsonTable match {
+      case true =>
+        if (query.sort.isEmpty) "ID"
+        else query.sort.map { arr => fldSortSpecToSortExpr(arr) } mkString ","
+      case _    => {
+        def colName(s: String) : String = if (s.trim.startsWith("properties.")) s.trim.substring(11) else s.trim
+        if (query.sort.isEmpty) query.metadata.pkey else query.sort.map(f => s"${colName(f.fld)} ${f.direction} ") mkString ","
+      }
+    }
+
+
+     def condition(query : SpatialQuery) : String = {
+      val renderer = if(query.metadata.jsonTable) PGJsonQueryRenderer else PGRegularQueryRenderer
       val windowOpt = query.windowOpt.map( env => Wkt.toWkt(FeatureTransformers.toPolygon(env)))
-      val attOpt = query.queryOpt.map( PGQueryRenderer.render )
+      val geomCol = if (query.metadata.jsonTable) "geometry" else query.metadata.geometryColumn
+      val attOpt = query.queryOpt.map( renderer.render )
       (windowOpt, attOpt) match {
-        case (Some(w),Some(q)) => s"geometry && ${single_quote(w)}::geometry and $q"
-        case (Some(w), _ ) => s"geometry && ${single_quote(w)}::geometry"
+        case (Some(w),Some(q)) => s"$geomCol && ${single_quote(w)}::geometry and $q"
+        case (Some(w), _ ) => s"$geomCol && ${single_quote(w)}::geometry"
         case (_, Some(q)) => q
         case _ => "true"
       }
@@ -479,7 +566,7 @@ object PostgresqlRepository extends Repository {
 
 
 
-    def SELECT_DATA(db: String, col: String, query: SpatialQuery, sortExpr: String, start: Option[Int] = None, limit: Option[Int] = None): String = {
+    def SELECT_DATA(db: String, col: String, query: SpatialQuery, start: Option[Int] = None, limit: Option[Int] = None): String = {
 
       val cond = condition(query)
 
@@ -493,11 +580,15 @@ object PostgresqlRepository extends Repository {
         case _ => ""
       }
 
+      val projection =
+        if (query.metadata.jsonTable) "json, ID, geometry"
+        else s" ST_AsGeoJson( ${query.metadata.geometryColumn}, 15, 3 ) as __geojson, * "
+
       s"""
-       |SELECT json, ID
+       |SELECT $projection
        |FROM ${quote(db)}.${quote(col)}
        |WHERE $cond
-       |ORDER BY ${ if (sortExpr.isEmpty) "ID" else sortExpr }
+       |ORDER BY ${sort(query)}
      """.stripMargin + offsetClause + limitClause
 
     }
@@ -519,8 +610,10 @@ object PostgresqlRepository extends Repository {
           | ${toColName(ExtentField)} JSON,
           | ${toColName(IndexLevelField)} INT,
           | ${toColName(IdTypeField)} VARCHAR(120),
-          | ${toColName(CollectionField)} VARCHAR(255) PRIMARY KEY
-          | )
+          | ${toColName(CollectionField)} VARCHAR(255) PRIMARY KEY,
+          | geometry_col VARCHAR(255),
+          | pkey VARCHAR(255)
+          | );
        """.stripMargin
 
     def CREATE_VIEW_TABLE_IN(dbname: String) =
@@ -540,6 +633,18 @@ object PostgresqlRepository extends Repository {
           | json JSON
           | )
        """.stripMargin
+
+    def GET_TABLE_PRIMARY_KEY(dbname: String, tableName: String) = {
+      val relname = s"$dbname.$tableName"
+      s"""
+         |SELECT a.attname, format_type(a.atttypid, a.atttypmod) AS data_type
+         |FROM   pg_index i
+         |JOIN   pg_attribute a ON a.attrelid = i.indrelid
+         |                     AND a.attnum = ANY(i.indkey)
+         |WHERE  i.indrelid = ${single_quote(relname)}::regclass
+         |AND    i.indisprimary;
+       """.stripMargin
+    }
 
     def CREATE_COLLECTION_ID_INDEX(dbname: String, tableName: String, idType: String) =
     s"""CREATE INDEX ${quote("idx_"+tableName+"_id")}
@@ -571,13 +676,24 @@ object PostgresqlRepository extends Repository {
        """.stripMargin
     }
 
-    def INSERT_METADATA(dbname: String, tableName: String, md: Metadata) =
+    def INSERT_METADATA_JSON_COLLECTION(dbname: String, tableName: String, md: Metadata) =
       s"""insert into ${quote(dbname)}.${quote(MetadataCollection)} values(
        | ${single_quote(Json.stringify(Json.toJson(md.envelope)))}::json,
        | ${md.level},
        | ${single_quote(md.idType)},
        | ${single_quote(tableName)}
        | )
+     """.stripMargin
+
+    def INSERT_METADATA_REGISTERED(dbname: String, tableName: String, md: Metadata) =
+      s"""insert into ${quote(dbname)}.${quote(MetadataCollection)} values(
+          | ${single_quote(Json.stringify(Json.toJson(md.envelope)))}::json,
+          | ${md.level},
+          | ${single_quote(md.idType)},
+          | ${single_quote(tableName)},
+          | ${single_quote(md.geometryColumn)},
+          | ${single_quote(md.pkey)}
+          | )
      """.stripMargin
 
     def SELECT_COLLECTION_NAMES(dbname: String) =

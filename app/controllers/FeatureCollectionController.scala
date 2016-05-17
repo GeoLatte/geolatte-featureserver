@@ -1,6 +1,7 @@
 package controllers
 
 import Exceptions._
+
 import config.AppExecutionContexts
 import nosql._
 import nosql.json.GeometryReaders._
@@ -112,11 +113,11 @@ object FeatureCollectionController extends AbstractNoSqlController with FutureIn
 
         implicit val format = QueryParams.FMT.extract
         implicit val filename = QueryParams.FILENAME.extract
-        repository.query(db, collection, SpatialQuery()).map {
-          case (_, x) => enumJsonToResult(x)
-        }.map{
-          x => toSimpleResult(x)
-        }.recover {
+        (for {
+          md <- repository.metadata(db, collection)
+          (_, x) <- repository.query(db, collection, SpatialQuery( metadata = md ))
+        } yield toSimpleResult(enumJsonToResult(x)))
+        .recover {
           commonExceptionHandler(db, collection)
         }
       }
@@ -152,9 +153,10 @@ object FeatureCollectionController extends AbstractNoSqlController with FutureIn
    * converts a JsObject Enumerator to an RenderableStreamingResource supporting both Json and Csv output
    *
    * Limitations: when the passed Json is not a valid GeoJson object, this will pass a stream of empty points
-   * @param enum GeoJSON enumerator
-   * @param req request header
-   * @return returns the Reponse Stream
+
+    * @param enum enumerator
+   * @param req requestHeader
+   * @return
    */
   implicit def enumJsonToResult(enum: Enumerator[JsObject])(implicit req: RequestHeader) =
     new JsonStreamable with CsvStreamable {
@@ -203,8 +205,8 @@ object FeatureCollectionController extends AbstractNoSqlController with FutureIn
       } match {
         case Success(v) => v
         case Failure(t) =>
-          Logger.error(s"Failure to encode $js in CSV. Message is: ")
-          ""
+          Utils.withError(s"Failure to encode $js in CSV. Message is: ")("")
+
       }
 
       def toJsonStream = enum
@@ -239,7 +241,8 @@ object FeatureCollectionController extends AbstractNoSqlController with FutureIn
           windowOpt,
           selectorMerge(queryOpt, queryParamOpt),
           toProjectList(projOpt, projectionOpt),
-          toFldSortSpecList(sortParam, sortDirParam)
+          toFldSortSpecList(sortParam, sortDirParam),
+          smd
         )
     }
 

@@ -5,7 +5,7 @@ import querylang._
 /**
 * Created by Karel Maesen, Geovise BVBA on 23/01/15.
 */
-object PGQueryRenderer extends QueryRenderer[String] {
+object PGJsonQueryRenderer extends AbstractPGQueryRenderer {
 
   def render(expr: BooleanExpr) : String = expr match {
     case BooleanAnd(lhs, rhs) => s" ( ${render(lhs)} ) AND ( ${render(rhs)} )"
@@ -18,7 +18,7 @@ object PGQueryRenderer extends QueryRenderer[String] {
     case LikePredicate(lhs, rhs) => s" ${renderPropertyExpr(lhs,rhs)} ilike '${rhs.pattern}'"
   }
 
-  private def renderPropertyExpr(lhs: PropertyExpr, rhs: Expr): String = {
+  protected def renderPropertyExpr(lhs: PropertyExpr, rhs: Expr): String = {
     val variadicPath: String = path2VariadicList(lhs)
     s"json_extract_path_text(json, $variadicPath)::${cast(rhs)}"
   }
@@ -37,21 +37,5 @@ object PGQueryRenderer extends QueryRenderer[String] {
   def path2VariadicList(propertyExpr: PropertyExpr): String = "'" + propertyExpr.path.replaceAll("\\.", "','") + "'"
     
 
-  private def renderValue(expr: ValueExpr) : String = expr match{
-    case LiteralBoolean(b) => if (b) " true " else " false "
-    case LiteralNumber(n)  => s" ${n.toString} "
-    case LiteralString(s)  => s" '$s' "
-  }
 
-  private def renderValueList(expr: ValueListExpr) : String =
-    s"(${expr.values.map(renderValue).map(_.trim).mkString(",")})"
-
-  private def sym(op: ComparisonOperator): String = op match {
-      case EQ => " = "
-      case NEQ => " != "
-      case LT => " < "
-      case GT => " > "
-      case LTE => " <= "
-      case GTE => " >= "
-    }
 }

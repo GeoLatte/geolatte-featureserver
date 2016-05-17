@@ -14,8 +14,6 @@ class MetadataFormatSpec extends Specification {
 
     "validate " in {
 
-      import Formats.CollectionFormat
-
       val jsMd = Json.obj("extent" -> Json.obj(
         "crs" -> 31370,
         "envelope" -> Json.arr(0, 0, 300000, 300000)
@@ -24,9 +22,8 @@ class MetadataFormatSpec extends Specification {
         "id-type" -> "decimal"
       )
 
-      val md = jsMd.as[Metadata]
+      val md = jsMd.as[Metadata](Formats.CollectionReadsForJsonTable)
 
-      println(md)
       md must beAnInstanceOf[Metadata]
 
     }

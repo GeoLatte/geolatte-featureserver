@@ -1,14 +1,14 @@
 package integration
 
+import nosql.Utils
 import org.specs2._
 import org.specs2.main.{Arguments, ArgProperty}
 import org.specs2.matcher.{Expectable, Matcher}
-
 import org.specs2.specification.Step
 import org.specs2.specification.core.{Env, SpecStructure, Fragments}
 import play.api.{libs, Play}
 import play.api.Play._
-import play.api.libs.json.{Json, JsArray, JsObject, _}
+import play.api.libs.json.{JsArray, JsObject, Json, _}
 import play.api.test.FakeApplication
 
 /**

@@ -447,5 +447,8 @@ object MongoDBRepository extends nosql.Repository with FutureInstrumented {
 
   override def dropIndex(database: String, collection: String, index: String): Future[Boolean] = ???
 
+  //Makes no sense for Mongo
+  override def registerCollection(db: String, collection: String, md: Metadata): Future[Boolean] = sys.error("Not implemented")
+
 }
 

@@ -30,4 +30,10 @@ package object Exceptions {
 
   case class InvalidParamsException(msg: String = "") extends NoSqlException(msg)
 
+  case class NotReadyException(msg: String) extends NoSqlException(msg)
+
+  case class InvalidPrimaryKeyException(msg: String) extends NoSqlException(msg)
+
+    case class InvalidRequestException(msg: String) extends NoSqlException(msg)
+
 }
