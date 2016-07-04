@@ -270,7 +270,7 @@ object PostgresqlRepository extends Repository {
 
     //TOODO -- simpliy this by doing upsert in SQL like here http://www.the-art-of-web.com/sql/upsert/
     // to be later replaced by postgresql 9.5 upsert behavior
-    metadata(database, collection).map{ md =>
+    metadataFromDb(database, collection).map{ md =>
       new SpatialQuery(None, Some(expr), metadata = md)
     }.flatMap { q =>
       query(database, collection, q)
