@@ -1,13 +1,12 @@
 package controllers
 
 import org.supercsv.util.CsvContext
-import querylang.{BooleanAnd, QueryParser, BooleanExpr}
+import querylang.{BooleanAnd, BooleanExpr, QueryParser}
 
 import scala.collection.mutable.ListBuffer
 import scala.language.reflectiveCalls
 import scala.language.implicitConversions
-
-import org.geolatte.geom.{Point, Geometry, Envelope}
+import org.geolatte.geom.{Envelope, Geometry, Point}
 import org.geolatte.geom.crs.CrsId
 import play.api.mvc._
 import play.api.Logger
@@ -17,17 +16,16 @@ import play.api.libs.json._
 import nosql.json.GeometryReaders._
 import org.supercsv.encoder.DefaultCsvEncoder
 import org.supercsv.prefs.CsvPreference
-import scala.concurrent.Future
 
+import scala.concurrent.Future
 import play.api.libs.json.JsString
 import play.api.libs.json.JsBoolean
-
 import play.api.libs.json.JsNumber
 import utilities.{EnumeratorUtility, QueryParam}
 import nosql._
 import play.api.libs.json.JsObject
 
-import scala.util.{Try, Failure, Success}
+import scala.util.{Failure, Success, Try}
 
 
 object FeatureCollectionController extends AbstractNoSqlController with FutureInstrumented {
@@ -88,21 +86,46 @@ object FeatureCollectionController extends AbstractNoSqlController with FutureIn
     val FILENAME = QueryParam("filename", (s: String) => Some(s))
   }
 
+  case class FeatureCollectionRequest(bbox: Option[String],
+                                      query: Option[BooleanExpr],
+                                      projection: List[String],
+                                      withView: Option[String],
+                                      sort: List[String],
+                                      sortDir: List[String],
+                                      start: Int,
+                                      limit: Int)
 
+  private def extractFeatureCollectionRequest(request: Request[AnyContent]) = {
+
+    implicit val queryString: Map[String, Seq[String]] = request.queryString
+
+    val bbox = QueryParams.BBOX.extract
+    val query = QueryParams.QUERY.extract
+    val projection = QueryParams.PROJECTION.extract.map(_.as[List[String]]).getOrElse(List())
+    val withView = QueryParams.WITH_VIEW.extract
+
+    val sort = QueryParams.SORT.extract.map(_.as[List[String]]).getOrElse(List())
+    val sortDir = QueryParams.SORTDIR.extract.map(_.as[List[String]]).getOrElse(List())
+
+    val start = QueryParams.START.extract.getOrElse(0)
+    val limit = Math.min(QueryParams.LIMIT.extract.getOrElse(COLLECTION_LIMIT), COLLECTION_LIMIT)
+
+    FeatureCollectionRequest(bbox, query, projection, withView, sort, sortDir, start, limit)
+  }
 
   def query(db: String, collection: String) =
     repositoryAction ( implicit request =>
       futureTimed("featurecollection-query"){
         implicit val queryStr = request.queryString
 
-        val start : Option[Int] = QueryParams.START.extract
-        val limit : Option[Int]= QueryParams.LIMIT.extract
         implicit val format = QueryParams.FMT.extract
         implicit val filename = QueryParams.FILENAME.extract
 
-        Logger.info(s"Query string $queryStr on $db, collection $collection")
+        val featureCollectionRequest = extractFeatureCollectionRequest(request)
+
+        Logger.info(s"Query $featureCollectionRequest on $db, collection $collection")
           repository.metadata(db, collection).flatMap(md =>
-            doQuery(db, collection, md, start, limit).map{
+            doQuery(db, collection, md, featureCollectionRequest).map {
               case (_, x) => enumJsonToResult(x)
             }.map{
               x => toSimpleResult(x)
@@ -139,15 +162,13 @@ object FeatureCollectionController extends AbstractNoSqlController with FutureIn
 
   def list(db: String, collection: String) = repositoryAction(
     implicit request => futureTimed("featurecollection-list"){
-      implicit val queryStr = request.queryString
 
-      val limit = Math.min( QueryParams.LIMIT.extract.getOrElse(COLLECTION_LIMIT),COLLECTION_LIMIT)
-      val start = QueryParams.START.extract.getOrElse(0)
+      val featureCollectionRequest = extractFeatureCollectionRequest(request)
 
-      Logger.info(s"Query string $queryStr on $db, collection $collection")
+      Logger.info(s"Query $featureCollectionRequest on $db, collection $collection")
 
       repository.metadata(db, collection).flatMap(md =>
-        doQuery(db, collection, md, Some(start), Some(limit)).map[SimpleResult] {
+        doQuery(db, collection, md, featureCollectionRequest).map[SimpleResult] {
           case (optTotal, features) => toSimpleResult(FeaturesResource(optTotal, features))
         }
       ).recover {
@@ -222,36 +243,22 @@ object FeatureCollectionController extends AbstractNoSqlController with FutureIn
 
     }
 
-  private def doQuery(db: String, collection: String, smd: Metadata, start: Option[Int] = None, limit: Option[Int] = None)
-                            (implicit queryStr: Map[String, Seq[String]]) : Future[(Option[Long], Enumerator[JsObject])] =
-    queryString2SpatialQuery(db,collection,smd).flatMap( q =>  repository.query(db, collection, q, start, limit) )
+  private def doQuery(db: String, collection: String, smd: Metadata, request: FeatureCollectionRequest): Future[(Option[Long], Enumerator[JsObject])] = {
 
+    val window = Bbox(request.bbox.getOrElse(""), smd.envelope.getCrsId)
 
-  implicit def queryString2SpatialQuery(db: String, collection: String, smd: Metadata)
-                                       (implicit queryStr: Map[String, Seq[String]]) : Future[SpatialQuery] = {
-    val windowOpt = Bbox(QueryParams.BBOX.extractOrElse(""), smd.envelope.getCrsId)
-    val projectionOpt = QueryParams.PROJECTION.extract
-    val queryParamOpt = QueryParams.QUERY.extract
-
-    val sortParam  = QueryParams.SORT.extract.map(_.as[List[String]]).getOrElse(List())
-    val sortDirParam = QueryParams.SORTDIR.extract.map(_.as[List[String]]).getOrElse(List())
-
-    val viewDef = QueryParams.WITH_VIEW.extract.map(vd => repository.getView(db, collection, vd))
-      .getOrElse(Future {
-      Json.obj()
-    })
-
-    viewDef.map(vd => vd.as(Formats.ViewDefExtract))
-      .map {
-      case (queryOpt, projOpt) =>
-        SpatialQuery(
-          windowOpt,
-          selectorMerge(queryOpt, queryParamOpt),
-          toProjectList(projOpt, projectionOpt),
-          toFldSortSpecList(sortParam, sortDirParam),
-          smd
-        )
-    }
+    for {
+      viewDef <- request.withView.map(viewId => repository.getView(db, collection, viewId)).getOrElse(Future.successful(Json.obj()))
+      (viewQuery, viewProj) = viewDef.as(Formats.ViewDefExtract)
+      spatialQuery = SpatialQuery(
+        window,
+        selectorMerge(viewQuery, request.query),
+        toProjectList(viewProj, request.projection),
+        toFldSortSpecList(request.sort, request.sortDir),
+        smd
+      )
+      result <- repository.query(db, collection, spatialQuery, Some(request.start), Some(request.limit))
+    } yield result
 
   }
 
@@ -267,10 +274,9 @@ object FeatureCollectionController extends AbstractNoSqlController with FutureIn
     res
   }
 
-  private def toProjectList(viewProj: Option[JsArray], qProj: Option[JsArray]): List[String] = {
+  private def toProjectList(viewProj: Option[JsArray], qProj: List[String]): List[String] = {
     val vp1 = viewProj.flatMap( jsa => jsa.asOpt[List[String]] ).getOrElse(List())
-    val vp2 = qProj.flatMap( jsa => jsa.asOpt[List[String]] ).getOrElse(List())
-    val result = vp1 ++ vp2
+    val result = vp1 ++ qProj
     Logger.debug(s"Merging optional projectors of view and query to: $result")
     result
   }
