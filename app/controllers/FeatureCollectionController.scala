@@ -93,11 +93,13 @@ object FeatureCollectionController extends AbstractNoSqlController with FutureIn
                                       sort: List[String],
                                       sortDir: List[String],
                                       start: Int,
-                                      limit: Int)
+                                      limit: Int,
+                                      intersectionGeometryWkt: Option[String])
 
   private def extractFeatureCollectionRequest(request: Request[AnyContent]) = {
 
     implicit val queryString: Map[String, Seq[String]] = request.queryString
+    val intersectionGeometryWkt: Option[String] = request.body.asText
 
     val bbox = QueryParams.BBOX.extract
     val query = QueryParams.QUERY.extract
@@ -110,7 +112,7 @@ object FeatureCollectionController extends AbstractNoSqlController with FutureIn
     val start = QueryParams.START.extract.getOrElse(0)
     val limit = Math.min(QueryParams.LIMIT.extract.getOrElse(COLLECTION_LIMIT), COLLECTION_LIMIT)
 
-    FeatureCollectionRequest(bbox, query, projection, withView, sort, sortDir, start, limit)
+    FeatureCollectionRequest(bbox, query, projection, withView, sort, sortDir, start, limit, intersectionGeometryWkt)
   }
 
   def query(db: String, collection: String) =
@@ -252,6 +254,7 @@ object FeatureCollectionController extends AbstractNoSqlController with FutureIn
       (viewQuery, viewProj) = viewDef.as(Formats.ViewDefExtract)
       spatialQuery = SpatialQuery(
         window,
+        request.intersectionGeometryWkt,
         selectorMerge(viewQuery, request.query),
         toProjectList(viewProj, request.projection),
         toFldSortSpecList(request.sort, request.sortDir),
