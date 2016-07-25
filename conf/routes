@@ -28,6 +28,9 @@ GET /api/databases/:db/:collection/query                controllers.FeatureColle
 GET /api/databases/:db/:collection/featurecollection    controllers.FeatureCollectionController.list(db: String, collection: String)
 GET /api/databases/:db/:collection/download             controllers.FeatureCollectionController.download(db: String, collection: String)
 
+POST /api/databases/:db/:collection/query               controllers.FeatureCollectionController.query(db: String, collection: String)
+POST /api/databases/:db/:collection/featurecollection   controllers.FeatureCollectionController.list(db: String, collection: String)
+
 POST /api/databases/:db/:collection/media               controllers.MediaController.save(db: String, collection: String)
 GET /api/databases/:db/:collection/media/:id            controllers.MediaController.get(db: String, collection: String, id: String)
 DELETE /api/databases/:db/:collection/media/:id         controllers.MediaController.delete(db: String, collection: String, id: String)
