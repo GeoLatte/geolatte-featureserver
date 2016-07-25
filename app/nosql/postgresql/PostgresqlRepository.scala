@@ -268,10 +268,10 @@ object PostgresqlRepository extends Repository {
 
     val expr = QueryParser.parse(idq).get
 
-    //TOODO -- simpliy this by doing upsert in SQL like here http://www.the-art-of-web.com/sql/upsert/
+    //TOODO -- simplify this by doing upsert in SQL like here http://www.the-art-of-web.com/sql/upsert/
     // to be later replaced by postgresql 9.5 upsert behavior
     metadataFromDb(database, collection).map{ md =>
-      new SpatialQuery(None, Some(expr), metadata = md)
+      new SpatialQuery(windowOpt = None, intersectionGeometryWktOpt = None, queryOpt = Some(expr), metadata = md)
     }.flatMap { q =>
       query(database, collection, q)
     }.flatMap{ case ( _, e)  =>
@@ -532,31 +532,32 @@ object PostgresqlRepository extends Repository {
       case true =>
         if (query.sort.isEmpty) "ID"
         else query.sort.map { arr => fldSortSpecToSortExpr(arr) } mkString ","
-      case _    => {
+      case _    =>
         def colName(s: String) : String = if (s.trim.startsWith("properties.")) s.trim.substring(11) else s.trim
         if (query.sort.isEmpty) query.metadata.pkey else query.sort.map(f => s"${colName(f.fld)} ${f.direction} ") mkString ","
-      }
     }
 
 
-     def condition(query : SpatialQuery) : String = {
-      val renderer = if(query.metadata.jsonTable) PGJsonQueryRenderer else PGRegularQueryRenderer
-      val windowOpt = query.windowOpt.map( env => Wkt.toWkt(FeatureTransformers.toPolygon(env)))
+    def condition(query: SpatialQuery): Option[String] = {
+
+      val renderer = if (query.metadata.jsonTable) PGJsonQueryRenderer else PGRegularQueryRenderer
       val geomCol = if (query.metadata.jsonTable) "geometry" else query.metadata.geometryColumn
-      val attOpt = query.queryOpt.map( renderer.render )
-      (windowOpt, attOpt) match {
-        case (Some(w),Some(q)) => s"$geomCol && ${single_quote(w)}::geometry and $q"
-        case (Some(w), _ ) => s"$geomCol && ${single_quote(w)}::geometry"
-        case (_, Some(q)) => q
-        case _ => "true"
-      }
+
+      def bboxIntersectionRenderer(wkt: String) = s"$geomCol && ${single_quote(wkt)}::geometry"
+      def geomIntersectionRenderer(wkt: String) = s"ST_Intersects($geomCol, ${single_quote(wkt)}::geometry)"
+
+      val windowOpt = query.windowOpt.map(env => Wkt.toWkt(FeatureTransformers.toPolygon(env))).map(bboxIntersectionRenderer)
+      val intersectionOpt = query.intersectionGeometryWktOpt.map(geomIntersectionRenderer)
+      val attOpt = query.queryOpt.map(renderer.render)
+
+      (windowOpt ++ intersectionOpt ++ attOpt).reduceOption((condition1, condition2) => s"$condition1 and $condition2")
     }
 
     def SELECT_TOTAL_IN_QUERY(db: String, col: String, query: SpatialQuery) : String =
       s"""
        |SELECT COUNT(*)
        |FROM ${quote(db)}.${quote(col)}
-       |where ${condition(query)}
+       |${condition(query).map(c => s"WHERE $c").getOrElse("")}
      """.stripMargin
 
 
@@ -582,7 +583,7 @@ object PostgresqlRepository extends Repository {
       s"""
        |SELECT $projection
        |FROM ${quote(db)}.${quote(col)}
-       |WHERE $cond
+       |${cond.map(c => s"WHERE $c").getOrElse("")}
        |ORDER BY ${sort(query)}
      """.stripMargin + offsetClause + limitClause
 

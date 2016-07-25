@@ -90,6 +90,7 @@ case class FldSortSpec(fld: String, direction: Direction)
 
 case class SpatialQuery (
                           windowOpt: Option[Envelope] = None,
+                          intersectionGeometryWktOpt: Option[String] = None,
                           queryOpt: Option[BooleanExpr] = None,
                           projection: List[String] = List(),
                           sort: List[FldSortSpec] = List(),
