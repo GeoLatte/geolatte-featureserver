@@ -2,7 +2,7 @@ package nosql
 
 import akka.actor.Props
 import kamon.Kamon
-import metrics.{PrometheusMetrics, SimplePrinter, KamonUserMetrics}
+import metrics.PrometheusMetrics
 import org.slf4j.LoggerFactory
 import play.api._
 import play.api.mvc.Results._
@@ -32,10 +32,8 @@ object Global extends GlobalSettings {
   }
 
   override def onStart(app: Application) {
-
+      Kamon.start()
       prometheusMetrics.start()
-//      val subscriber = app.actorSystem.actorOf(Props[SimplePrinter], "kamon-stdout-reporter")
-//      Kamon.metrics.subscribe("request", "**", subscriber)
   }
 
   val requestLogger = LoggerFactory.getLogger("requests")
@@ -64,7 +62,7 @@ object Global extends GlobalSettings {
   }
 
   override def onStop(app: Application): Unit = {
-//    Kamon.shutdown()
+    Kamon.shutdown()
 //    //TODO also stop repository connection pools (e.g. postgresql-async!)
   }
 

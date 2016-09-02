@@ -16,6 +16,7 @@ object GeolatteNoSqlBuild extends Build {
     "Sonatype Repo" at "https://oss.sonatype.org/content/repositories/releases/",
     "Sonatype Snapshots" at "http://oss.sonatype.org/content/repositories/snapshots/",
     "Typesafe Repository" at "http://repo.typesafe.com/typesafe/releases/",
+    "Typesafe Snapshots" at "http://repo.typesafe.com/typesafe/snapshots/",
     "sbt-idea-repo" at "http://mpeltonen.github.com/maven/",
     "scalaz-bintray" at "https://dl.bintray.com/scalaz/releases",
     Resolver.jcenterRepo,
@@ -30,6 +31,7 @@ object GeolatteNoSqlBuild extends Build {
     "commons-codec" % "commons-codec" % "1.8",
     "net.sf.supercsv" % "super-csv" % "2.1.0",
     "org.parboiled" %% "parboiled" % "2.0.1",
+    "com.typesafe.akka" %% "akka-slf4j" % "2.4.9",
     "net.logstash.logback" % "logstash-logback-encoder" % "4.6",
     filters
   )
@@ -44,11 +46,11 @@ object GeolatteNoSqlBuild extends Build {
     "com.github.mauricio" %% "postgresql-async" % "0.2.20"
   )
 
-  val kamonVersion = "0.6.1" //"0.6.0-b23ea502a2589d569e6917b40e90b50dc2457e7a" //"0.6.0-a9d5c5c61f7e5e189bf67baee2b13e21ebbaaf73" //sort-of snapshot release
+  val kamonVersion = "0.6.2"
 
   lazy val kamonDependencies = Seq(
     "io.kamon" %% "kamon-core" % kamonVersion
-    , "com.monsanto.arch" %% "kamon-prometheus" % "0.1.2b-SNAPSHOT"
+    , "com.monsanto.arch" %% "kamon-prometheus" % "0.2.0"
 //    ,"io.kamon" %% "kamon-autoweave" % kamonVersion
 //    ,"io.kamon" %% "kamon-jmx" % kamonVersion
 //    ,"io.kamon" %% "kamon-log-reporter" % kamonVersion
@@ -81,7 +83,7 @@ object GeolatteNoSqlBuild extends Build {
     name := appName,
     version := appVersion,
     organization := "org.geolatte.nosql",
-    scalaVersion := "2.11.7",
+    scalaVersion := "2.11.8",
     scalacOptions ++= Seq( "-feature", "-language:postfixOps", "-language:implicitConversions" ),
     resolvers ++= commonResolvers
   )

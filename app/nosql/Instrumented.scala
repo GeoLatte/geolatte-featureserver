@@ -3,17 +3,15 @@ package nosql
 
 import scala.concurrent.{ExecutionContext, Future}
 import java.util.concurrent.TimeUnit
+
+import kamon.Kamon
 import play.api.Logger
 
 /**
  * @author Karel Maesen, Geovise BVBA
  *         creation-date: 3/7/14
  */
-trait Instrumented  {
-
-  val metricRegistry = null
-
-}
+trait Instrumented
 
 trait FutureInstrumented extends Instrumented {
 
@@ -27,13 +25,13 @@ trait FutureInstrumented extends Instrumented {
    */
   def futureTimed[A](name: String, start: Long = System.nanoTime())(f: => Future[A])(implicit ec: ExecutionContext): Future[A] = {
 
-//    val timer = metricRegistry.timer(name)
     val res = f //force evaluation of f (do not reference f more than once, because it will trigger a full evaluation of f!!)
-//    res.onComplete {
-//      case _ => {
-//        timer.update(System.nanoTime() - start, TimeUnit.NANOSECONDS)
-//      }
-//    }
+    res.onComplete {
+      case _ => {
+        val myHistogram = Kamon.metrics.histogram(name)
+        myHistogram.record(System.nanoTime() - start)
+      }
+    }
     res
   }
 
