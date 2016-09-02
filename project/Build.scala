@@ -2,6 +2,7 @@ import sbt._
 import Keys._
 import play.sbt.PlayScala
 import play.sbt.PlayImport._
+import play.sbt.routes.RoutesKeys._
 
 object GeolatteNoSqlBuild extends Build {
 
@@ -40,10 +41,10 @@ object GeolatteNoSqlBuild extends Build {
   )
 
   lazy val psqlDependencies = Seq(
-    "com.github.mauricio" %% "postgresql-async" % "0.2.18"
+    "com.github.mauricio" %% "postgresql-async" % "0.2.20"
   )
 
-  val kamonVersion = "0.5.2" //"0.6.0-b23ea502a2589d569e6917b40e90b50dc2457e7a" //"0.6.0-a9d5c5c61f7e5e189bf67baee2b13e21ebbaaf73" //sort-of snapshot release
+  val kamonVersion = "0.6.1" //"0.6.0-b23ea502a2589d569e6917b40e90b50dc2457e7a" //"0.6.0-a9d5c5c61f7e5e189bf67baee2b13e21ebbaaf73" //sort-of snapshot release
 
   lazy val kamonDependencies = Seq(
     "io.kamon" %% "kamon-core" % kamonVersion
@@ -54,10 +55,11 @@ object GeolatteNoSqlBuild extends Build {
 //    ,"io.kamon" %% "kamon-system-metrics" % kamonVersion
   )
 
-  lazy val prometheusClientVersion = "0.0.13"
+  lazy val prometheusClientVersion = "0.0.15"
 
   lazy val prometheusDependencies = Seq(
     "io.prometheus" % "simpleclient" % prometheusClientVersion,
+    "io.prometheus" % "simpleclient_common" % prometheusClientVersion,
     "io.prometheus" % "simpleclient_hotspot" % prometheusClientVersion
   )
 

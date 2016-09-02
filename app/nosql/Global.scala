@@ -33,9 +33,7 @@ object Global extends GlobalSettings {
 
   override def onStart(app: Application) {
 
-      Kamon.start()
       prometheusMetrics.start()
-
 //      val subscriber = app.actorSystem.actorOf(Props[SimplePrinter], "kamon-stdout-reporter")
 //      Kamon.metrics.subscribe("request", "**", subscriber)
   }
@@ -52,15 +50,10 @@ object Global extends GlobalSettings {
       else {
         val endTime = System.currentTimeMillis
         val requestTime = (endTime - startTime)
-
-        val metrics = Kamon.metrics.entity( KamonUserMetrics, "featureserver-request" )
-        metrics.requests.increment( )
-        metrics.requestExecutionTime.record( requestTime )
         prometheusMetrics.totalRequests.inc()
         timer.observeDuration()
 
         if ( result.header.status != 200 ) {
-          metrics.errors.increment( )
           prometheusMetrics.failedRequests.inc()
         }
 
@@ -71,8 +64,8 @@ object Global extends GlobalSettings {
   }
 
   override def onStop(app: Application): Unit = {
-    Kamon.shutdown()
-    //TODO also stop repository connection pools (e.g. postgresql-async!)
+//    Kamon.shutdown()
+//    //TODO also stop repository connection pools (e.g. postgresql-async!)
   }
 
 

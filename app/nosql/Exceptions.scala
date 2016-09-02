@@ -34,6 +34,6 @@ package object Exceptions {
 
   case class InvalidPrimaryKeyException(msg: String) extends NoSqlException(msg)
 
-    case class InvalidRequestException(msg: String) extends NoSqlException(msg)
+  case class InvalidRequestException(msg: String) extends NoSqlException(msg)
 
 }
