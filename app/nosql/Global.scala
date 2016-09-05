@@ -3,6 +3,7 @@ package nosql
 import akka.actor.Props
 import kamon.Kamon
 import metrics.PrometheusMetrics
+import nosql.postgresql.PostgresqlRepository
 import org.slf4j.LoggerFactory
 import play.api._
 import play.api.mvc.Results._
@@ -61,9 +62,8 @@ object Global extends GlobalSettings {
     }
   }
 
-  override def onStop(app: Application): Unit = {
+  override def onStop(app: Application) {
     Kamon.shutdown()
-//    //TODO also stop repository connection pools (e.g. postgresql-async!)
   }
 
 

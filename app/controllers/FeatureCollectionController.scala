@@ -1,13 +1,14 @@
 package controllers
 
 
+import javax.inject.Inject
+
 import Exceptions._
 import querylang.{BooleanAnd, BooleanExpr, QueryParser}
 
 import scala.collection.mutable.ListBuffer
 import scala.language.reflectiveCalls
 import scala.language.implicitConversions
-
 import config.AppExecutionContexts
 import nosql._
 import nosql.json.GeometryReaders._
@@ -30,7 +31,7 @@ import utilities.{EnumeratorUtility, QueryParam}
 import scala.util.{Failure, Success, Try}
 
 
-object FeatureCollectionController extends AbstractNoSqlController with FutureInstrumented {
+class FeatureCollectionController @Inject() (val repository: Repository) extends AbstractNoSqlController with FutureInstrumented {
 
   import AppExecutionContexts.streamContext
   import config.ConfigurationValues._
@@ -101,7 +102,12 @@ object FeatureCollectionController extends AbstractNoSqlController with FutureIn
   private def extractFeatureCollectionRequest(request: Request[AnyContent]) = {
 
     implicit val queryString: Map[String, Seq[String]] = request.queryString
-    val intersectionGeometryWkt: Option[String] = request.body.asText
+    //TODO -- why is this not a query parameter
+    val intersectionGeometryWkt: Option[String] = request.body.asText.flatMap{
+      case x if !x.isEmpty => Some(x)
+      case _ => None
+    }
+
 
     val bbox = QueryParams.BBOX.extract
     val query = QueryParams.QUERY.extract
@@ -265,7 +271,7 @@ object FeatureCollectionController extends AbstractNoSqlController with FutureIn
   }
 
   private def selectorMerge(viewQuery: Option[String], exprOpt: Option[BooleanExpr]): Option[BooleanExpr] = {
-
+    Logger.info(s"MERGING $viewQuery and $exprOpt")
     val res = (viewQuery, exprOpt) match {
       case (Some(str), Some(e)) => parseQueryExpr(str).map(expr => BooleanAnd(expr, e))
       case (None, s@Some(_))    => s

@@ -1,5 +1,7 @@
 package nosql.mongodb
 
+import javax.inject._
+
 import config.AppExecutionContexts.streamContext
 import controllers.IndexDef
 import nosql._
@@ -27,23 +29,27 @@ import scala.concurrent.Future
 import scala.language.implicitConversions
 import scala.util.{Failure, Success}
 
-
-object MongoDBRepository extends nosql.Repository with FutureInstrumented {
-
+object MongoTypes {
   type SpatialCollection = MongoSpatialCollection
   type MediaStore = GridFS[BSONSerializationPack.type]
 
   /**
-   * combines the JSONCollection, Metadata and transformer.
-   *
-   * The transformer is a Reads[JsObject] that transform an input Feature to a Feature for persistence
-   * in the JSONCollection
-   */
+    * combines the JSONCollection, Metadata and transformer.
+    *
+    * The transformer is a Reads[JsObject] that transform an input Feature to a Feature for persistence
+    * in the JSONCollection
+    */
   type CollectionInfo = (JSONCollection, Metadata, Reads[JsObject])
+
+}
+
+@Singleton
+class MongoDBRepository extends nosql.Repository with FutureInstrumented {
+
 
   val awaitJournalCommit = GetLastError(j = true, w = Some(BSONInteger(1)))
 
-
+  import MongoTypes._
   import MetadataIdentifiers._
   import config.ConfigurationValues._
 
@@ -387,7 +393,7 @@ object MongoDBRepository extends nosql.Repository with FutureInstrumented {
       .flatMap(_.remove(mkViewSelector(id)))
       .map(le => if (le.n == 0) throw new ViewObjectNotFoundException() else true)
 
-  override def writer(database: String, collection: String): FeatureWriter = new MongoWriter(database, collection)
+  override def writer(database: String, collection: String): FeatureWriter = new MongoWriter(this, database, collection)
 
   override def delete(database: String, collection: String, query: BooleanExpr): Future[Boolean] =
     getCollectionInfo(database, collection)

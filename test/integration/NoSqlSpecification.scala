@@ -2,20 +2,22 @@ package integration
 
 import nosql.Utils
 import org.specs2._
-import org.specs2.main.{Arguments, ArgProperty}
+import org.specs2.main.{ArgProperty, Arguments}
 import org.specs2.matcher.{Expectable, Matcher}
 import org.specs2.specification.Step
-import org.specs2.specification.core.{Env, SpecStructure, Fragments}
-import play.api.{libs, Play}
+import org.specs2.specification.core.{Env, Fragments, SpecStructure}
+import play.api.{Application, Play, libs}
 import play.api.Play._
 import play.api.libs.json.{JsArray, JsObject, Json, _}
-import play.api.test.FakeApplication
+import play.api.inject.guice.GuiceApplicationBuilder
 
 /**
  * @author Karel Maesen, Geovise BVBA
  *         creation-date: 12/3/13
  */
-abstract class NoSqlSpecification(app: FakeApplication = FakeApplication()) extends Specification {
+abstract class NoSqlSpecification extends Specification {
+
+  val app: Application = new GuiceApplicationBuilder().build()
   val testDbName = "xfstestdb"
   val testColName = "xfstestcoll"
 
@@ -34,7 +36,7 @@ abstract class NoSqlSpecification(app: FakeApplication = FakeApplication()) exte
 
 }
 
-abstract class InDatabaseSpecification(app: FakeApplication = FakeApplication()) extends NoSqlSpecification {
+abstract class InDatabaseSpecification extends NoSqlSpecification {
   import integration.RestApiDriver._
 
   override def map(fs: => Fragments) =
@@ -45,7 +47,7 @@ abstract class InDatabaseSpecification(app: FakeApplication = FakeApplication())
       step( Play.stop( app ) ) ^ tag(configuredDatabase)
 }
 
-abstract class InCollectionSpecification(app: FakeApplication = FakeApplication()) extends NoSqlSpecification {
+abstract class InCollectionSpecification extends NoSqlSpecification {
   import integration.RestApiDriver._
 
   override def map(fs: => Fragments) =

@@ -1,7 +1,10 @@
 package controllers
 
+import javax.inject.Inject
+
 import Exceptions._
 import config.AppExecutionContexts
+import nosql.Repository
 import nosql.mongodb.ReactiveGeoJson
 import nosql.mongodb.ReactiveGeoJson._
 import play.api.libs.json._
@@ -18,7 +21,7 @@ import scala.util.{Failure, Success, Try}
  * @author Karel Maesen, Geovise BVBA
  *         creation-date: 7/25/13
  */
-object TxController extends AbstractNoSqlController {
+class TxController @Inject() (val repository: Repository)  extends AbstractNoSqlController {
 
   import AppExecutionContexts.streamContext
 

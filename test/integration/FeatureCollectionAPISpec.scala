@@ -17,44 +17,42 @@ class FeatureCollectionAPISpec extends InCollectionSpecification {
 
   def is = s2"""
                                                                                   ${section("mongodb", "postgresql")}
-     The FeatureCollection /download should:
-       return 404 when the collection does not exist                              $e1
-       return all elements when the collection does exist                         $e2
+      The FeatureCollection /download should:
+        return 404 when the collection does not exist                              $e1
+        return all elements when the collection does exist                         $e2
 
+      The FeatureCollection /list should:
+        return the objects contained within the specified bbox as json object      $e3
+        respond to the START query-param                                           $e4
+        respond to the LIMIT query-param                                           $e5
+        support the SORT parameter                                                 $e5b
+        support the SORT-DIRECTION parameter                                       $e5c
+        support pagination                                                         $e6
 
-
-     The FeatureCollection /list should:
-       return the objects contained within the specified bbox as json object      $e3
-       respond to the START query-param                                           $e4
-       respond to the LIMIT query-param                                           $e5
-       support the SORT parameter                                                 $e5b
-       support the SORT-DIRECTION parameter                                       $e5c
-       support pagination                                                         $e6
-
-     The FeatureCollection /query should:
-      return the objects contained within the specified bbox as a stream          $e7
-      support the PROJECTION parameter                                            $e8
-      support the SORT parameter                                                  $e8b
-      support the SORT-DIRECTION parameter                                        $e8c
-      support the QUERY parameter                                                 $e9
+      The FeatureCollection /query should:
+        return the objects contained within the specified bbox as a stream          $e7
+        support the PROJECTION parameter                                            $e8
+        support the SORT parameter                                                  $e8b
+        support the SORT-DIRECTION parameter                                        $e8c
+        support the QUERY parameter                                                 $e9
       support the WITH-VIEW query-param                                           $e14
       support the WITH-VIEW query-param and a view with no projection clause      $e15
-      BAD_REQUEST response code if the PROJECTION parameter is empty or invalid   $e10
-      BAD_REQUEST response code if the Query parameter is an invalid expression   $e11
+        BAD_REQUEST response code if the PROJECTION parameter is empty or invalid   $e10
+        BAD_REQUEST response code if the Query parameter is an invalid expression   $e11
 
-     General:
-       Query parameters should be case insensitive                                $e12
+      General:
+        Query parameters should be case insensitive                                 $e12
 
-
-     The FeatureCollection /query in  CSV should:
-        return the objects with all attributes within JSON Object tree            $e13
+      The FeatureCollection /query in  CSV should:
+        return the objects with all attributes within JSON Object tree              $e13
                                                                                   ${section( "mongodb", "postgresql" )}
 
 
                                                                                   ${section( "postgresql" )}
      Projection may specify fields not in inputJson (works only on postgresql)
-            with Json output, fields are set to JsNull                            $e16
-            with CSV output, fields are empty strings                             $e17
+        with Json output, fields are set to JsNull                            $e16
+        with CSV output, fields are empty strings                             $e17
+
                                                                                   ${section("postgresql")}
   """
 

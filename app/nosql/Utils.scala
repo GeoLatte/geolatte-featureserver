@@ -1,7 +1,6 @@
 package nosql
 
 import Exceptions.InvalidRequestException
-import com.github.mauricio.async.db.{QueryResult, RowData}
 import org.geolatte.geom.ByteBuffer
 import org.geolatte.geom.codec.Wkb
 import play.api.Logger
@@ -129,31 +128,4 @@ object JsonUtils {
       .asOpt[JsObject](reads)
 }
 
-object QueryResultUtils {
-
-  def first[T](rowF : RowData => Option[T])(qr: QueryResult) : Option[T] = qr.rows match {
-    case Some(rs) if rs.nonEmpty => rowF(rs.head)
-    case _ => None
-  }
-
-  def toList[T](qr: QueryResult)(rowF : RowData => Option[T]): List[T] = qr.rows match {
-    case Some(rs) =>
-      rs.map(rowF).collect{case Some(v) => v}.toList
-    case _ => List[T]()
-  }
-
-  def toProjectedJsonList(qr: QueryResult, optProj : Option[Reads[JsObject]]) : List[JsObject] = {
-    def json(row : RowData) : Option[JsObject] = JsonUtils.toJson(row(0).asInstanceOf[String])
-    def project(reads : Reads[JsObject])(jsOpt : Option[JsObject]) : Option[JsObject] = jsOpt flatMap (_.asOpt(reads))
-    val transformFunc = optProj match {
-      case Some(reads) => json _ andThen project(reads)
-      case _ => json _
-    }
-    toList(qr)(transformFunc)
-  }
-
-  def toMap(colnames: IndexedSeq[String])(row: RowData): Map[String, Any] =
-    colnames.map { c => (c,row(c)) } toMap
-
-}
 

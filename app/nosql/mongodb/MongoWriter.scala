@@ -1,7 +1,7 @@
 package nosql.mongodb
 
 import nosql.FeatureWriter
-import nosql.mongodb.MongoDBRepository.CollectionInfo
+import nosql.mongodb.MongoTypes.CollectionInfo
 import org.reactivemongo.play.json._    //whatever IDEA says, we need this
 import play.api.Logger
 import play.api.libs.json._
@@ -14,11 +14,11 @@ import scala.concurrent._
  *         creation-date: 9/13/13
  */
 
-case class MongoWriter(db: String, collection: String) extends FeatureWriter {
+case class MongoWriter(repo: MongoDBRepository, db: String, collection: String) extends FeatureWriter {
 
   import config.AppExecutionContexts.streamContext
 
-  val fCollectionInfo: Future[CollectionInfo] = MongoDBRepository.getCollectionInfo(db, collection)
+  val fCollectionInfo: Future[CollectionInfo] = repo.getCollectionInfo(db, collection)
 
   def add(features: Seq[JsObject]) : Future[Long] =
     if(features.isEmpty) Future.successful(0)

@@ -10,6 +10,7 @@ import play.api.libs.iteratee.Enumerator
 import play.api.libs.json._
 import play.api.libs.functional.syntax._
 import querylang.BooleanExpr
+import slick.basic.DatabasePublisher
 
 import scala.concurrent.Future
 import scala.util.{Failure, Success}

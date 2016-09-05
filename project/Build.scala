@@ -8,6 +8,7 @@ object GeolatteNoSqlBuild extends Build {
 
   val appName = "geolatte-nosql"
   val appVersion = "2.0-SNAPSHOT"
+  val playVersion = "2.4.6" //TODO -- get rid of redundantdef
 
   //Resolvers
   lazy val commonResolvers = Seq(
@@ -42,8 +43,16 @@ object GeolatteNoSqlBuild extends Build {
     "org.reactivemongo" %% "reactivemongo-play-json" % "0.11.9"
   )
 
+//  val slickPgVersion        =   "0.15.0-M2"
+
   lazy val psqlDependencies = Seq(
-    "com.github.mauricio" %% "postgresql-async" % "0.2.20"
+    "com.typesafe.slick" %% "slick" % "3.2.0-M1",
+    "com.typesafe.slick" %% "slick-hikaricp" % "3.2.0-M1",
+    "postgresql" % "postgresql" % "9.1-901.jdbc4",
+//    "com.github.tminglei"         %%    "slick-pg"                  % slickPgVersion,
+////  "com.github.tminglei"         %%    "slick-pg_date2"            % slickPgVersion,
+//    "com.github.tminglei"         %%    "slick-pg_play-json"        % slickPgVersion,
+    "com.typesafe.play"           %%    "play-streams-experimental" % playVersion
   )
 
   val kamonVersion = "0.6.2"
@@ -51,10 +60,6 @@ object GeolatteNoSqlBuild extends Build {
   lazy val kamonDependencies = Seq(
     "io.kamon" %% "kamon-core" % kamonVersion
     , "com.monsanto.arch" %% "kamon-prometheus" % "0.2.0"
-//    ,"io.kamon" %% "kamon-autoweave" % kamonVersion
-//    ,"io.kamon" %% "kamon-jmx" % kamonVersion
-//    ,"io.kamon" %% "kamon-log-reporter" % kamonVersion
-//    ,"io.kamon" %% "kamon-system-metrics" % kamonVersion
   )
 
   lazy val prometheusClientVersion = "0.0.15"
@@ -118,6 +123,7 @@ object GeolatteNoSqlBuild extends Build {
   ).configs( ItTest )
     .settings( inConfig( ItTest )( Defaults.testTasks ): _* )
     .settings( (defaultSettings ++ testSettings): _* )
+    .settings(routesGenerator := InjectedRoutesGenerator)
     .enablePlugins(PlayScala)
 
 }

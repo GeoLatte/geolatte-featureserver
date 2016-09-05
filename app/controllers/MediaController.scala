@@ -1,6 +1,9 @@
 package controllers
 
+import javax.inject.Inject
+
 import config.AppExecutionContexts
+import nosql.Repository
 import nosql.mongodb.MongoDBRepository
 import play.api.Logger
 import play.api.libs.iteratee._
@@ -16,14 +19,14 @@ import scala.concurrent.Future
 
 case class MediaObjectIn(contentType: String, name: String, data: Array[Byte])
 
-object MediaController extends AbstractNoSqlController {
+class MediaController @Inject() (val repository: Repository) extends AbstractNoSqlController {
 
   import AppExecutionContexts.streamContext
   import Formats._
 
   def save(db: String, collection: String) = repositoryAction(BodyParsers.parse.tolerantJson) {
     implicit req => {
-      if (repository != MongoDBRepository) {
+      if (! repository.isInstanceOf[MongoDBRepository]) {
         Future.successful(NotImplemented)
       } else {
         req.body.validate[MediaObjectIn] match {
@@ -32,7 +35,7 @@ object MediaController extends AbstractNoSqlController {
             Future.successful(BadRequest("Invalid media object"))
 
           case JsSuccess(m, _) =>
-            MongoDBRepository
+            repository.asInstanceOf[MongoDBRepository]
               .saveMedia(db, collection, Enumerator.enumerate(List(m.data)), m.name, Some(m.contentType))
               .map[Result](res => {
                 val url = routes.MediaController.get(db, collection, res.id).url
@@ -47,10 +50,10 @@ object MediaController extends AbstractNoSqlController {
 
   def get(db: String, collection: String, id: String) = repositoryAction {
     implicit req =>
-      if (repository != MongoDBRepository) {
+      if (! repository.isInstanceOf[MongoDBRepository]) {
         Future.successful(NotImplemented)
       } else {
-        MongoDBRepository.getMedia(db, collection, id).map[Result](res => MediaReaderResource(res))
+        repository.asInstanceOf[MongoDBRepository].getMedia(db, collection, id).map[Result](res => MediaReaderResource(res))
           .recover(commonExceptionHandler(db, collection))
       }
   }

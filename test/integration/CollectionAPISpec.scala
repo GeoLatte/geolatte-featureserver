@@ -1,7 +1,6 @@
 package integration
 
 import play.api.libs.json._
-import play.api.http.Status._
 
 /**
  * @author Karel Maesen, Geovise BVBA

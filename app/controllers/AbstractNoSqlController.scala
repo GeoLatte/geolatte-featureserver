@@ -1,5 +1,7 @@
 package controllers
 
+import javax.inject.Inject
+
 import config.AppExecutionContexts.streamContext
 import config.ConfigurationValues
 import config.ConfigurationValues.{Format, Version}
@@ -24,12 +26,7 @@ import scala.language.{implicitConversions, reflectiveCalls}
  */
 trait AbstractNoSqlController extends Controller with FutureInstrumented {
 
-  //TODO the resolution belongs properly in ConfigurationValues, but then should be split (definitionsettings/defaults vs configured values)
-  val repository: Repository = config.ConfigurationValues.configuredRepository match {
-    case "mongodb" => MongoDBRepository
-    case "postgresql" => PostgresqlRepository
-    case _ => sys.error("Configured with Unsupported database")
-  }
+  def repository: Repository
 
   def repositoryAction[T](bp: BodyParser[T])(action: Request[T] => Future[Result]) =
     Action.async(bp) { request => action(request)}
@@ -51,6 +48,7 @@ trait AbstractNoSqlController extends Controller with FutureInstrumented {
       case ( Some(f), Some(ve), _)              => (f,ve)
       case (Some(f), None, _)                   => (f, Version.default)
       case (_, _, SupportedMediaTypes(f, ve))   => (f,ve)
+      case _                                    => (Format.JSON, Version.default)
     }
 
     val simpleresult =

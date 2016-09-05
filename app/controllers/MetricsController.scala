@@ -1,6 +1,7 @@
 package controllers
 
 import java.io._
+import javax.inject.Inject
 
 import com.monsanto.arch.kamon.prometheus.Prometheus
 import com.monsanto.arch.kamon.prometheus.PrometheusExtension._
@@ -8,7 +9,7 @@ import akka.pattern.ask
 import com.monsanto.arch.kamon.prometheus.metric.{MetricFamily, TextFormat => KamonPrometheusTextFormat}
 import io.prometheus.client.CollectorRegistry
 import io.prometheus.client.exporter.common.{TextFormat => PrometheusTextFormat}
-import nosql.FutureInstrumented
+import nosql.{FutureInstrumented, Repository}
 import nosql.Utils._
 import play.api.mvc._
 
@@ -18,7 +19,7 @@ import play.api.libs.concurrent.Execution.Implicits.defaultContext
 import scala.concurrent.Future
 
 
-object MetricsController extends Controller with FutureInstrumented{
+class MetricsController @Inject() (val repository: Repository) extends Controller with FutureInstrumented{
 
   val AcceptsTextPlain = Accepting("text/plain")
   val AcceptsProtoBuf = Accepting("application/vnd.google.protobuf")

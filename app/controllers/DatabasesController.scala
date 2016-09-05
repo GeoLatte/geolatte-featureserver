@@ -1,6 +1,8 @@
 package controllers
 
-import nosql.{Metadata, Utils}
+import javax.inject.Inject
+
+import nosql.{Metadata, Repository, Utils}
 import play.api.mvc._
 import play.api.libs.json._
 
@@ -13,7 +15,7 @@ import Exceptions._
   * @author Karel Maesen, Geovise BVBA
   *         creation-date: 7/22/13
   */
-object DatabasesController extends AbstractNoSqlController {
+class DatabasesController @Inject() (val repository: Repository )extends AbstractNoSqlController {
 
   import config.AppExecutionContexts.streamContext
 
@@ -75,7 +77,7 @@ object DatabasesController extends AbstractNoSqlController {
         repository.createCollection(db, col, metadata).map(_ => Created(s"$db/$col ")).recover {
           case ex: DatabaseNotFoundException        => NotFound(s"No database $db")
           case ex: CollectionAlreadyExistsException => Conflict(s"Collection $db/$col already exists.")
-          case ex: Throwable                        => InternalServerError(s"{ex.getMessage}")
+          case ex: Throwable                        => InternalServerError(s"${nosql.Utils.withError(s"${ex}") {ex.getMessage}}")
         }
       }
 

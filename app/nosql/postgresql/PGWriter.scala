@@ -1,6 +1,6 @@
 package nosql.postgresql
 
-import nosql.{FeatureTransformers, FeatureWriter, Metadata}
+import nosql.{FeatureTransformers, FeatureWriter, Metadata, Repository}
 import org.geolatte.geom.Polygon
 import play.api.Logger
 import play.api.libs.json.{JsObject, Reads}
@@ -11,11 +11,11 @@ import scala.concurrent.Future
  * A Writer for
  * Created by Karel Maesen, Geovise BVBA on 15/12/14.
  */
-case class PGWriter(db: String, collection: String) extends FeatureWriter {
+case class PGWriter(repo: PostgresqlRepository, db: String, collection: String) extends FeatureWriter {
 
   import config.AppExecutionContexts.streamContext
 
-  lazy val metadata : Future[Metadata] = PostgresqlRepository.metadata(db, collection)
+  lazy val metadata : Future[Metadata] = repo.metadata(db, collection)
 
   lazy val reads: Future[(Reads[Polygon], Reads[JsObject])] = metadata.map{ md =>
     ( FeatureTransformers.envelopeTransformer(md.envelope),
@@ -32,7 +32,7 @@ case class PGWriter(db: String, collection: String) extends FeatureWriter {
         } collect {
           case (Some(f), Some(env)) => (f, env)
         }
-        val fLng = PostgresqlRepository.batchInsert(db, collection, docs)
+        val fLng = repo.batchInsert(db, collection, docs)
         fLng.onSuccess {
           case num => Logger.info(s"Successfully inserted $num features")
         }
