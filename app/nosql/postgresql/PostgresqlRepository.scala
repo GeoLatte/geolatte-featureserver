@@ -526,7 +526,7 @@ class PostgresqlRepository @Inject() (applicationLifecycle: ApplicationLifecycle
 
       val limitClause = limit match {
         case Some(lim) => s"\nLIMIT $lim"
-        case _         => s"\nLIMIT ${ConfigurationValues.MaxReturnItems}"
+        case _         => ""
       }
 
       val offsetClause = start match {

@@ -36,8 +36,6 @@ class FeatureCollectionController @Inject() (val repository: Repository) extends
   import AppExecutionContexts.streamContext
   import config.ConfigurationValues._
 
-  val COLLECTION_LIMIT = MaxReturnItems
-
 
   def parseQueryExpr(s: String): Option[BooleanExpr] = QueryParser.parse(s) match {
     case Success(expr) => Some(expr)
@@ -96,7 +94,7 @@ class FeatureCollectionController @Inject() (val repository: Repository) extends
                                       sort: List[String],
                                       sortDir: List[String],
                                       start: Int,
-                                      limit: Int,
+                                      limit: Option[Int],
                                       intersectionGeometryWkt: Option[String])
 
   private def extractFeatureCollectionRequest(request: Request[AnyContent]) = {
@@ -118,7 +116,7 @@ class FeatureCollectionController @Inject() (val repository: Repository) extends
     val sortDir = QueryParams.SORTDIR.extract.map(_.as[List[String]]).getOrElse(List())
 
     val start = QueryParams.START.extract.getOrElse(0)
-    val limit = Math.min(QueryParams.LIMIT.extract.getOrElse(COLLECTION_LIMIT), COLLECTION_LIMIT)
+    val limit = QueryParams.LIMIT.extract
 
     FeatureCollectionRequest(bbox, query, projection, withView, sort, sortDir, start, limit, intersectionGeometryWkt)
   }
@@ -175,7 +173,7 @@ class FeatureCollectionController @Inject() (val repository: Repository) extends
 
   def collectFeatures: Iteratee[JsObject, ListBuffer[JsObject]] =
     Iteratee.fold[JsObject, ListBuffer[JsObject]](ListBuffer[JsObject]())((state, feature) => {
-      state.append(feature);
+      state.append(feature)
       state
     }
     )
@@ -265,7 +263,7 @@ class FeatureCollectionController @Inject() (val repository: Repository) extends
         toFldSortSpecList(request.sort, request.sortDir),
         smd
       )
-      result <- repository.query(db, collection, spatialQuery, Some(request.start), Some(request.limit))
+      result <- repository.query(db, collection, spatialQuery, Some(request.start), request.limit)
     } yield result
 
   }

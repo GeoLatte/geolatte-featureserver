@@ -53,7 +53,7 @@ object Utils {
     t
   }
 
-  //TODO -- replace with Cats??
+  //TODO -- should no longer be necessary after cleanup of Migrations and DatabaseController
   trait Foldable[B] {
     //by name argument in second position is vital to have proper "serializing" behavior
     def combine(b1: B, b2: => B) : B

@@ -27,7 +27,7 @@ object ConfigurationValues {
   private val DEFAULT_SYS_DB = "featureServerSys"
   private val DEFAULT_DB_HOST = "localhost"
   private val DEFAULT_PG_CONNECTION_URL = "postgresql:localhost/5432"
-  private val DEFAULT_MAXIMUM_RESULT_SIZE = 10000
+
   //PGSQL connection pool configuration
   private val DEFAULT_PG_MAXOBJECTS = 10
   private val DEFAULT_PG_MAXIDLE = 4
@@ -96,8 +96,6 @@ object ConfigurationValues {
   val PgMaxValidationinterval = getConfigInt(PG_VALIDATION_INTERVAL_KEY, DEFAULT_PG_VALIDATION_INTERVAL)
 
   val MongoSystemDB = getConfigString(MONGO_SYSTEM_DB_KEY, DEFAULT_SYS_DB)
-
-  val MaxReturnItems = getConfigInt(MAXIMUM_RESULT_SIZE_KEY, DEFAULT_MAXIMUM_RESULT_SIZE)
 
   /**
    * The separator to use between any two chunks when using chunked response streaming
