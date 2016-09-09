@@ -1,6 +1,5 @@
 package integration
 
-import nosql.Utils
 import org.specs2._
 import org.specs2.main.{ArgProperty, Arguments}
 import org.specs2.matcher.{Expectable, Matcher}
@@ -10,6 +9,7 @@ import play.api.{Application, Play, libs}
 import play.api.Play._
 import play.api.libs.json.{JsArray, JsObject, Json, _}
 import play.api.inject.guice.GuiceApplicationBuilder
+import utilities.Utils
 
 /**
  * @author Karel Maesen, Geovise BVBA

@@ -2,13 +2,14 @@ package controllers
 
 import javax.inject.Inject
 
-import nosql.{Metadata, Repository, Utils}
+import nosql.{Metadata, Repository}
 import play.api.mvc._
 import play.api.libs.json._
 
 import scala.concurrent.Future
 import play.Logger
 import Exceptions._
+import utilities.Utils
 
 
 /**
@@ -77,7 +78,7 @@ class DatabasesController @Inject() (val repository: Repository )extends Abstrac
         repository.createCollection(db, col, metadata).map(_ => Created(s"$db/$col ")).recover {
           case ex: DatabaseNotFoundException        => NotFound(s"No database $db")
           case ex: CollectionAlreadyExistsException => Conflict(s"Collection $db/$col already exists.")
-          case ex: Throwable                        => InternalServerError(s"${nosql.Utils.withError(s"${ex}") {ex.getMessage}}")
+          case ex: Throwable                        => InternalServerError(s"${Utils.withError(s"${ex}") {ex.getMessage}}")
         }
       }
 

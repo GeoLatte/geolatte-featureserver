@@ -5,11 +5,11 @@ import javax.inject.Inject
 import Exceptions._
 import config.AppExecutionContexts
 import nosql.Repository
-import nosql.mongodb.ReactiveGeoJson
-import nosql.mongodb.ReactiveGeoJson._
 import play.api.libs.json._
 import play.api.mvc._
 import querylang.{BooleanExpr, QueryParser}
+import utilities.ReactiveGeoJson
+import utilities.ReactiveGeoJson.State
 
 import scala.concurrent.Future
 import scala.reflect.ClassTag

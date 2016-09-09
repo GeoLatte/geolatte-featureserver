@@ -1,11 +1,10 @@
-package nosql.mongodb
+package utilities
 
 import nosql.FeatureWriter
 import play.Logger
 import play.api.libs.iteratee.Iteratee
 import play.api.libs.json.{JsSuccess, _}
 import play.api.mvc.{BodyParser, Result}
-import utilities.JsonHelper
 
 import scala.concurrent.{ExecutionContext, Future}
 import scala.util.Try

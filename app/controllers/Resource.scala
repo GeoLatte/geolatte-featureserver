@@ -1,7 +1,7 @@
 package controllers
 
 import nosql.json.GeometryReaders._
-import nosql.{MediaReader, Metadata, MetadataIdentifiers}
+import nosql.{Metadata, MetadataIdentifiers}
 import org.apache.commons.codec.binary.Base64
 import org.geolatte.geom.Envelope
 import play.api.data.validation.ValidationError
@@ -54,18 +54,6 @@ case class CollectionResource(md: Metadata) extends Jsonable {
   def toJson = Json.toJson(md)(Formats.CollectionWrites)
 }
 
-case class MediaMetadataResource(id: String, md5: Option[String], url: String) extends Jsonable {
-  import Formats.MediaMetadataWrites
-  def toJson = Json.toJson(this)
-}
-
-case class MediaResource(id: String, name: String, md5: Option[String], data: String)
-
-case class MediaReaderResource(mediaReader: MediaReader) extends Jsonable {
-  import Formats.MediaReaderWrites
-  def toJson = Json.toJson(mediaReader)
-}
-
 case class FeaturesResource(totalOpt: Option[Long], features: Enumerator[JsObject]) extends JsonStringStreamable {
   def toJsonStringStream: Enumerator[String] = {
     val total: Long = totalOpt.getOrElse(-1L)
@@ -93,24 +81,13 @@ object Formats {
 
   def toByteArray(implicit r: Reads[String]) : Reads[Array[Byte]] = r.map(str => Base64.decodeBase64(str))
 
-  implicit val MediaReads : Reads[MediaObjectIn] = (
-      ( __ \ "content-type").read[String] and
-      ( __ \ "name").read[String] and
-      ( __ \ "data").read[Array[Byte]](toByteArray)
-    )(MediaObjectIn)
-
-  implicit val MediaMetadataWrites : Writes[MediaMetadataResource] = (
-    ( __ \ "id").write[String] and
-    ( __ \ "md5").writeNullable[String] and
-    ( __ \ "url").write[String]
-    )(unlift(MediaMetadataResource.unapply))
 
 
   def newCollectionMetadata(extent: Envelope, level: Int, idtype: String) =
       Metadata.fromReads("", extent, level, idtype)
 
   def registerTableMetadata(collection: String, extent: Envelope, geometryCol: String) =
-    Metadata(collection, extent, 0, "decimal", 0, geometryCol, "", false)
+    Metadata(collection, extent, 0, "decimal", 0, geometryCol, "", jsonTable = false)
 
   /**
     * This is the format  for the PUT resource when creating a Json table
@@ -141,14 +118,6 @@ object Formats {
         ( __ \ MetadataIdentifiers.IsJsonField).write[Boolean]
    )(unlift(Metadata.unapply))
 
-  implicit val MediaReaderWrites : Writes[MediaReader] = (
-      (__ \ "id").write[String] and
-      (__ \"md5").writeNullable[String] and
-      (__ \ "name" ).write[String] and
-      (__ \ "length").write[Int] and
-      (__ \ "content-type").writeNullable[String] and
-      (__ \ "data").write[String].contramap[Array[Byte]]( ar => Base64.encodeBase64String(ar))
-    )(unlift(MediaReader.unapply))
 
   val projection : Reads[JsArray] = (__ \ "projection").readNullable[JsArray].map(js=> js.getOrElse(Json.arr()))
 

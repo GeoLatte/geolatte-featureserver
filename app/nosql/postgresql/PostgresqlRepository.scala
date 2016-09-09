@@ -14,7 +14,7 @@ import org.postgresql.util.PSQLException
 import play.api.libs.iteratee.Iteratee
 import play.api.libs.json._
 import querylang.{BooleanExpr, QueryParser}
-import utilities.JsonHelper
+import utilities.{JsonHelper, JsonUtils, Utils}
 import slick.jdbc.PostgresProfile.api._
 import play.api.libs.streams.Streams
 import play.api.inject.ApplicationLifecycle
@@ -30,7 +30,7 @@ class PostgresqlRepository @Inject() (applicationLifecycle: ApplicationLifecycle
 
   import AppExecutionContexts.streamContext
   import GeometryReaders._
-  import Utils._
+  import utilities.Utils._
 
   lazy val database = Database.forConfig("fs.postgresql")
 
@@ -638,7 +638,7 @@ class PostgresqlRepository @Inject() (applicationLifecycle: ApplicationLifecycle
               ${Json.stringify(Json.toJson(md.envelope))}::json,
               ${md.level},
               ${md.idType},
-              ${tableName}
+              $tableName
               )
      """
 

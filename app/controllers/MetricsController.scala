@@ -10,7 +10,7 @@ import com.monsanto.arch.kamon.prometheus.metric.{MetricFamily, TextFormat => Ka
 import io.prometheus.client.CollectorRegistry
 import io.prometheus.client.exporter.common.{TextFormat => PrometheusTextFormat}
 import nosql.{FutureInstrumented, Repository}
-import nosql.Utils._
+import utilities.Utils._
 import play.api.mvc._
 
 import scala.concurrent.duration._

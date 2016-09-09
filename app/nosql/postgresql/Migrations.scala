@@ -1,13 +1,12 @@
 package nosql.postgresql
 
-import nosql.Utils
 import play.api.Logger
 
 import scala.concurrent.Future
 import scala.concurrent.ExecutionContext.Implicits.global
 import slick.jdbc.PostgresProfile.api._
-
 import slick.sql.SqlAction
+import utilities.Utils
 
 case class Migration(version: Int, statement: SqlAction[Int, NoStream, Effect], schema: String)
 

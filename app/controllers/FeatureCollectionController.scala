@@ -26,7 +26,7 @@ import scala.concurrent.Future
 import play.api.libs.json.JsString
 import play.api.libs.json.JsBoolean
 import play.api.libs.json.JsNumber
-import utilities.{EnumeratorUtility, QueryParam}
+import utilities.{EnumeratorUtility, QueryParam, Utils}
 
 import scala.util.{Failure, Success, Try}
 

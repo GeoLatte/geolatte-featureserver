@@ -6,7 +6,7 @@ import play.api.libs.json._
 import org.geolatte.geom.Envelope
 import java.net.URLEncoder._
 
-import nosql.Utils
+import utilities.Utils
 
 /**
  * @author Karel Maesen, Geovise BVBA

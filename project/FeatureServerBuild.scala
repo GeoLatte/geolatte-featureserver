@@ -4,11 +4,11 @@ import play.sbt.PlayScala
 import play.sbt.PlayImport._
 import play.sbt.routes.RoutesKeys._
 
-object GeolatteNoSqlBuild extends Build {
+object FeatureServerBuild extends Build {
 
-  val appName = "geolatte-nosql"
+  val appName = "geolatte-featureserver"
   val appVersion = "2.0-SNAPSHOT"
-  val playVersion = "2.4.6" //TODO -- get rid of redundantdef
+  val playVersion = "2.4.6" //TODO -- get rid of redundant def of playversion
 
   //Resolvers
   lazy val commonResolvers = Seq(
@@ -37,21 +37,10 @@ object GeolatteNoSqlBuild extends Build {
     filters
   )
 
-  lazy val mongoDependencies = Seq(
-    "org.reactivemongo" %% "reactivemongo" % "0.11.9",
-    "org.reactivemongo" %% "play2-reactivemongo" % "0.11.7.play24",
-    "org.reactivemongo" %% "reactivemongo-play-json" % "0.11.9"
-  )
-
-//  val slickPgVersion        =   "0.15.0-M2"
-
   lazy val psqlDependencies = Seq(
     "com.typesafe.slick" %% "slick" % "3.2.0-M1",
     "com.typesafe.slick" %% "slick-hikaricp" % "3.2.0-M1",
     "postgresql" % "postgresql" % "9.1-901.jdbc4",
-//    "com.github.tminglei"         %%    "slick-pg"                  % slickPgVersion,
-////  "com.github.tminglei"         %%    "slick-pg_date2"            % slickPgVersion,
-//    "com.github.tminglei"         %%    "slick-pg_play-json"        % slickPgVersion,
     "com.typesafe.play"           %%    "play-streams-experimental" % playVersion
   )
 
@@ -77,7 +66,6 @@ object GeolatteNoSqlBuild extends Build {
 
   //Dependencies
   lazy val dependencies = coreDependencies ++
-    mongoDependencies ++
     psqlDependencies ++
     kamonDependencies ++
     prometheusDependencies ++

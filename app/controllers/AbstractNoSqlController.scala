@@ -7,8 +7,6 @@ import config.ConfigurationValues
 import config.ConfigurationValues.{Format, Version}
 import nosql._
 import Exceptions._
-import nosql.mongodb._
-import nosql.postgresql.PostgresqlRepository
 import play.Logger
 import play.api.libs.iteratee._
 import play.api.libs.json._

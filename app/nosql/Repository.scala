@@ -2,7 +2,6 @@ package nosql
 
 import controllers.IndexDef
 import nosql.json.GeometryReaders._
-import nosql.mongodb._
 import org.geolatte.geom.Envelope
 import org.geolatte.geom.curve.MortonCode
 import play.api.data.validation.ValidationError
@@ -10,7 +9,6 @@ import play.api.libs.iteratee.Enumerator
 import play.api.libs.json._
 import play.api.libs.functional.syntax._
 import querylang.BooleanExpr
-import slick.basic.DatabasePublisher
 
 import scala.concurrent.Future
 import scala.util.{Failure, Success}
@@ -61,15 +59,6 @@ object Metadata {
     )(Metadata.fromReads _)
 }
 
-case class Media(id: String, md5: Option[String])
-
-case class MediaReader(id: String,
-                       md5: Option[String],
-                       name: String,
-                       len: Int,
-                       contentType: Option[String],
-                       data: Array[Byte])
-
 sealed trait Direction
 
 object ASC extends Direction {
@@ -98,18 +87,7 @@ case class SpatialQuery (
                           metadata: Metadata
                         )
 
-trait MortonCodeQueryOptimizer {
 
-  //the return type of the optimizer
-  type QueryDocuments
-
-  /**
-   * Optimizes the window query, given the specified MortonCode
-   * @param window
-   * @return
-   */
-  def optimize(window: Envelope, mortoncode: MortonCode): QueryDocuments
-}
 
 trait FeatureWriter {
 
@@ -118,7 +96,8 @@ trait FeatureWriter {
 }
 
 
-/**
+/***
+  * The feature repository
  * Created by Karel Maesen, Geovise BVBA on 08/12/14.
  */
 trait Repository {
