@@ -1,9 +1,11 @@
 package utilities
 
+import akka.util.ByteString
 import featureserver.FeatureWriter
 import play.Logger
 import play.api.libs.iteratee.Iteratee
 import play.api.libs.json.{JsSuccess, _}
+import play.api.libs.streams.{Accumulator, Streams}
 import play.api.mvc.{BodyParser, Result}
 
 import scala.concurrent.{ExecutionContext, Future}
@@ -29,9 +31,9 @@ object ReactiveGeoJson {
     case JsError(seq) => (features, State("With Errors", JsonHelper.JsValidationErrors2String(seq) :: state.warnings, ""))
   }
 
-  def processChunk(writer: FeatureWriter, state: State, chunk: Array[Byte], sep : String = "\n")
+  def processChunk(writer: FeatureWriter, state: State, chunk: ByteString, sep : String = "\n")
                   (implicit ec: ExecutionContext) : Future[State] = {
-    val chunkAsString = new String(chunk, "UTF8")
+    val chunkAsString = chunk.decodeString("UTF8")
     val toProcess = state.dataRemaining + chunkAsString
     val jsonStrings = toProcess.split(sep)
     Logger.debug(s"split results in ${jsonStrings.size} elements" )
@@ -48,13 +50,19 @@ object ReactiveGeoJson {
     writer.add(fs).map( int => newState)
   }
 
-  def mkStreamingIteratee(writer: FeatureWriter, sep: String)(implicit ec: ExecutionContext) : Iteratee[Array[Byte], Either[Result, Future[State]]] =
-    Iteratee.fold( Future{ State() } ) {
-      (fState: Future[State], chunk: Array[Byte]) => fState.flatMap( state => processChunk(writer, state, chunk, sep))
-    }.map( fstate => Right(fstate) )
+  def mkStreamingIteratee(writer: FeatureWriter, sep: String)(implicit ec: ExecutionContext)  =
+    Iteratee.fold(Future {
+      State()
+    }) {
+      (fState: Future[State], chunk: ByteString) => fState.flatMap(state => processChunk(writer, state, chunk, sep))
+    }.map(fstate => Right(fstate))
+
+  def mkStreamingAccumulator(writer: FeatureWriter, sep: String)(implicit ec: ExecutionContext) : Accumulator[ByteString, Either[Result, Future[State]]] = {
+    Streams.iterateeToAccumulator(mkStreamingIteratee(writer, sep))
+  }
 
   def bodyParser(writer: FeatureWriter, sep: String)(implicit ec: ExecutionContext) = BodyParser("GeoJSON feature BodyParser") { request =>
-    mkStreamingIteratee(writer, sep)
+    mkStreamingAccumulator(writer, sep)
   }
 
 }

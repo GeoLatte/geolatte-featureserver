@@ -2,13 +2,14 @@ import sbt._
 import Keys._
 import play.sbt.PlayScala
 import play.sbt.PlayImport._
-import play.sbt.routes.RoutesKeys._
+
+import play.sbt.routes.RoutesCompiler.autoImport._
 
 object FeatureServerBuild extends Build {
 
   val appName = "geolatte-featureserver"
   val appVersion = "2.0-SNAPSHOT"
-  val playVersion = "2.4.6" //TODO -- get rid of redundant def of playversion
+//  val playVersion = "2.5.6" //TODO -- get rid of redundant def of playversion
 
   //Resolvers
   lazy val commonResolvers = Seq(
@@ -40,8 +41,8 @@ object FeatureServerBuild extends Build {
   lazy val psqlDependencies = Seq(
     "com.typesafe.slick" %% "slick" % "3.2.0-M1",
     "com.typesafe.slick" %% "slick-hikaricp" % "3.2.0-M1",
-    "postgresql" % "postgresql" % "9.1-901.jdbc4",
-    "com.typesafe.play"           %%    "play-streams-experimental" % playVersion
+    "postgresql" % "postgresql" % "9.1-901.jdbc4"
+//    "com.typesafe.play"           %%    "play-streams-experimental" % playVersion
   )
 
   val kamonVersion = "0.6.2"
@@ -111,7 +112,7 @@ object FeatureServerBuild extends Build {
   ).configs( ItTest )
     .settings( inConfig( ItTest )( Defaults.testTasks ): _* )
     .settings( (defaultSettings ++ testSettings): _* )
-    .settings(routesGenerator := InjectedRoutesGenerator)
+//    .settings(routesGenerator := InjectedRoutesGenerator)
     .enablePlugins(PlayScala)
 
 }

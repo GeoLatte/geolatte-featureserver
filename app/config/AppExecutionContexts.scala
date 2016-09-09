@@ -9,11 +9,7 @@ import scala.concurrent.ExecutionContext
  */
 object AppExecutionContexts {
 
-  import play.api.Play.current
-
-
-  implicit val streamContext : ExecutionContext =
-    if (play.api.Play.maybeApplication.isDefined) Akka.system.dispatchers.lookup("play.akka.actor.stream-dispatcher")
-    else scala.concurrent.ExecutionContext.global
+  //TODO -- figure out how to configure the "Streaming" Context, if still appropriate
+  implicit val streamContext : ExecutionContext = scala.concurrent.ExecutionContext.global
 
 }

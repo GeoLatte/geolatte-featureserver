@@ -4,7 +4,7 @@ package featureserver.postgresql
 import javax.inject._
 
 import Exceptions._
-import config.{AppExecutionContexts, ConfigurationValues}
+import config.AppExecutionContexts
 import controllers.{Formats, IndexDef}
 import featureserver._
 import featureserver.json.GeometryReaders

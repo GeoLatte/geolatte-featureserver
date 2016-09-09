@@ -3,7 +3,7 @@ package controllers
 import javax.inject.Inject
 
 import config.AppExecutionContexts
-import config.ConfigurationValues.Format
+import config.Constants.Format
 import featureserver.Repository
 import play.api.Logger
 import play.api.libs.json._

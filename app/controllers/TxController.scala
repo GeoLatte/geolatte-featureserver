@@ -99,7 +99,7 @@ class TxController @Inject() (val repository: Repository)  extends AbstractFeatu
    */
   private def mkJsonWritingBodyParser(db: String, col: String): BodyParser[Future[State]] = {
     val writer = repository.writer(db, col)
-    ReactiveGeoJson.bodyParser(writer, config.ConfigurationValues.chunkSeparator)
+    ReactiveGeoJson.bodyParser(writer, config.Constants.chunkSeparator)
   }
 
 

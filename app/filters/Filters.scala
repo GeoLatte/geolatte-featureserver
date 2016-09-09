@@ -2,21 +2,24 @@ package filters
 
 import javax.inject.Inject
 
-import kamon.Kamon
+import akka.stream.Materializer
 import metrics.Metrics
 import org.slf4j.LoggerFactory
-import play.api.http.HttpFilters
-import play.api.mvc.Filter
+import play.api.http.DefaultHttpFilters
+import play.api.mvc._
 import play.filters.gzip.GzipFilter
 
+import scala.concurrent.{ExecutionContext, Future}
 import scala.concurrent.ExecutionContext.Implicits.global
 
-class Filters @Inject() (gzipFilter: GzipFilter, metrics: Metrics ) extends HttpFilters {
+class LoggingFilter @Inject() (implicit val metrics: Metrics, val mat: Materializer, ec: ExecutionContext) extends Filter {
 
-  val requestLogger = LoggerFactory.getLogger("requests")
-  val loggingFilter  = Filter { (nextFilter, requestHeader) =>
+  def apply(nextFilter: RequestHeader => Future[Result])(requestHeader: RequestHeader): Future[Result] = {
+
     val startTime = System.currentTimeMillis
     val timer = metrics.prometheusMetrics.requestLatency.startTimer()
+
+    val requestLogger = LoggerFactory.getLogger("requests")
 
     nextFilter(requestHeader).map { result =>
       if (requestHeader.path.contains("metrics"))
@@ -37,5 +40,6 @@ class Filters @Inject() (gzipFilter: GzipFilter, metrics: Metrics ) extends Http
     }
   }
 
-  def filters = Seq(gzipFilter, loggingFilter)
 }
+
+class Filters @Inject() (gzip: GzipFilter, logger: LoggingFilter ) extends DefaultHttpFilters(gzip, logger)

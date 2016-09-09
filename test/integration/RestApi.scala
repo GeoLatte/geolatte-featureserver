@@ -1,42 +1,42 @@
 package integration
 
-import play.api.libs.json._
-import play.api.libs.functional.syntax._
-
-import play.api.test._
-import play.api.mvc._
-import utilities.SupportedMediaTypes
-
-import language.implicitConversions
-import play.api.Logger
+import akka.actor.ActorSystem
+import akka.stream.{ActorMaterializer, Materializer}
+import akka.util.{ByteString, Timeout}
+import config.Constants
 import org.geolatte.geom._
 import org.geolatte.geom.crs.CrsId
-import scala.concurrent.{Await, Future}
-import scala.concurrent.duration._
-import play.api.http.{HttpProtocol, Status, HeaderNames, Writeable}
+import org.geolatte.geom.curve.{MortonCode, MortonContext}
 import org.specs2.matcher._
-import config.ConfigurationValues
-import org.geolatte.geom.curve.{MortonContext, MortonCode}
-import scala.collection.mutable.ListBuffer
-import akka.util.Timeout
+import play.api.Logger
+import play.api.http.{HeaderNames, HttpProtocol, Status, Writeable}
 import play.api.libs.iteratee.Iteratee
+import play.api.libs.json._
+import play.api.libs.streams.Streams
+import play.api.mvc._
+import play.api.test._
+import utilities.SupportedMediaTypes
+
+import scala.collection.mutable.ListBuffer
+import scala.concurrent.duration._
+import scala.concurrent.{Await, Future}
+import scala.language.implicitConversions
 
 /**
- * Test Helper for Requests.
- *
- * @author Karel Maesen, Geovise BVBA
- *         creation-date: 10/12/13
- *
- * @tparam B Type for request body as passed into test requests
- * @tparam T Type of content for request body, passed to test server
- * @tparam R Type of result body content
- */
-case class FakeRequestResult[B, T, R]( url: String,
-                                       format: Option[Future[Result] => R] = None,
-                                       requestBody: Option[B] = None,
-                                       mkRequest: (String, Option[B]) => FakeRequest[T])(
+  * Test Helper for Requests.
+  *
+  * @author Karel Maesen, Geovise BVBA
+  *         creation-date: 10/12/13
+  * @tparam B Type for request body as passed into test requests
+  * @tparam T Type of content for request body, passed to test server
+  * @tparam R Type of result body content
+  */
+case class FakeRequestResult[B, T, R](url: String,
+                                      format: Option[Future[Result] => R] = None,
+                                      requestBody: Option[B] = None,
+                                      mkRequest: (String, Option[B]) => FakeRequest[T])(
                                        implicit val w: Writeable[T]
-                                       ) {
+                                     ) {
 
   import UtilityMethods._
 
@@ -44,12 +44,12 @@ case class FakeRequestResult[B, T, R]( url: String,
     val req = mkRequest(url, requestBody)
     route(req) match {
       case Some(res) => res
-      case None => throw new RuntimeException("Route failed to execute for req: " + req)
+      case None      => throw new RuntimeException("Route failed to execute for req: " + req)
     }
   }
   /**
-   * Calling status on a FakeRequest forces a wait for the result.
-   */
+    * Calling status on a FakeRequest forces a wait for the result.
+    */
   val status: Int = play.api.test.Helpers.status(wrappedResult)
 
   val responseBody = format.map(f => f(wrappedResult))
@@ -64,17 +64,17 @@ object FakeRequestResult {
 
   import scala.reflect.runtime.universe._
 
-  def GET[T : TypeTag](url: String, format: Future[Result] => T) : FakeRequestResult[Nothing, AnyContentAsEmpty.type, T]=
-      format match {
-        case fmt if typeOf[T]  <:< typeOf[JsValue] => {
-          val mediaType = ConfigurationValues.Format.JSON
-          new FakeRequestResult(url = url, format = Some(format), mkRequest = makeGetRequest(mediaType) )
-        }
-        case fmt if typeOf[T]  <:< typeOf[Seq[String]] => {
-          val mediaType = ConfigurationValues.Format.CSV
-          new FakeRequestResult(url = url, format = Some(format), mkRequest = makeGetRequest(mediaType))
-        }
+  def GET[T: TypeTag](url: String, format: Future[Result] => T): FakeRequestResult[Nothing, AnyContentAsEmpty.type, T] =
+    format match {
+      case fmt if typeOf[T] <:< typeOf[JsValue]     => {
+        val mediaType = Constants.Format.JSON
+        new FakeRequestResult(url = url, format = Some(format), mkRequest = makeGetRequest(mediaType))
       }
+      case fmt if typeOf[T] <:< typeOf[Seq[String]] => {
+        val mediaType = Constants.Format.CSV
+        new FakeRequestResult(url = url, format = Some(format), mkRequest = makeGetRequest(mediaType))
+      }
+    }
 
 
   def PUT(url: String, body: Option[JsValue] = None) =
@@ -85,21 +85,23 @@ object FakeRequestResult {
   def POSTJson(url: String, body: JsValue, format: Future[Result] => JsValue) =
     new FakeRequestResult(url = url, format = Some(format), requestBody = Some(body), mkRequest = makePostRequestJson)
 
-  def POSTRaw(url: String, body: Array[Byte], format: Future[Result] => JsValue) =
+  def POSTRaw(url: String, body: ByteString, format: Future[Result] => JsValue) =
     new FakeRequestResult(url = url, format = Some(format), requestBody = Some(body), mkRequest = makePostRequestRaw)
 
 }
 
 //This is for pattern match
 object ResultCheck {
+
   def unapply[B, T, R](fr: FakeRequestResult[B, T, R]): Option[(Int, Option[R])] = Some(fr.status, fr.responseBody)
 }
 
 
 object RestApiDriver {
 
-  import UtilityMethods._
   import API._
+  import UtilityMethods._
+
   import scala.reflect.runtime.universe._
 
 
@@ -114,9 +116,9 @@ object RestApiDriver {
   }
 
   def getDatabases = {
-    val format : Future[Result] => JsValue = (resp: Future[Result]) => contentAsJson(resp) match {
+    val format: Future[Result] => JsValue = (resp: Future[Result]) => contentAsJson(resp) match {
       case jArray: JsArray => jArray
-      case _ => JsNull //indicates that something wrong
+      case _               => JsNull //indicates that something wrong
     }
     FakeRequestResult.GET(DATABASES, format)
 
@@ -125,7 +127,7 @@ object RestApiDriver {
   def getDatabase(dbName: String) = {
     val format = (resp: Future[Result]) => contentAsJson(resp) match {
       case jArray: JsArray => jArray
-      case _ => JsNull //indicates that something wrong
+      case _               => JsNull //indicates that something wrong
     }
     FakeRequestResult.GET(DATABASES / dbName, format)
   }
@@ -144,7 +146,7 @@ object RestApiDriver {
 
   def deleteCollection(dbName: String, colName: String) = {
     Logger.info("START DELETING Collection")
-    val url = DATABASES/ dbName / colName
+    val url = DATABASES / dbName / colName
     FakeRequestResult.DELETE(url)
   }
 
@@ -154,7 +156,7 @@ object RestApiDriver {
     FakeRequestResult.GET(url, contentAsJsonStream)
   }
 
-  def getQuery[T : TypeTag](dbName: String, colName: String, queryStr: String)(format : Future[Result] => T) = {
+  def getQuery[T: TypeTag](dbName: String, colName: String, queryStr: String)(format: Future[Result] => T) = {
     Logger.info("Start Collection Query with QUERY parameter: " + queryStr)
     val url = DATABASES / dbName / colName / QUERY ? queryStr
     FakeRequestResult.GET(url, format)
@@ -179,7 +181,7 @@ object RestApiDriver {
   }
 
   def postRemove(db: String, col: String, reqBody: JsObject) = {
-    Logger.info(s"START REMOVING DATA WITH REQUEST ${Json.stringify(reqBody)}" )
+    Logger.info(s"START REMOVING DATA WITH REQUEST ${Json.stringify(reqBody)}")
     val url = DATABASES / db / col / TX / REMOVE
     FakeRequestResult.POSTJson(url, reqBody, contentAsJson)
   }
@@ -189,7 +191,7 @@ object RestApiDriver {
 
     val format = (posted: Future[Result]) => contentAsJson(posted) match {
       case obj: JsObject => obj
-      case _ => JsNull
+      case _             => JsNull
     }
     FakeRequestResult.POSTJson(url, mediaObject, format)
   }
@@ -197,7 +199,7 @@ object RestApiDriver {
   def getMediaObject(url: String) = {
     val format = (resp: Future[Result]) => contentAsJson(resp) match {
       case obj: JsObject => obj
-      case _ => JsNull //indicates that something wrong
+      case _             => JsNull //indicates that something wrong
     }
     FakeRequestResult.GET(url, format)
   }
@@ -232,7 +234,7 @@ object RestApiDriver {
     FakeRequestResult.PUT(url, Some(body))
   }
 
-  def getIndices(dbName: String, colName: String)  = {
+  def getIndices(dbName: String, colName: String) = {
     val url = DATABASES / dbName / colName / INDEXES
     FakeRequestResult.GET(url, contentAsJson)
   }
@@ -247,7 +249,7 @@ object RestApiDriver {
     FakeRequestResult.DELETE(url)
   }
 
-  def loadData[B](db: String, col: String, data: Array[Byte]) = {
+  def loadData[B](db: String, col: String, data: ByteString) = {
     Logger.info("START LOADING TEST DATA")
     val url = DATABASES / db / col / TX / INSERT
     val res = FakeRequestResult.POSTRaw(url, data, contentAsJson)
@@ -270,11 +272,12 @@ object RestApiDriver {
   }
 
   def withFeatures[B, T](db: String, col: String, features: JsArray)(block: => T) = {
-    val data = features.value map (j => Json.stringify(j)) mkString ConfigurationValues.chunkSeparator getBytes ("UTF-8")
-    loadData(db, col, data)
+    val data = features.value map (j => Json.stringify(j)) mkString Constants.chunkSeparator getBytes ("UTF-8")
+    loadData(db, col, ByteString(data))
     try {
       block
-    } finally {
+    }
+    finally {
       removeData(db, col)
     }
   }
@@ -282,19 +285,20 @@ object RestApiDriver {
 }
 
 object UtilityMethods extends PlayRunners
-with HeaderNames
-with Status
-with HttpProtocol
-with DefaultAwaitTimeout
-with ResultExtractors
-with Writeables
-with RouteInvokers
-//with WsTestClient
-with FutureAwaits {
-
-  import play.api.libs.concurrent._
+  with HeaderNames
+  with Status
+  with HttpProtocol
+  with DefaultAwaitTimeout
+  with ResultExtractors
+  with Writeables
+  with RouteInvokers
+  //with WsTestClient
+  with FutureAwaits {
 
   override implicit def defaultAwaitTimeout = 60.seconds
+
+  implicit val actorSys = ActorSystem()
+  implicit val mat = ActorMaterializer()
 
   val defaultIndexLevel = 4
   implicit val defaultExtent = new Envelope(0, 0, 90, 90, CrsId.valueOf(4326))
@@ -307,9 +311,10 @@ with FutureAwaits {
     "id-type" -> "decimal"
   )
 
-  implicit def mapOfQParams2QueryStr[T](params: Map[String, T]): String = params.map { case (k, v) => s"$k=$v"} mkString "&"
 
-  def makeGetRequest[B](mediatype: ConfigurationValues.Format.Value)(url: String, js: Option[B] = None) =
+  implicit def mapOfQParams2QueryStr[T](params: Map[String, T]): String = params.map { case (k, v) => s"$k=$v" } mkString "&"
+
+  def makeGetRequest[B](mediatype: Constants.Format.Value)(url: String, js: Option[B] = None) =
     FakeRequest(GET, url).withHeaders("Accept" -> SupportedMediaTypes(mediatype).toString)
 
 
@@ -321,30 +326,31 @@ with FutureAwaits {
     .withHeaders("Accept" -> "application/json")
     .withJsonBody(body.getOrElse(JsNull))
 
-  def makePostRequestRaw(url: String, body: Option[Array[Byte]]) = FakeRequest(POST, url)
+  def makePostRequestRaw(url: String, body: Option[ByteString]) = FakeRequest(POST, url)
     .withHeaders("Accept" -> "application/json")
-    .withRawBody(body.getOrElse(Array[Byte]()))
+    .withRawBody(body.getOrElse(ByteString.empty))
 
   def makeDeleteRequest(url: String, body: Option[JsValue] = None) = FakeRequest(DELETE, url)
 
   //when formatting the resonsebody for purposes of interpreting response bodies in test, we
   // transform pure text strings into JsString objects.
   private def parseJson(responseText: String): JsValue =
-    try {
-      Json.parse(responseText)
-    } catch {
-      case ex: Throwable => {
-        JsString(responseText)
-      }
+  try {
+    Json.parse(responseText)
+  }
+  catch {
+    case ex: Throwable => {
+      JsString(responseText)
     }
+  }
 
-  override def contentAsJson(result: Future[Result])(implicit timeout: Timeout): JsValue = {
-    val responseText = contentAsString(result)(timeout)
+  override def contentAsJson(result: Future[Result])(implicit timeout: Timeout, mat: Materializer): JsValue = {
+    val responseText = contentAsString(result)(timeout, mat)
     parseJson(responseText)
   }
 
-  def extractSizeAndData(bytes: Array[Byte]): (Int, String) = {
-    val elems = new String(bytes, "UTF-8").split("\r\n")
+  def extractSizeAndData(bytes: ByteString): (Int, String) = {
+    val elems = bytes.decodeString("UTF8").split("\r\n")
     val chunkSize = Integer.parseInt(elems(0), 16)
     if (elems.size == 1) (chunkSize, "")
     else (chunkSize, elems(1))
@@ -354,45 +360,48 @@ with FutureAwaits {
   private def readChunked[T](result: Future[Result], parse: String => T)(timeout: Timeout): Seq[T] = {
     import scala.concurrent.ExecutionContext.Implicits.global
     val buf = ListBuffer[T]()
-    val consumer: Iteratee[Array[Byte], Unit] =
-      Iteratee.fold[Array[Byte], ListBuffer[T]](buf)((buf, bytes) => {
+    val consumer: Iteratee[ByteString, Unit] =
+      Iteratee.fold[ByteString, ListBuffer[T]](buf)((buf, bytes) => {
         val (size, text) = extractSizeAndData(bytes)
         try {
           buf += parse(text)
-        } catch {
+        }
+        catch {
           case _: Throwable => buf
         }
       }).map(_ => Unit)
-    val body = Await.result(result, timeout.duration).body
-    val f = (body |>>> consumer)
+    val body = Await.result(result, timeout.duration).body.dataStream
+    val sink = Streams.iterateeToAccumulator(consumer)
+
+    val f = sink.run(body)
     Await.result(f, timeout.duration)
-    buf.toSeq
+    buf
   }
 
-  def contentAsJsonStringStream (result: Future[Result])(implicit timeout: Timeout): JsObject =
+  def contentAsJsonStringStream(result: Future[Result])(implicit timeout: Timeout, mat: Materializer): JsObject =
     header("Transfer-Encoding", result)(timeout) match {
       case Some("chunked") => Json.parse(
-        (readChunked(result, s => s)(timeout)).foldLeft("")( (s, result) => s + result)
+        (readChunked(result, s => s)(timeout)).foldLeft("")((s, result) => s + result)
       ).asInstanceOf[JsObject]
-      case _ => Json.parse(contentAsString(result)(timeout)).asInstanceOf[JsObject]
+      case _               => Json.parse(contentAsString(result)(timeout, mat)).asInstanceOf[JsObject]
     }
 
-  def contentAsJsonStream(result: Future[Result])(implicit timeout: Timeout): JsArray =
+  def contentAsJsonStream(result: Future[Result])(implicit timeout: Timeout, mat: Materializer): JsArray =
     header("Transfer-Encoding", result)(timeout) match {
       case Some("chunked") => JsArray(readChunked(result, Json.parse)(timeout))
-      case _ => Json.arr(contentAsJson(result)(timeout))
+      case _               => Json.arr(contentAsJson(result)(timeout, mat))
     }
 
-  def contentAsStringStream(result: Future[Result])(implicit timeout: Timeout): Seq[String] =
+  def contentAsStringStream(result: Future[Result])(implicit timeout: Timeout, mat: Materializer): Seq[String] =
     header("Transfer-Encoding", result)(timeout) match {
       case Some("chunked") => readChunked(result, identity[String])(timeout)
-      case _ => Seq(contentAsString(result)(timeout))
+      case _               => Seq(contentAsString(result)(timeout, mat))
     }
 
 
   implicit def toArrayOpt(js: Option[JsValue]): Option[JsArray] = js match {
     case Some(ja: JsArray) => Some(ja)
-    case _ => None
+    case _                 => None
   }
 
   implicit def fakeRequestToResult[B, T, R](fake: FakeRequestResult[B, T, R]): Future[Result] = fake.wrappedResult
@@ -403,6 +412,7 @@ with FutureAwaits {
 object API {
 
   case class URLToken(token: String) {
+
     def /(other: URLToken): URLToken = URLToken(s"$token/${other.token}")
 
     def ?(other: URLToken): URLToken = URLToken(s"$token?${other.token}")

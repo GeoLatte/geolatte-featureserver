@@ -34,7 +34,7 @@ import scala.util.{Failure, Success, Try}
 class FeatureCollectionController @Inject() (val repository: Repository) extends AbstractFeatureServerSqlController with FutureInstrumented {
 
   import AppExecutionContexts.streamContext
-  import config.ConfigurationValues._
+  import config.Constants._
 
 
   def parseQueryExpr(s: String): Option[BooleanExpr] = QueryParser.parse(s) match {

@@ -1,10 +1,10 @@
 package utilities
 
-import config.ConfigurationValues
+
+import config.Constants._
 import org.specs2.mutable._
-import config.ConfigurationValues.{Version, Format}
 import play.api.http.{MediaRange, MediaType}
-import play.api.test.{FakeRequest, FakeHeaders}
+import play.api.test.{FakeHeaders, FakeRequest}
 
 /**
  * @author Karel Maesen, Geovise BVBA

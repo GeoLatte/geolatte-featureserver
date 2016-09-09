@@ -3,8 +3,7 @@ package controllers
 import javax.inject.Inject
 
 import config.AppExecutionContexts.streamContext
-import config.ConfigurationValues
-import config.ConfigurationValues.{Format, Version}
+import config.Constants.{Format, Version}
 import featureserver._
 import Exceptions._
 import play.Logger
@@ -69,7 +68,7 @@ trait AbstractFeatureServerSqlController extends Controller with FutureInstrumen
   // this code won't be called
   def toStream[A](features: Enumerator[A])(implicit toStr: A => String): Enumerator[Array[Byte]] = {
 
-    val finalSeparatorEnumerator = Enumerator.enumerate(List(ConfigurationValues.chunkSeparator.getBytes( "UTF-8")))
+    val finalSeparatorEnumerator = Enumerator.enumerate(List(config.Constants.chunkSeparator.getBytes( "UTF-8")))
 
     val startTime = System.nanoTime()
 
@@ -90,7 +89,7 @@ trait AbstractFeatureServerSqlController extends Controller with FutureInstrumen
     }
 
 
-    val commaSeparate = new CommaSeparate(ConfigurationValues.chunkSeparator)
+    val commaSeparate = new CommaSeparate(config.Constants.chunkSeparator)
     val jsons = features.map(f => toStr(f)) &> commaSeparate
     val toBytes = Enumeratee.map[String](_.getBytes("UTF-8"))
     (jsons &> toBytes) andThen finalSeparatorEnumerator andThen enumInput(Input.EOF) //Enumerator.eof

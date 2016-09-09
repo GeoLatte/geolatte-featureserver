@@ -1,7 +1,7 @@
 package utilities
 
 
-import config.ConfigurationValues.{Format, Version}
+import config.Constants.{Format, Version}
 import play.api.http.MediaType
 import play.api.mvc.RequestHeader
 
