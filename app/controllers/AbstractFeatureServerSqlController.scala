@@ -5,7 +5,7 @@ import javax.inject.Inject
 import config.AppExecutionContexts.streamContext
 import config.ConfigurationValues
 import config.ConfigurationValues.{Format, Version}
-import nosql._
+import featureserver._
 import Exceptions._
 import play.Logger
 import play.api.libs.iteratee._
@@ -22,7 +22,7 @@ import scala.language.{implicitConversions, reflectiveCalls}
  * @author Karel Maesen, Geovise BVBA
  *         creation-date: 10/11/13
  */
-trait AbstractNoSqlController extends Controller with FutureInstrumented {
+trait AbstractFeatureServerSqlController extends Controller with FutureInstrumented {
 
   def repository: Repository
 

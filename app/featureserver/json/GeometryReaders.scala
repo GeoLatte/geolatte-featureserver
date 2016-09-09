@@ -1,4 +1,4 @@
-package nosql.json
+package featureserver.json
 
 /**
  * @author Karel Maesen, Geovise BVBA

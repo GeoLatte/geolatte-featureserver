@@ -1,4 +1,4 @@
-package nosql.postgresql
+package featureserver.postgresql
 
 import play.api.Logger
 

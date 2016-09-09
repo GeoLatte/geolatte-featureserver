@@ -1,7 +1,7 @@
 package integration
 
 import config.ConfigurationValues
-import nosql.json.Gen
+import featureserver.json.Gen
 import org.specs2.matcher.MatchResult
 import play.api.libs.json._
 import play.api.http.Status._

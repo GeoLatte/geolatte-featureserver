@@ -1,6 +1,6 @@
-package nosql.mongodb
+package featureserver.mongodb
 
-import nosql.FeatureWriter
+import featureserver.FeatureWriter
 import org.specs2.mutable.Specification
 import play.api.libs.iteratee._
 
@@ -8,7 +8,7 @@ import scala.concurrent.{Await, Future}
 import scala.concurrent.duration.Duration
 import config.ConfigurationValues
 import play.api.libs.json.JsObject
-import nosql.json.Gen
+import featureserver.json.Gen
 import org.geolatte.geom.Envelope
 import utilities.ReactiveGeoJson
 

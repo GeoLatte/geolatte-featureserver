@@ -8,7 +8,7 @@ import play.api.mvc.AnyContentAsEmpty
  * @author Karel Maesen, Geovise BVBA
  *         creation-date: 10/26/13
  */
-class DatabaseAPISpec extends NoSqlSpecification {
+class DatabaseAPISpec extends FeatureServerSqlSpecification {
 
 
 

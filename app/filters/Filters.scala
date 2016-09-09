@@ -4,7 +4,7 @@ import javax.inject.Inject
 
 import kamon.Kamon
 import metrics.KamonUserMetrics$
-import nosql.Global
+import featureserver.Global
 import play.api.http.HttpFilters
 import play.api.mvc.Filter
 import play.filters.gzip.GzipFilter

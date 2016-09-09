@@ -1,7 +1,7 @@
-package nosql.json
+package featureserver.json
 
-import nosql.json.Gen._
-import nosql.{FeatureTransformers, Metadata}
+import featureserver.json.Gen._
+import featureserver.{FeatureTransformers, Metadata}
 import org.geolatte.geom.DimensionalFlag._
 import org.geolatte.geom._
 import org.geolatte.geom.crs.CrsId

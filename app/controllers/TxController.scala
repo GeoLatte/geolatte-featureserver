@@ -4,7 +4,7 @@ import javax.inject.Inject
 
 import Exceptions._
 import config.AppExecutionContexts
-import nosql.Repository
+import featureserver.Repository
 import play.api.libs.json._
 import play.api.mvc._
 import querylang.{BooleanExpr, QueryParser}
@@ -21,7 +21,7 @@ import scala.util.{Failure, Success, Try}
  * @author Karel Maesen, Geovise BVBA
  *         creation-date: 7/25/13
  */
-class TxController @Inject() (val repository: Repository)  extends AbstractNoSqlController {
+class TxController @Inject() (val repository: Repository)  extends AbstractFeatureServerSqlController {
 
   import AppExecutionContexts.streamContext
 

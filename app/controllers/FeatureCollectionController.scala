@@ -10,8 +10,8 @@ import scala.collection.mutable.ListBuffer
 import scala.language.reflectiveCalls
 import scala.language.implicitConversions
 import config.AppExecutionContexts
-import nosql._
-import nosql.json.GeometryReaders._
+import featureserver._
+import featureserver.json.GeometryReaders._
 import org.geolatte.geom.crs.CrsId
 import org.geolatte.geom.{Envelope, Geometry, Point}
 import org.supercsv.encoder.DefaultCsvEncoder
@@ -31,7 +31,7 @@ import utilities.{EnumeratorUtility, QueryParam, Utils}
 import scala.util.{Failure, Success, Try}
 
 
-class FeatureCollectionController @Inject() (val repository: Repository) extends AbstractNoSqlController with FutureInstrumented {
+class FeatureCollectionController @Inject() (val repository: Repository) extends AbstractFeatureServerSqlController with FutureInstrumented {
 
   import AppExecutionContexts.streamContext
   import config.ConfigurationValues._

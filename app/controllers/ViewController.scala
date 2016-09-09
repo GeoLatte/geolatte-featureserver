@@ -4,7 +4,7 @@ import javax.inject.Inject
 
 import config.AppExecutionContexts
 import config.ConfigurationValues.Format
-import nosql.Repository
+import featureserver.Repository
 import play.api.Logger
 import play.api.libs.json._
 import play.api.mvc.{BodyParsers, Result}
@@ -12,7 +12,7 @@ import utilities.{JsonHelper, QueryParam, SupportedMediaTypes}
 
 import scala.concurrent.Future
 
-class ViewController @Inject() (val repository: Repository) extends AbstractNoSqlController {
+class ViewController @Inject() (val repository: Repository) extends AbstractFeatureServerSqlController {
 
   import AppExecutionContexts.streamContext
   import Formats._

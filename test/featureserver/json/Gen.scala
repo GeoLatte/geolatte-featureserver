@@ -1,4 +1,4 @@
-package nosql.json
+package featureserver.json
 
 
 import java.util.UUID
@@ -6,7 +6,7 @@ import java.util.UUID
 import org.geolatte.geom._
 import play.api.libs.json._
 import play.api.libs.json.Json.JsValueWrapper
-import nosql.json.GeometryReaders._
+import featureserver.json.GeometryReaders._
 import org.geolatte.geom.curve.MortonCode
 import scala.reflect.ClassTag
 import scala.util.Random

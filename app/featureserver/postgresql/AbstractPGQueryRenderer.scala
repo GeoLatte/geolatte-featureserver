@@ -1,4 +1,4 @@
-package nosql.postgresql
+package featureserver.postgresql
 
 import querylang.{GTE, LTE, _}
 

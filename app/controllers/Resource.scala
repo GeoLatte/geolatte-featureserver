@@ -1,7 +1,7 @@
 package controllers
 
-import nosql.json.GeometryReaders._
-import nosql.{Metadata, MetadataIdentifiers}
+import featureserver.json.GeometryReaders._
+import featureserver.{Metadata, MetadataIdentifiers}
 import org.apache.commons.codec.binary.Base64
 import org.geolatte.geom.Envelope
 import play.api.data.validation.ValidationError

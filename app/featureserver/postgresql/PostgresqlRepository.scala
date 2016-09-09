@@ -1,4 +1,4 @@
-package nosql.postgresql
+package featureserver.postgresql
 
 
 import javax.inject._
@@ -6,8 +6,8 @@ import javax.inject._
 import Exceptions._
 import config.{AppExecutionContexts, ConfigurationValues}
 import controllers.{Formats, IndexDef}
-import nosql._
-import nosql.json.GeometryReaders
+import featureserver._
+import featureserver.json.GeometryReaders
 import org.geolatte.geom.codec.{Wkb, Wkt}
 import org.geolatte.geom.{ByteBuffer, Envelope, Geometry, Polygon}
 import org.postgresql.util.PSQLException

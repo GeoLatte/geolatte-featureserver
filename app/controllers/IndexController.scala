@@ -4,14 +4,14 @@ import javax.inject.Inject
 
 import config.AppExecutionContexts
 import controllers.Formats._
-import nosql.Repository
+import featureserver.Repository
 import play.api.Logger
 import play.api.libs.json.{JsError, JsSuccess}
 import play.api.mvc.{BodyParsers, Result}
 
 import scala.concurrent.Future
 
-class IndexController @Inject()(val repository: Repository) extends AbstractNoSqlController {
+class IndexController @Inject()(val repository: Repository) extends AbstractFeatureServerSqlController {
 
   import AppExecutionContexts._
 

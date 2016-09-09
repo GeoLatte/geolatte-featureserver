@@ -1,4 +1,4 @@
-package nosql
+package featureserver
 
 
 import scala.concurrent.{ExecutionContext, Future}

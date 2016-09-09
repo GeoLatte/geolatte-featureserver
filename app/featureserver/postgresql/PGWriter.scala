@@ -1,6 +1,6 @@
-package nosql.postgresql
+package featureserver.postgresql
 
-import nosql.{FeatureTransformers, FeatureWriter, Metadata, Repository}
+import featureserver.{FeatureTransformers, FeatureWriter, Metadata, Repository}
 import org.geolatte.geom.Polygon
 import play.api.Logger
 import play.api.libs.json.{JsObject, Reads}

@@ -2,7 +2,7 @@ package controllers
 
 import javax.inject.Inject
 
-import nosql.{Metadata, Repository}
+import featureserver.{Metadata, Repository}
 import play.api.mvc._
 import play.api.libs.json._
 
@@ -16,7 +16,7 @@ import utilities.Utils
   * @author Karel Maesen, Geovise BVBA
   *         creation-date: 7/22/13
   */
-class DatabasesController @Inject() (val repository: Repository )extends AbstractNoSqlController {
+class DatabasesController @Inject() (val repository: Repository )extends AbstractFeatureServerSqlController {
 
   import config.AppExecutionContexts.streamContext
 

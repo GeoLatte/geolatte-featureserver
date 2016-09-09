@@ -15,7 +15,7 @@ import utilities.Utils
  * @author Karel Maesen, Geovise BVBA
  *         creation-date: 12/3/13
  */
-abstract class NoSqlSpecification extends Specification {
+abstract class FeatureServerSqlSpecification extends Specification {
 
   val app: Application = new GuiceApplicationBuilder().build()
   val testDbName = "xfstestdb"
@@ -36,7 +36,7 @@ abstract class NoSqlSpecification extends Specification {
 
 }
 
-abstract class InDatabaseSpecification extends NoSqlSpecification {
+abstract class InDatabaseSpecification extends FeatureServerSqlSpecification {
   import integration.RestApiDriver._
 
   override def map(fs: => Fragments) =
@@ -47,7 +47,7 @@ abstract class InDatabaseSpecification extends NoSqlSpecification {
       step( Play.stop( app ) ) ^ tag(configuredDatabase)
 }
 
-abstract class InCollectionSpecification extends NoSqlSpecification {
+abstract class InCollectionSpecification extends FeatureServerSqlSpecification {
   import integration.RestApiDriver._
 
   override def map(fs: => Fragments) =

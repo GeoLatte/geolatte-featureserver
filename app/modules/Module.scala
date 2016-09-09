@@ -1,8 +1,8 @@
 package modules
 
 import com.google.inject.AbstractModule
-import nosql.Repository
-import nosql.postgresql.PostgresqlRepository
+import featureserver.Repository
+import featureserver.postgresql.PostgresqlRepository
 import play.api.{Configuration, Environment}
 
 /**

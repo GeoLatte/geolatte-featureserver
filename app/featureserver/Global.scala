@@ -1,9 +1,9 @@
-package nosql
+package featureserver
 
 import akka.actor.Props
 import kamon.Kamon
 import metrics.PrometheusMetrics
-import nosql.postgresql.PostgresqlRepository
+import featureserver.postgresql.PostgresqlRepository
 import org.slf4j.LoggerFactory
 import play.api._
 import play.api.mvc.Results._

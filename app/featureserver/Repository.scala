@@ -1,7 +1,7 @@
-package nosql
+package featureserver
 
 import controllers.IndexDef
-import nosql.json.GeometryReaders._
+import featureserver.json.GeometryReaders._
 import org.geolatte.geom.Envelope
 import org.geolatte.geom.curve.MortonCode
 import play.api.data.validation.ValidationError
@@ -22,7 +22,7 @@ case class Metadata(
                      count: Long = 0,
                      geometryColumn: String = "GEOMETRY",
                      pkey: String = "id",
-                     jsonTable: Boolean = true // is table defined by nosql Server? or registered
+                     jsonTable: Boolean = true // is table defined by featureserver Server? or registered
                    )
 
 

@@ -1,7 +1,7 @@
 package integration
 
-import nosql.json.Gen
-import nosql.json.Gen._
+import featureserver.json.Gen
+import featureserver.json.Gen._
 import play.api.libs.json._
 import org.geolatte.geom.Envelope
 import java.net.URLEncoder._

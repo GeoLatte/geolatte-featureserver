@@ -1,6 +1,6 @@
 package utilities
 
-import nosql.FeatureWriter
+import featureserver.FeatureWriter
 import play.Logger
 import play.api.libs.iteratee.Iteratee
 import play.api.libs.json.{JsSuccess, _}

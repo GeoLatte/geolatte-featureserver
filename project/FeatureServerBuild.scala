@@ -75,7 +75,7 @@ object FeatureServerBuild extends Build {
   lazy val commonBuildSettings = Seq(
     name := appName,
     version := appVersion,
-    organization := "org.geolatte.nosql",
+    organization := "org.geolatte",
     scalaVersion := "2.11.8",
     scalacOptions ++= Seq( "-feature", "-language:postfixOps", "-language:implicitConversions" ),
     resolvers ++= commonResolvers
