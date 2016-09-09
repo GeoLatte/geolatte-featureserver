@@ -21,18 +21,16 @@ abstract class FeatureServerSqlSpecification extends Specification {
   val testDbName = "xfstestdb"
   val testColName = "xfstestcoll"
 
-  lazy val configuredDatabase  : String = app.configuration.getString("fs.db").getOrElse("mongodb")
-
   //override decorate so we can inject 'include' en 'sequential' arguments
   override def decorate(is: SpecStructure, env: Env) = {
     val dec = super.decorate( is, env )
-    dec.setArguments(dec.arguments  <| args(include=configuredDatabase, sequential=true) )
+    dec.setArguments(dec.arguments  <| args(sequential=true) )
   }
 
   override def map(fs: =>Fragments) =
-      step(Play.start(app)) ^ tag(configuredDatabase) ^
+      step(Play.start(app)) ^
         fs ^
-      step(Play.stop(app)) ^ tag(configuredDatabase)
+      step(Play.stop(app))
 
 }
 
@@ -40,23 +38,23 @@ abstract class InDatabaseSpecification extends FeatureServerSqlSpecification {
   import integration.RestApiDriver._
 
   override def map(fs: => Fragments) =
-      step( Play.start( app ) ) ^ tag( configuredDatabase ) ^
-      step( makeDatabase( testDbName ) ) ^ tag( configuredDatabase ) ^
+      step( Play.start( app ) ) ^
+      step( makeDatabase( testDbName ) )  ^
       fs ^
-      step( dropDatabase( testDbName ) ) ^ tag( configuredDatabase ) ^
-      step( Play.stop( app ) ) ^ tag(configuredDatabase)
+      step( dropDatabase( testDbName ) )  ^
+      step( Play.stop( app ) )
 }
 
 abstract class InCollectionSpecification extends FeatureServerSqlSpecification {
   import integration.RestApiDriver._
 
   override def map(fs: => Fragments) =
-      step( Play.start( app ) ) ^ tag( configuredDatabase ) ^
-      step( makeDatabase( testDbName ) ) ^ tag( configuredDatabase ) ^
-      step( makeCollection( testDbName, testColName ) ) ^ tag( configuredDatabase ) ^
+      step( Play.start( app ) ) ^
+      step( makeDatabase( testDbName ) ) ^
+      step( makeCollection( testDbName, testColName ) ) ^
       fs ^
-      step( dropDatabase( testDbName ) ) ^ tag( configuredDatabase ) ^
-      step( Play.stop( app ) ) ^ tag( configuredDatabase )
+      step( dropDatabase( testDbName ) ) ^ 
+      step( Play.stop( app ) )
 
 
 

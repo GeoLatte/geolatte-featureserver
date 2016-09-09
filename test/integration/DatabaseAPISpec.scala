@@ -17,7 +17,7 @@ class DatabaseAPISpec extends FeatureServerSqlSpecification {
 
 
 
-    The /api/databases should return                    ${section("mongodb", "postgresql")}
+    The /api/databases should return
       an array of databases                             ${e1}
       with content-type                                 ${e2("application/vnd.geolatte-featureserver+json")}
       CREATED on PUT of a database                      ${e3}
@@ -28,7 +28,6 @@ class DatabaseAPISpec extends FeatureServerSqlSpecification {
       OK when deleting again (DELETE is Idempotent)     ${e7}
       array without name of db, after drop              ${e8}
                                                         ${step(cleanup)}
-                                                        ${section("mongodb", "postgresql")}
 
   """
 

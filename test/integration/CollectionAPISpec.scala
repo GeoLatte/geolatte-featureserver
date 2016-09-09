@@ -10,7 +10,7 @@ class CollectionAPISpec extends InDatabaseSpecification {
 
   def is = s2"""
 
-      The Collection API should:                                                            ${section("mongodb","postgresql")}
+      The Collection API should:
         return CREATED on PUT of a collection                                               $e1
         return CONFLICT on attempt to PUT to same collection name                           $e2
         return an array of collections on GET to database                                   $e6
@@ -20,7 +20,7 @@ class CollectionAPISpec extends InDatabaseSpecification {
         return 404 on attempt to GET a collection which does not exist                      $e5
         return OK on attempt to DELETE a collection which does not exist                    $e7
         return 404 on attempt to create a collection on a non-existing database             $e9
-                                                                                            ${section("mongodb","postgresql")}
+
     """
 
   import RestApiDriver._

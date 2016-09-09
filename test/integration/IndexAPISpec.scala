@@ -9,7 +9,7 @@ class IndexAPISpec extends InCollectionSpecification {
 
 
   def is = s2"""
-                                                                                    ${section("postgresql")}
+
       The PUT on /index should:
         return 404 when the collection does not exist                               $e1
         return 400 (BAD REQUEST) when index data is invalid                         $e2

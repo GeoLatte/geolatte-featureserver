@@ -18,7 +18,7 @@ class TransactionAPISpec  extends InCollectionSpecification {
   def is = s2"""
 
 
-                                                                                  ${section("mongodb", "postgresql")}
+
      The Transaction /upsert should:
        return 404 when the collection does not exist                              $e1
        return OK when the collection does exist, and data is valid                $e2
@@ -35,13 +35,13 @@ class TransactionAPISpec  extends InCollectionSpecification {
 
       The transaction /delete should:
         return status code BAD_REQUEST when query is malformed                    $e8
-                                                                                  ${section("mongodb", "postgresql")}
 
-                                                                                  ${section("postgresql")}
+
+
       The transaction /insert should:
         accept Json values with string-value ID props if id-type is 'text'        $e62
         refuses Json values with numerical ID props if id-type is 'text'          $e63
-                                                                                  ${section( "postgresql" )}
+
 
   """
 
