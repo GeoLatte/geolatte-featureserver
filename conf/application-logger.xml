@@ -73,7 +73,7 @@
         <appender-ref ref="FILE"/>
     </logger>
 
-    <logger name="slick.jdbc.JdbcBackend.statement" level="WARN" additivity="false">
+    <logger name="slick.jdbc.JdbcBackend.statement" level="debug" additivity="false">
         <appender-ref ref="STDOUT"/>
     </logger>
 
