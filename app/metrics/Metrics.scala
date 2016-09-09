@@ -17,9 +17,9 @@ trait Metrics {
 class FeatureServerMetrics @Inject() (lifecycle : ApplicationLifecycle) extends Metrics {
 
   Kamon.start()
-
   override val prometheusMetrics = new PrometheusMetrics
-
+  prometheusMetrics.start()
+  
   lifecycle.addStopHook(
     () => {
       Kamon.shutdown()
