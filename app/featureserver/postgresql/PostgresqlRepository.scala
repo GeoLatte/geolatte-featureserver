@@ -19,7 +19,7 @@ import slick.jdbc.PostgresProfile.api._
 import play.api.libs.streams.Streams
 import play.api.inject.ApplicationLifecycle
 import slick.basic.DatabasePublisher
-import slick.jdbc.GetResult
+import slick.jdbc.{GetResult, PositionedResult}
 
 import scala.concurrent.Future
 
@@ -32,6 +32,7 @@ class PostgresqlRepository @Inject() (applicationLifecycle: ApplicationLifecycle
   import GeometryReaders._
   import utilities.Utils._
 
+  private val geoJsonCol = "__geojson"
   lazy val database = Database.forConfig("fs.postgresql")
 
   applicationLifecycle.addStopHook(
@@ -40,7 +41,25 @@ class PostgresqlRepository @Inject() (applicationLifecycle: ApplicationLifecycle
 
   case class Row(id: String, geometry: String, json: JsObject)
 
-  implicit val getRowResult = GetResult(r => Row(r.nextString, r.nextString(), Json.parse(r.nextString()).asInstanceOf[JsObject]))
+  def getRowResultFromTable(md: Metadata) = GetResult(tableRecordToRow(md))
+
+
+  def tableRecordToRow(meta: Metadata)= (pr: PositionedResult) =>
+  if (meta.jsonTable) Row(pr.nextString, pr.nextString(), Json.parse(pr.nextString()).asInstanceOf[JsObject])
+    else {
+      val rs = pr.rs
+      val md = rs.getMetaData
+      val id = rs.getString(meta.pkey)
+      val geom = rs.getString(geoJsonCol)
+      val props : Seq[(String, JsValue)] = for {
+        idx <- 1 to pr.numColumns
+        key = md.getColumnName(idx) if key != meta.geometryColumn && key != geoJsonCol && key != meta.pkey
+        value = rs.getObject(idx)
+      } yield (key, JsonUtils.toJsValue(value))
+      val jsObj = Json.obj( meta.pkey -> id, meta.geometryColumn -> geom, "properties" -> JsObject(props))
+      Row(id, geom, jsObj)
+  }
+
   implicit val getMetadataResult = GetResult(r => {
     val jsEnv = json(r.nextString())
     val env = Json.fromJson[Envelope](jsEnv) match {
@@ -537,7 +556,7 @@ class PostgresqlRepository @Inject() (applicationLifecycle: ApplicationLifecycle
 
       val projection =
         if (query.metadata.jsonTable) "ID, geometry, json"
-        else s" ST_AsGeoJson( ${query.metadata.geometryColumn}, 15, 3 ) as __geojson, * "
+        else s" ${query.metadata.pkey}, ST_AsGeoJson( ${query.metadata.geometryColumn}, 15, 3 ) as __geojson, * "
 
       sql"""
          SELECT #$projection
@@ -546,7 +565,7 @@ class PostgresqlRepository @Inject() (applicationLifecycle: ApplicationLifecycle
          ORDER BY #${sort(query)}
          #$offsetClause
          #$limitClause
-     """.as[Row]
+     """.as[Row](getRowResultFromTable(query.metadata))
 
     }
 
