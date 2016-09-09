@@ -207,16 +207,17 @@ class PostgresqlRepository @Inject() (applicationLifecycle: ApplicationLifecycle
     val fCnt: Future[Option[Long]] = database.run(stmtTotal).map(Some(_))
 
     //get the data
-    def project(js: Option[JsObject]): Option[JsObject] = projectingReads match {
-      case None              => js
-      case Some(projections) => js.flatMap(_.asOpt(projections))
+    def project(js: JsObject): Option[JsObject] = projectingReads match {
+      case None              => Some(js)
+      case Some(projections) => js.asOpt(projections)
     }
+
     val dataStmt = Sql.SELECT_DATA(db, collection, spatialQuery, start, limit)
 
     val disableAutocommit = SimpleDBIO(_.connection.setAutoCommit(false))
 
-    val publisher: DatabasePublisher[JsObject] = database.stream(disableAutocommit andThen dataStmt.withStatementParameters(fetchSize = 32))
-      .mapResult { case (jsonText, _, _) => project(JsonUtils.toJson(jsonText)).get
+    val publisher: DatabasePublisher[JsObject] = database.stream(disableAutocommit andThen dataStmt.withStatementParameters(fetchSize = 128))
+      .mapResult { case Row( _, _, json) => project(json).get
       }
 
     for {
@@ -535,7 +536,7 @@ class PostgresqlRepository @Inject() (applicationLifecycle: ApplicationLifecycle
       }
 
       val projection =
-        if (query.metadata.jsonTable) "json, ID, geometry"
+        if (query.metadata.jsonTable) "ID, geometry, json"
         else s" ST_AsGeoJson( ${query.metadata.geometryColumn}, 15, 3 ) as __geojson, * "
 
       sql"""
@@ -545,7 +546,7 @@ class PostgresqlRepository @Inject() (applicationLifecycle: ApplicationLifecycle
          ORDER BY #${sort(query)}
          #$offsetClause
          #$limitClause
-     """.as[(String, String, String)]
+     """.as[Row]
 
     }
 
