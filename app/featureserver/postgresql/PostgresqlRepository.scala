@@ -56,7 +56,7 @@ class PostgresqlRepository @Inject() (applicationLifecycle: ApplicationLifecycle
         key = md.getColumnName(idx) if key != meta.geometryColumn && key != geoJsonCol && key != meta.pkey
         value = rs.getObject(idx)
       } yield (key, JsonUtils.toJsValue(value))
-      val jsObj = Json.obj( meta.pkey -> id, meta.geometryColumn -> geom, "properties" -> JsObject(props))
+      val jsObj = Json.obj( meta.pkey -> id, meta.geometryColumn -> Json.parse(geom), "properties" -> JsObject(props))
       Row(id, geom, jsObj)
   }
 
@@ -458,12 +458,14 @@ class PostgresqlRepository @Inject() (applicationLifecycle: ApplicationLifecycle
     }
   }
 
+
   private def toJsPathList(flds: List[String]): List[JsPath] = {
 
     val paths = flds.map {
       spath => spath.split("\\.").foldLeft[JsPath](__)((jsp, pe) => jsp \ pe)
     }
 
+    //TODO -- fix this! geometry and id are not always called that (in case of regular tables)!!
     if (paths.isEmpty) paths
     else paths ++ List(__ \ "type", __ \ "geometry", __ \ "id")
   }
@@ -556,7 +558,7 @@ class PostgresqlRepository @Inject() (applicationLifecycle: ApplicationLifecycle
 
       val projection =
         if (query.metadata.jsonTable) "ID, geometry, json"
-        else s" ${query.metadata.pkey}, ST_AsGeoJson( ${query.metadata.geometryColumn}, 15, 3 ) as __geojson, * "
+        else s" ${query.metadata.pkey}, ST_AsGeoJson( ${query.metadata.geometryColumn}, 15, 3 ) as $geoJsonCol, * "
 
       sql"""
          SELECT #$projection
