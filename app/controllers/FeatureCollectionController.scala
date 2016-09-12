@@ -269,7 +269,6 @@ class FeatureCollectionController @Inject() (val repository: Repository) extends
   }
 
   private def selectorMerge(viewQuery: Option[String], exprOpt: Option[BooleanExpr]): Option[BooleanExpr] = {
-    Logger.info(s"MERGING $viewQuery and $exprOpt")
     val res = (viewQuery, exprOpt) match {
       case (Some(str), Some(e)) => parseQueryExpr(str).map(expr => BooleanAnd(expr, e))
       case (None, s@Some(_))    => s

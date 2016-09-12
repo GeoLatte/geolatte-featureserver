@@ -1,6 +1,7 @@
 package integration
 
 import akka.actor.ActorSystem
+import akka.stream.scaladsl.Sink
 import akka.stream.{ActorMaterializer, Materializer}
 import akka.util.{ByteString, Timeout}
 import config.Constants
@@ -9,13 +10,12 @@ import org.geolatte.geom.crs.CrsId
 import org.geolatte.geom.curve.{MortonCode, MortonContext}
 import org.specs2.matcher._
 import play.api.Logger
-import play.api.http.{HeaderNames, HttpProtocol, Status, Writeable}
-import play.api.libs.iteratee.Iteratee
+import play.api.http._
 import play.api.libs.json._
-import play.api.libs.streams.Streams
 import play.api.mvc._
 import play.api.test._
 import utilities.SupportedMediaTypes
+import utilities.Utils.withInfo
 
 import scala.collection.mutable.ListBuffer
 import scala.concurrent.duration._
@@ -43,7 +43,9 @@ case class FakeRequestResult[B, T, R](url: String,
   val wrappedResult: Future[Result] = {
     val req = mkRequest(url, requestBody)
     route(req) match {
-      case Some(res) => res
+      case Some(res) => withInfo(s"Result for $url: $res") {
+        res
+      }
       case None      => throw new RuntimeException("Route failed to execute for req: " + req)
     }
   }
@@ -349,53 +351,51 @@ object UtilityMethods extends PlayRunners
     parseJson(responseText)
   }
 
-  def extractSizeAndData(bytes: ByteString): (Int, String) = {
-    val elems = bytes.decodeString("UTF8").split("\r\n")
-    val chunkSize = Integer.parseInt(elems(0), 16)
-    if (elems.size == 1) (chunkSize, "")
-    else (chunkSize, elems(1))
-
+  def extractSizeAndData(bytes: ByteString): String = {
+    bytes.decodeString("UTF8")
   }
 
   private def readChunked[T](result: Future[Result], parse: String => T)(timeout: Timeout): Seq[T] = {
-    import scala.concurrent.ExecutionContext.Implicits.global
-    val buf = ListBuffer[T]()
-    val consumer: Iteratee[ByteString, Unit] =
-      Iteratee.fold[ByteString, ListBuffer[T]](buf)((buf, bytes) => {
-        val (size, text) = extractSizeAndData(bytes)
+    val buffer = ListBuffer[T]()
+
+    val body = Await.result(result, timeout.duration).body.dataStream
+    val sink: Sink[ByteString, Future[Seq[T]]] = Sink.fold[ListBuffer[T], ByteString](buffer) { (buf, bytes) => {
+        val text = extractSizeAndData(bytes)
         try {
           buf += parse(text)
-        }
-        catch {
+        } catch {
           case _: Throwable => buf
         }
-      }).map(_ => Unit)
-    val body = Await.result(result, timeout.duration).body.dataStream
-    val sink = Streams.iterateeToAccumulator(consumer)
+      }
+    }
 
-    val f = sink.run(body)
+    val f = body.runWith(sink)
     Await.result(f, timeout.duration)
-    buf
+  }
+
+  def isTransferEncoded(fresult: Future[Result])(implicit timeout: Timeout): Boolean = {
+    val b: HttpEntity = Await.result(fresult, timeout.duration).body
+    b.isInstanceOf[HttpEntity.Chunked] || b.isInstanceOf[HttpEntity.Streamed]
   }
 
   def contentAsJsonStringStream(result: Future[Result])(implicit timeout: Timeout, mat: Materializer): JsObject =
-    header("Transfer-Encoding", result)(timeout) match {
-      case Some("chunked") => Json.parse(
+    isTransferEncoded(result)(timeout) match {
+      case true => Json.parse(
         (readChunked(result, s => s)(timeout)).foldLeft("")((s, result) => s + result)
       ).asInstanceOf[JsObject]
-      case _               => Json.parse(contentAsString(result)(timeout, mat)).asInstanceOf[JsObject]
+      case _    => Json.parse(contentAsString(result)(timeout, mat)).asInstanceOf[JsObject]
     }
 
   def contentAsJsonStream(result: Future[Result])(implicit timeout: Timeout, mat: Materializer): JsArray =
-    header("Transfer-Encoding", result)(timeout) match {
-      case Some("chunked") => JsArray(readChunked(result, Json.parse)(timeout))
-      case _               => Json.arr(contentAsJson(result)(timeout, mat))
+    isTransferEncoded(result)(timeout) match {
+      case true => JsArray(readChunked(result, Json.parse)(timeout))
+      case _    => Json.arr(contentAsJson(result)(timeout, mat))
     }
 
   def contentAsStringStream(result: Future[Result])(implicit timeout: Timeout, mat: Materializer): Seq[String] =
-    header("Transfer-Encoding", result)(timeout) match {
-      case Some("chunked") => readChunked(result, identity[String])(timeout)
-      case _               => Seq(contentAsString(result)(timeout, mat))
+    isTransferEncoded(result)(timeout) match {
+      case true => readChunked(result, identity[String])(timeout)
+      case _    => Seq(contentAsString(result)(timeout, mat))
     }
 
 
