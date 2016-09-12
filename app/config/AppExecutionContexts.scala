@@ -10,6 +10,6 @@ import scala.concurrent.ExecutionContext
 object AppExecutionContexts {
 
   //TODO -- figure out how to configure the "Streaming" Context, if still appropriate
-  implicit val streamContext : ExecutionContext = scala.concurrent.ExecutionContext.global
+  implicit val streamContext: ExecutionContext = scala.concurrent.ExecutionContext.global
 
 }

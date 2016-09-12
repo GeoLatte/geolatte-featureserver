@@ -9,7 +9,7 @@ import play.api.http.DefaultHttpFilters
 import play.api.mvc._
 import play.filters.gzip.GzipFilter
 
-import scala.concurrent.{ExecutionContext, Future}
+import scala.concurrent.{ ExecutionContext, Future }
 import scala.concurrent.ExecutionContext.Implicits.global
 
 class LoggingFilter @Inject() (implicit val metrics: Metrics, val mat: Materializer, ec: ExecutionContext) extends Filter {
@@ -42,4 +42,4 @@ class LoggingFilter @Inject() (implicit val metrics: Metrics, val mat: Materiali
 
 }
 
-class Filters @Inject() (gzip: GzipFilter, logger: LoggingFilter ) extends DefaultHttpFilters(gzip, logger)
+class Filters @Inject() (gzip: GzipFilter, logger: LoggingFilter) extends DefaultHttpFilters(gzip, logger)

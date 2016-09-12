@@ -3,7 +3,7 @@ package controllers
 import javax.inject.Inject
 
 import config.AppExecutionContexts.streamContext
-import config.Constants.{Format, Version}
+import config.Constants.{ Format, Version }
 import featureserver._
 import Exceptions._
 import play.Logger
@@ -14,8 +14,7 @@ import utilities.EnumeratorUtility.CommaSeparate
 import utilities.SupportedMediaTypes
 
 import scala.concurrent.Future
-import scala.language.{implicitConversions, reflectiveCalls}
-
+import scala.language.{ implicitConversions, reflectiveCalls }
 
 /**
  * @author Karel Maesen, Geovise BVBA
@@ -26,41 +25,39 @@ trait AbstractFeatureServerSqlController extends Controller with FutureInstrumen
   def repository: Repository
 
   def repositoryAction[T](bp: BodyParser[T])(action: Request[T] => Future[Result]) =
-    Action.async(bp) { request => action(request)}
-
+    Action.async(bp) { request => action(request) }
 
   def repositoryAction(action: Request[AnyContent] => Future[Result]): Action[AnyContent] =
     repositoryAction(BodyParsers.parse.anyContent)(action)
 
-  implicit def toSimpleResult[A <: RenderableResource](result: A)
-                                                      (implicit request: RequestHeader,
-                                                       format: Option[Format.Value] = None,
-                                                       filename: Option[String] = None,
-                                                       version: Option[Version.Value] = None): Result = {
-
+  implicit def toSimpleResult[A <: RenderableResource](result: A)(implicit
+    request: RequestHeader,
+    format: Option[Format.Value] = None,
+    filename: Option[String] = None,
+    version: Option[Version.Value] = None): Result = {
 
     implicit def toStr(js: JsObject): String = Json.stringify(js)
 
     val (fmt, v) = (format, version, request) match {
-      case ( Some(f), Some(ve), _)              => (f,ve)
-      case (Some(f), None, _)                   => (f, Version.default)
-      case (_, _, SupportedMediaTypes(f, ve))   => (f,ve)
-      case _                                    => (Format.JSON, Version.default)
+      case (Some(f), Some(ve), _) => (f, ve)
+      case (Some(f), None, _) => (f, Version.default)
+      case (_, _, SupportedMediaTypes(f, ve)) => (f, ve)
+      case _ => (Format.JSON, Version.default)
     }
 
     val simpleresult =
-    (result, fmt) match {
-      case (r: Jsonable, Format.JSON)         => Ok(r.toJson).as(SupportedMediaTypes(Format.JSON, v).toString)
-      case (r: Csvable, Format.CSV)           => Ok(r.toCsv).as(SupportedMediaTypes(Format.CSV, v).toString)
-      case (r: JsonStreamable, Format.JSON)   => Ok.chunked(toStream(r.toJsonStream)).as(SupportedMediaTypes(Format.JSON, v).toString)
-      case (r: CsvStreamable, Format.CSV)     => Ok.chunked(toStream(r.toCsvStream)).as(SupportedMediaTypes(Format.CSV, v).toString)
-      case (r: JsonStringStreamable, Format.JSON) => Ok.chunked(toStream(r.toJsonStringStream)).as(SupportedMediaTypes(Format.JSON, v).toString)
-      case _ => UnsupportedMediaType("No supported media type: " + request.acceptedTypes.mkString(";"))
-    }
+      (result, fmt) match {
+        case (r: Jsonable, Format.JSON) => Ok(r.toJson).as(SupportedMediaTypes(Format.JSON, v).toString)
+        case (r: Csvable, Format.CSV) => Ok(r.toCsv).as(SupportedMediaTypes(Format.CSV, v).toString)
+        case (r: JsonStreamable, Format.JSON) => Ok.chunked(toStream(r.toJsonStream)).as(SupportedMediaTypes(Format.JSON, v).toString)
+        case (r: CsvStreamable, Format.CSV) => Ok.chunked(toStream(r.toCsvStream)).as(SupportedMediaTypes(Format.CSV, v).toString)
+        case (r: JsonStringStreamable, Format.JSON) => Ok.chunked(toStream(r.toJsonStringStream)).as(SupportedMediaTypes(Format.JSON, v).toString)
+        case _ => UnsupportedMediaType("No supported media type: " + request.acceptedTypes.mkString(";"))
+      }
 
     filename match {
       case Some(fname) => simpleresult.withHeaders(headers = ("content-disposition", s"attachment; filename=$fname"))
-      case None        => simpleresult
+      case None => simpleresult
     }
   }
 
@@ -68,7 +65,7 @@ trait AbstractFeatureServerSqlController extends Controller with FutureInstrumen
   // this code won't be called
   def toStream[A](features: Enumerator[A])(implicit toStr: A => String): Enumerator[Array[Byte]] = {
 
-    val finalSeparatorEnumerator = Enumerator.enumerate(List(config.Constants.chunkSeparator.getBytes( "UTF-8")))
+    val finalSeparatorEnumerator = Enumerator.enumerate(List(config.Constants.chunkSeparator.getBytes("UTF-8")))
 
     val startTime = System.nanoTime()
 
@@ -87,7 +84,6 @@ trait AbstractFeatureServerSqlController extends Controller with FutureInstrumen
           }
         }
     }
-
 
     val commaSeparate = new CommaSeparate(config.Constants.chunkSeparator)
     val jsons = features.map(f => toStr(f)) &> commaSeparate

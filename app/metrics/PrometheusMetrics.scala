@@ -5,8 +5,8 @@ import io.prometheus.client.hotspot.DefaultExports
 import play.api.Logger
 
 /**
-  * Created by Karel Maesen, Geovise BVBA on 22/02/16.
-  */
+ * Created by Karel Maesen, Geovise BVBA on 22/02/16.
+ */
 class PrometheusMetrics {
 
   val totalRequests = Counter.build()
@@ -15,15 +15,15 @@ class PrometheusMetrics {
   val failedRequests = Counter.build()
     .name("requests_failed_total").help("Total failed requests.").register()
 
-    val requestLatency = Histogram.build()
+  val requestLatency = Histogram.build()
     .name("requests_latency_seconds").help("Request latency in seconds.").register();
 
   def start() {
     Logger.info(s"Starting the PrometheusMetrics...")
     CollectorRegistry.defaultRegistry.clear()
-    CollectorRegistry.defaultRegistry.register( totalRequests )
-    CollectorRegistry.defaultRegistry.register( failedRequests )
-    CollectorRegistry.defaultRegistry.register( requestLatency )
+    CollectorRegistry.defaultRegistry.register(totalRequests)
+    CollectorRegistry.defaultRegistry.register(failedRequests)
+    CollectorRegistry.defaultRegistry.register(requestLatency)
 
     // Register the default Hotspot collectors
     DefaultExports.initialize()

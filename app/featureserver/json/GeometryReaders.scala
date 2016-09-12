@@ -12,17 +12,15 @@ import play.api.libs.json._
 import org.geolatte.geom._
 import org.geolatte.geom.crs.CrsId
 import play.api.data.validation.ValidationError
-import scala.util.{Success, Try}
+import scala.util.{ Success, Try }
 import scala.collection.mutable.ListBuffer
-
 
 object GeometryReaders {
   trait Extent {
-    def union(other: Extent) : Extent
-    def toEnvelope(crs: CrsId) : Envelope
+    def union(other: Extent): Extent
+    def toEnvelope(crs: CrsId): Envelope
     def toList: List[Double]
   }
-
 
   object EmptyExtent extends Extent {
     def union(other: Extent) = other
@@ -47,14 +45,14 @@ object GeometryReaders {
     def toList = List(xmin, ymin, xmax, ymax)
 
   }
-  implicit def Envelope2Extent(env : Envelope) : Extent =
-        if (env.isEmpty) EmptyExtent
-        else NonEmptyExtent(env.getMinX, env.getMinY, env.getMaxX, env.getMaxY)
+  implicit def Envelope2Extent(env: Envelope): Extent =
+    if (env.isEmpty) EmptyExtent
+    else NonEmptyExtent(env.getMinX, env.getMinY, env.getMaxX, env.getMaxY)
 
   trait Positions {
     def envelope(id: CrsId) = boundingBox.toEnvelope(id)
 
-    def boundingBox : Extent
+    def boundingBox: Extent
     def expand(ex: Extent) = boundingBox union ex
   }
 
@@ -66,33 +64,33 @@ object GeometryReaders {
     val boundingBox = EmptyExtent
   }
 
-  case class Position(x: Double, y: Double, other: Double *) extends Positions {
-    lazy val boundingBox = NonEmptyExtent(x,y,x,y)
+  case class Position(x: Double, y: Double, other: Double*) extends Positions {
+    lazy val boundingBox = NonEmptyExtent(x, y, x, y)
   }
 
   case class PositionList(list: List[Positions]) extends Positions {
-    lazy val boundingBox = list.foldLeft[Extent]( EmptyExtent ) { (ex, pos) => pos.expand(ex) }
+    lazy val boundingBox = list.foldLeft[Extent](EmptyExtent) { (ex, pos) => pos.expand(ex) }
   }
 
   implicit val extentFormats = new Format[Extent] {
 
-    def toJsResult(array : JsArray) : JsResult[Extent] =
+    def toJsResult(array: JsArray): JsResult[Extent] =
       if (array.value.isEmpty) JsSuccess(EmptyExtent)
       else
-        Try{
+        Try {
           val xmin = array.head.as[Double]
           val ymin = array.value(1).as[Double]
           val xmax = array.value(2).as[Double]
           val ymax = array.value(3).as[Double]
           JsSuccess(NonEmptyExtent(xmin, ymin, xmax, ymax))
-        }.getOrElse( JsError(ValidationError(s"Array $array can't be turned into a valid boundingbox")))
+        }.getOrElse(JsError(ValidationError(s"Array $array can't be turned into a valid boundingbox")))
 
     def reads(json: JsValue): JsResult[Extent] = json match {
-      case a : JsArray => toJsResult(a)
+      case a: JsArray => toJsResult(a)
       case _ => JsError(ValidationError("extent must be an array of 4 numbers"))
     }
 
-    def writes(ex: Extent): JsValue = JsArray(ex.toList.map( d => JsNumber(d)))
+    def writes(ex: Extent): JsValue = JsArray(ex.toList.map(d => JsNumber(d)))
 
   }
 
@@ -112,7 +110,7 @@ object GeometryReaders {
     }
   }
 
-  implicit val  PositionReads: Reads[Positions] = new Reads[Positions] {
+  implicit val PositionReads: Reads[Positions] = new Reads[Positions] {
 
     def readArray[T](values: Seq[T]): Positions = {
 
@@ -126,10 +124,10 @@ object GeometryReaders {
         case Seq((x: JsNumber), (y: JsNumber)) => Position(x.value.doubleValue(), y.value.doubleValue())
         case Seq((x: JsNumber), (y: JsNumber), (z: JsNumber)) =>
           Position(x.value.doubleValue(), y.value.doubleValue(), z.value.doubleValue())
-        case Seq((x: JsNumber), (y: JsNumber), (z: JsNumber), (m:JsNumber)) =>
-          Position(x.value.doubleValue(), y.value.doubleValue(), z.value.doubleValue(), m.value.doubleValue() )
+        case Seq((x: JsNumber), (y: JsNumber), (z: JsNumber), (m: JsNumber)) =>
+          Position(x.value.doubleValue(), y.value.doubleValue(), z.value.doubleValue(), m.value.doubleValue())
         case psv: Seq[_] =>
-          val pl = psv.foldLeft(ListBuffer[Positions]())( (result, el) => result :+ toPos(el) ).toList
+          val pl = psv.foldLeft(ListBuffer[Positions]())((result, el) => result :+ toPos(el)).toList
           PositionList(pl)
       }
     }
@@ -197,9 +195,9 @@ object GeometryReaders {
       else {
         val buf = ListBuffer[JsArray]()
         var i = 0
-        while( i < ps.size) {
+        while (i < ps.size) {
           ps.getCoordinates(coordinates, i)
-          buf.append( Json.arr(coordinates) )
+          buf.append(Json.arr(coordinates))
           i = i + 1
         }
         JsArray(buf)
@@ -207,17 +205,17 @@ object GeometryReaders {
     }
 
     def writes(col: PointCollection): JsArray = col match {
-      case ps : PointSequence => write(ps)
-      case cc : ComplexPointCollection =>
-        val buf = cc.getPointSets.foldLeft( ListBuffer[JsArray]() ) ( (buf, c) => {buf.append(writes(c)); buf} )
+      case ps: PointSequence => write(ps)
+      case cc: ComplexPointCollection =>
+        val buf = cc.getPointSets.foldLeft(ListBuffer[JsArray]())((buf, c) => { buf.append(writes(c)); buf })
         JsArray(buf)
     }
   }
 
   implicit val GeometryWithoutCrsWrites = new Writes[Geometry] {
     def writes(geometry: Geometry): JsValue = Json.obj(
-    "type" -> geometry.getGeometryType,
-    "coordinates" -> geometry.getPoints
+      "type" -> geometry.getGeometryType,
+      "coordinates" -> geometry.getPoints
     )
   }
 
@@ -228,13 +226,13 @@ object GeometryReaders {
         val extent = (json \ "envelope").as[Extent]
         val crs = (json \ "crs").as[Int]
         JsSuccess(extent.toEnvelope(CrsId.valueOf(crs)))
-      }.recover{
-        case t : Throwable => JsError(ValidationError(t.getMessage))
+      }.recover {
+        case t: Throwable => JsError(ValidationError(t.getMessage))
       }.get
 
     def writes(e: Envelope): JsValue = Json.obj(
       "crs" -> e.getCrsId.getCode,
-      "envelope" -> (if(e.isEmpty) JsArray() else Json.arr( e.getMinX, e.getMinY, e.getMaxX, e.getMaxY ))
+      "envelope" -> (if (e.isEmpty) JsArray() else Json.arr(e.getMinX, e.getMinY, e.getMaxX, e.getMaxY))
     )
   }
 

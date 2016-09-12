@@ -8,7 +8,7 @@ import play.api.libs.json._
 import scala.collection.mutable.ListBuffer
 
 /**
- * Helpers for working the Json lib 
+ * Helpers for working the Json lib
  *
  * @author Karel Maesen, Geovise BVBA
  *         creation-date: 12/4/13
@@ -23,18 +23,18 @@ object JsonHelper {
    *
    * @param jsObject object to flatten
    */
-  def flatten(jsObject: JsObject) : Seq[(String, JsValue)]=  {
+  def flatten(jsObject: JsObject): Seq[(String, JsValue)] = {
 
-    def join(path: String, key: String) : String =
+    def join(path: String, key: String): String =
       new StringBuilder(path).append(".").append(key).toString()
 
-    def prependPath(path: String, kv : (String, JsValue)) : (String, JsValue) = kv match {
-      case (k,v) => (join(path,k), v)
+    def prependPath(path: String, kv: (String, JsValue)): (String, JsValue) = kv match {
+      case (k, v) => (join(path, k), v)
     }
 
-    def flattenAcc(jsObject: JsObject, buffer:ListBuffer[(String, JsValue)]): ListBuffer[(String, JsValue)] = {
+    def flattenAcc(jsObject: JsObject, buffer: ListBuffer[(String, JsValue)]): ListBuffer[(String, JsValue)] = {
       jsObject.fields.foreach {
-        case (k, v: JsObject) => buffer.appendAll( flattenAcc(v, ListBuffer()).map( prependPath(k, _) )  )
+        case (k, v: JsObject) => buffer.appendAll(flattenAcc(v, ListBuffer()).map(prependPath(k, _)))
         case (k, v: JsArray) => Unit
         case (k, v: JsValue) => buffer.append((k, v))
       }
@@ -44,7 +44,6 @@ object JsonHelper {
     flattenAcc(jsObject, ListBuffer()).toSeq
   }
 
-
   def mkProjection(paths: List[JsPath]): Option[Reads[JsObject]] =
     if (paths.isEmpty) None
     else {
@@ -53,8 +52,6 @@ object JsonHelper {
       }
       Some(r)
     }
-
-
 
   /**
    * Converts a Json validation error sequence for a Feature into a single error message String.

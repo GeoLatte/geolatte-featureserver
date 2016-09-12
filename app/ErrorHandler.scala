@@ -1,14 +1,14 @@
-import play.api.{Logger, UnexpectedException, UsefulException}
-import play.api.http.{HttpErrorHandler, Status => StatusCodes}
+import play.api.{ Logger, UnexpectedException, UsefulException }
+import play.api.http.{ HttpErrorHandler, Status => StatusCodes }
 import play.api.mvc.Results._
-import play.api.mvc.{RequestHeader, Result}
+import play.api.mvc.{ RequestHeader, Result }
 import utilities.Utils
 
 import scala.concurrent.Future
 
 /**
-  * Created by Karel Maesen, Geovise BVBA on 09/09/16.
-  */
+ * Created by Karel Maesen, Geovise BVBA on 09/09/16.
+ */
 class ErrorHandler extends HttpErrorHandler {
 
   override def onClientError(request: RequestHeader, statusCode: Int, message: String): Future[Result] = {
@@ -16,10 +16,10 @@ class ErrorHandler extends HttpErrorHandler {
     import StatusCodes._
 
     statusCode match {
-      case NOT_FOUND => Utils.withWarning(s"Request $request not found."){
+      case NOT_FOUND => Utils.withWarning(s"Request $request not found.") {
         Future.successful(NotFound(s"Request $request not found."))
       }
-      case _ => Utils.withWarning(s"Request $request failed with code $statusCode: $message" ) {
+      case _ => Utils.withWarning(s"Request $request failed with code $statusCode: $message") {
         Future.successful(
           Status(statusCode)("A client error occurred: " + message)
         )

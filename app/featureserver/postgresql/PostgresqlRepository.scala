@@ -1,29 +1,26 @@
 package featureserver.postgresql
 
-
 import javax.inject._
 
 import Exceptions._
 import config.AppExecutionContexts
-import controllers.{Formats, IndexDef}
+import controllers.{ Formats, IndexDef }
 import featureserver._
 import featureserver.json.GeometryReaders
-import org.geolatte.geom.codec.{Wkb, Wkt}
-import org.geolatte.geom.{ByteBuffer, Envelope, Geometry, Polygon}
+import org.geolatte.geom.codec.{ Wkb, Wkt }
+import org.geolatte.geom.{ ByteBuffer, Envelope, Geometry, Polygon }
 import org.postgresql.util.PSQLException
 import play.api.libs.iteratee.Iteratee
 import play.api.libs.json._
-import querylang.{BooleanExpr, QueryParser}
-import utilities.{JsonHelper, JsonUtils, Utils}
+import querylang.{ BooleanExpr, QueryParser }
+import utilities.{ JsonHelper, JsonUtils, Utils }
 import slick.jdbc.PostgresProfile.api._
 import play.api.libs.streams.Streams
 import play.api.inject.ApplicationLifecycle
 import slick.basic.DatabasePublisher
-import slick.jdbc.{GetResult, PositionedResult}
+import slick.jdbc.{ GetResult, PositionedResult }
 
 import scala.concurrent.Future
-
-
 
 @Singleton
 class PostgresqlRepository @Inject() (applicationLifecycle: ApplicationLifecycle) extends Repository {
@@ -36,35 +33,34 @@ class PostgresqlRepository @Inject() (applicationLifecycle: ApplicationLifecycle
   lazy val database = Database.forConfig("fs.postgresql")
 
   applicationLifecycle.addStopHook(
-      () => Utils.withInfo("Closing database") { Future.successful(database.close) }
+    () => Utils.withInfo("Closing database") { Future.successful(database.close) }
   )
 
   case class Row(id: String, geometry: String, json: JsObject)
 
   def getRowResultFromTable(md: Metadata) = GetResult(tableRecordToRow(md))
 
-
-  def tableRecordToRow(meta: Metadata)= (pr: PositionedResult) =>
-  if (meta.jsonTable) Row(pr.nextString, pr.nextString(), Json.parse(pr.nextString()).asInstanceOf[JsObject])
+  def tableRecordToRow(meta: Metadata) = (pr: PositionedResult) =>
+    if (meta.jsonTable) Row(pr.nextString, pr.nextString(), Json.parse(pr.nextString()).asInstanceOf[JsObject])
     else {
       val rs = pr.rs
       val md = rs.getMetaData
       val id = rs.getString(meta.pkey)
       val geom = rs.getString(geoJsonCol)
-      val props : Seq[(String, JsValue)] = for {
+      val props: Seq[(String, JsValue)] = for {
         idx <- 1 to pr.numColumns
         key = md.getColumnName(idx) if key != meta.geometryColumn && key != geoJsonCol && key != meta.pkey
         value = rs.getObject(idx)
       } yield (key, JsonUtils.toJsValue(value))
-      val jsObj = Json.obj( meta.pkey -> id, meta.geometryColumn -> Json.parse(geom), "properties" -> JsObject(props))
+      val jsObj = Json.obj(meta.pkey -> id, meta.geometryColumn -> Json.parse(geom), "properties" -> JsObject(props))
       Row(id, geom, jsObj)
-  }
+    }
 
   implicit val getMetadataResult = GetResult(r => {
     val jsEnv = json(r.nextString())
     val env = Json.fromJson[Envelope](jsEnv) match {
       case JsSuccess(value, _) => value
-      case _                   => throw new RuntimeException("Invalid envelope JSON format.")
+      case _ => throw new RuntimeException("Invalid envelope JSON format.")
     }
     val indexLevel = r.nextInt
     val id_type = r.nextString
@@ -77,7 +73,6 @@ class PostgresqlRepository @Inject() (applicationLifecycle: ApplicationLifecycle
       Metadata(collection, env, indexLevel, id_type, 0, geometryColumn, pkey, jsonTable = false)
 
   })
-
 
   var migrationsStatus: Option[Boolean] = None
 
@@ -94,7 +89,7 @@ class PostgresqlRepository @Inject() (applicationLifecycle: ApplicationLifecycle
     database.run(dbio.transactionally)
       .map(_ => true)
       .recover {
-        case MappableException( dbe ) => throw dbe
+        case MappableException(dbe) => throw dbe
       }
   }
 
@@ -103,16 +98,15 @@ class PostgresqlRepository @Inject() (applicationLifecycle: ApplicationLifecycle
       .run(Sql.LIST_SCHEMA)
       .map { _.toList }
       .recover {
-        case MappableException( dbe ) => throw dbe
+        case MappableException(dbe) => throw dbe
       }
-
 
   override def dropDb(dbname: String): Future[Boolean] = {
     database
       .run(Sql.DROP_SCHEMA(dbname).transactionally)
       .map(_ => true)
       .recover {
-        case MappableException( dbe ) => throw dbe
+        case MappableException(dbe) => throw dbe
       }
   }
 
@@ -125,7 +119,7 @@ class PostgresqlRepository @Inject() (applicationLifecycle: ApplicationLifecycle
     database.run(dbio.transactionally)
       .map(_ => true)
       .recover {
-        case MappableException( dbe ) => throw dbe
+        case MappableException(dbe) => throw dbe
       }
   }
 
@@ -153,24 +147,23 @@ class PostgresqlRepository @Inject() (applicationLifecycle: ApplicationLifecycle
       .run(Sql.SELECT_COLLECTION_NAMES(dbname))
       .map(_.toList)
       .recover {
-        case MappableException( dbe ) => throw dbe
+        case MappableException(dbe) => throw dbe
       }
 
   /**
-    * Retrieves the collection metadata from the server, but does not count number of rows
-    *
-    * @param db         the database
-    * @param collection the collection (in fact table)
-    * @return metadata, but row count is set to 0
-    */
+   * Retrieves the collection metadata from the server, but does not count number of rows
+   *
+   * @param db         the database
+   * @param collection the collection (in fact table)
+   * @return metadata, but row count is set to 0
+   */
   def metadataFromDb(db: String, collection: String): Future[Metadata] =
-  database.run(Sql.SELECT_METADATA(db, collection)) map {
-    case Some(v) => v
-    case None    => throw CollectionNotFoundException(s"Collection $db/$collection not found.")
-  } recover {
-    case MappableException( dbe ) => throw dbe
-  }
-
+    database.run(Sql.SELECT_METADATA(db, collection)) map {
+      case Some(v) => v
+      case None => throw CollectionNotFoundException(s"Collection $db/$collection not found.")
+    } recover {
+      case MappableException(dbe) => throw dbe
+    }
 
   override def metadata(database: String, collection: String): Future[Metadata] =
     count(database, collection)
@@ -184,38 +177,35 @@ class PostgresqlRepository @Inject() (applicationLifecycle: ApplicationLifecycle
     database.run(dbio.transactionally)
       .map(_ => true)
       .recover {
-        case MappableException( dbe ) => throw dbe
+        case MappableException(dbe) => throw dbe
       }
   }
-
 
   override def count(db: String, collection: String): Future[Long] =
     database
       .run(Sql.SELECT_COUNT(db, collection))
       .recover {
-        case MappableException( dbe ) => throw dbe
+        case MappableException(dbe) => throw dbe
       }
-
 
   override def existsCollection(dbName: String, colName: String): Future[Boolean] =
     database.run(Sql.SELECT_COLLECTION_NAMES(dbName))
       .map(_.exists(_ == colName))
       .recover {
-        case MappableException( dbe ) => throw dbe
+        case MappableException(dbe) => throw dbe
       }
-
 
   override def writer(db: String, collection: String): FeatureWriter = new PGWriter(this, db, collection)
 
-//  private def selectEnumerator(md: Metadata): QueryResultEnumerator =
-//    if (md.jsonTable) JsonQueryResultEnumerator
-//    else new TableQueryResultEnumerator(md)
+  //  private def selectEnumerator(md: Metadata): QueryResultEnumerator =
+  //    if (md.jsonTable) JsonQueryResultEnumerator
+  //    else new TableQueryResultEnumerator(md)
 
   override def query(db: String, collection: String, spatialQuery: SpatialQuery, start: Option[Int] = None,
-                     limit: Option[Int] = None): Future[CountedQueryResult] = {
+    limit: Option[Int] = None): Future[CountedQueryResult] = {
 
     val projectingReads: Option[Reads[JsObject]] =
-      (toJsPathList _ andThen JsonHelper.mkProjection) (spatialQuery.projection)
+      (toJsPathList _ andThen JsonHelper.mkProjection)(spatialQuery.projection)
 
     //get the enumerator
     //TODO -- the role of the QueryResultEnumerator is now taken up by the GetRow implicits!!
@@ -227,7 +217,7 @@ class PostgresqlRepository @Inject() (applicationLifecycle: ApplicationLifecycle
 
     //get the data
     def project(js: JsObject): Option[JsObject] = projectingReads match {
-      case None              => Some(js)
+      case None => Some(js)
       case Some(projections) => js.asOpt(projections)
     }
 
@@ -236,16 +226,15 @@ class PostgresqlRepository @Inject() (applicationLifecycle: ApplicationLifecycle
     val disableAutocommit = SimpleDBIO(_.connection.setAutoCommit(false))
 
     val publisher: DatabasePublisher[JsObject] = database.stream(disableAutocommit andThen dataStmt.withStatementParameters(fetchSize = 128))
-      .mapResult { case Row( _, _, json) => project(json).get
+      .mapResult {
+        case Row(_, _, json) => project(json).get
       }
 
     for {
       cnt <- fCnt
-    } yield
-      (cnt, Streams.publisherToEnumerator(publisher))
+    } yield (cnt, Streams.publisherToEnumerator(publisher))
 
   }
-
 
   override def delete(db: String, collection: String, query: BooleanExpr): Future[Boolean] =
     database.run(Sql.DELETE_DATA(db, collection, PGJsonQueryRenderer.render(query))) map { _ => true }
@@ -254,48 +243,49 @@ class PostgresqlRepository @Inject() (applicationLifecycle: ApplicationLifecycle
     def id(json: JsValue): Any = json match {
       case JsString(v) => v
       case JsNumber(i) => i
-      case _           => throw new IllegalArgumentException("No ID property of type String or Number")
+      case _ => throw new IllegalArgumentException("No ID property of type String or Number")
     }
     val paramValues = jsons.map {
       case (json, env) => (id((json \ "id").getOrElse(JsNull)), unescapeJson(json), org.geolatte.geom.codec.Wkb.toWkb(env).toString)
     }
-    val dbio = DBIO.sequence(paramValues.map { case (id, json, geom) => Sql.INSERT_DATA(db,collection, id.toString, json, geom) })
-    database.run(dbio).map ( _.sum )
+    val dbio = DBIO.sequence(paramValues.map { case (id, json, geom) => Sql.INSERT_DATA(db, collection, id.toString, json, geom) })
+    database.run(dbio).map(_.sum)
   }
 
   override def insert(database: String, collection: String, json: JsObject): Future[Boolean] =
     metadataFromDb(database, collection)
       .map { md =>
         (FeatureTransformers.envelopeTransformer(md.envelope), FeatureTransformers.validator(md.idType))
-      }.flatMap { case (evr, validator) =>
-      batchInsert(database, collection, Seq((json.as(validator), json.as[Polygon](evr)))).map(_ => true)
-    }.recover {
-      case t: play.api.libs.json.JsResultException =>
-        throw new InvalidParamsException("Invalid Json object")
-    }
+      }.flatMap {
+        case (evr, validator) =>
+          batchInsert(database, collection, Seq((json.as(validator), json.as[Polygon](evr)))).map(_ => true)
+      }.recover {
+        case t: play.api.libs.json.JsResultException =>
+          throw new InvalidParamsException("Invalid Json object")
+      }
 
   def update(db: String, collection: String, query: BooleanExpr, newValue: JsObject, envelope: Polygon): Future[Int] = {
     val whereExpr = PGJsonQueryRenderer.render(query)
-    val stmt = Sql.UPDATE_DATA(db, collection, whereExpr, Json.stringify(newValue),Wkb.toWkb(envelope).toString)
+    val stmt = Sql.UPDATE_DATA(db, collection, whereExpr, Json.stringify(newValue), Wkb.toWkb(envelope).toString)
     database.run(stmt)
   }
 
   override def update(database: String, collection: String, query: BooleanExpr, updateSpec: JsObject): Future[Int] =
     metadataFromDb(database, collection)
       .map { md => FeatureTransformers.envelopeTransformer(md.envelope)
-      }.flatMap { implicit evr => {
-      val ne = updateSpec.as[Polygon] //extract new envelope
-      update(database, collection, query, updateSpec, ne)
-    }
-    }
+      }.flatMap { implicit evr =>
+        {
+          val ne = updateSpec.as[Polygon] //extract new envelope
+          update(database, collection, query, updateSpec, ne)
+        }
+      }
 
   override def upsert(database: String, collection: String, json: JsObject): Future[Boolean] = {
-
 
     val idq = (json \ "id").getOrElse(JsNull) match {
       case JsNumber(i) => s" id = $i"
       case JsString(i) => s" id = '$i'"
-      case _           => throw new IllegalArgumentException("Id neither string nor number in json.")
+      case _ => throw new IllegalArgumentException("Id neither string nor number in json.")
     }
 
     val expr = QueryParser.parse(idq).get
@@ -306,30 +296,31 @@ class PostgresqlRepository @Inject() (applicationLifecycle: ApplicationLifecycle
       new SpatialQuery(windowOpt = None, intersectionGeometryWktOpt = None, queryOpt = Some(expr), metadata = md)
     }.flatMap { q =>
       query(database, collection, q)
-    }.flatMap { case (_, e) =>
-      e(Iteratee.head[JsObject])
+    }.flatMap {
+      case (_, e) =>
+        e(Iteratee.head[JsObject])
     }.flatMap { i =>
       i.run
     }.flatMap {
       case Some(v) => update(database, collection, expr, json).map(_ => true)
-      case _       => insert(database, collection, json)
+      case _ => insert(database, collection, json)
     }
   }
 
   /**
-    * Saves a view for the specified database and collection.
-    *
-    * @param db   the database for the view
-    * @param collection the collection for the view
-    * @param viewDef    the view definition
-    * @return eventually true if this save resulted in the update of an existing view, false otherwise
-    */
+   * Saves a view for the specified database and collection.
+   *
+   * @param db   the database for the view
+   * @param collection the collection for the view
+   * @param viewDef    the view definition
+   * @return eventually true if this save resulted in the update of an existing view, false otherwise
+   */
   override def saveView(db: String, collection: String, viewDef: JsObject): Future[Boolean] = {
     val viewName = (viewDef \ "name").as[String]
 
     getViewOpt(db, collection, viewName).flatMap {
       case Some(_) => dropView(db, collection, viewName)
-      case _       => Future.successful(false)
+      case _ => Future.successful(false)
     } flatMap { isOverWrite =>
       database.run(Sql.INSERT_VIEW(db, collection, viewName, viewDef)) map {
         _ => isOverWrite
@@ -356,8 +347,7 @@ class PostgresqlRepository @Inject() (applicationLifecycle: ApplicationLifecycle
           case Some(view) => view.asOpt[JsObject](Formats.ViewDefOut(db, collection))
           case _ => None
         }
-      }
-      else throw new CollectionNotFoundException()
+      } else throw new CollectionNotFoundException()
     }
 
   override def getViews(db: String, collection: String): Future[List[JsObject]] =
@@ -370,12 +360,12 @@ class PostgresqlRepository @Inject() (applicationLifecycle: ApplicationLifecycle
     val fRes = if (indexDef.regex) database.run(
       Sql.CREATE_INDEX_WITH_TRGM(dbName, colName, indexDef.name, indexDef.path, indexDef.cast)
     )
-    else database.run (
+    else database.run(
       Sql.CREATE_INDEX(dbName, colName, indexDef.name, indexDef.path, indexDef.cast)
     )
 
     fRes map { _ => true } recover {
-      case MappableException( dbe ) => throw dbe
+      case MappableException(dbe) => throw dbe
     }
 
   }
@@ -391,7 +381,7 @@ class PostgresqlRepository @Inject() (applicationLifecycle: ApplicationLifecycle
     val cast = castRegex.findFirstMatchIn(defText).map { m => m group 1 } match {
       case Some("boolean") => "bool"
       case Some("numeric") => "decimal"
-      case _               => "text"
+      case _ => "text"
     }
 
     val path = (for (m <- pathElRegex.findAllMatchIn(defText)) yield m group 1) mkString "."
@@ -403,9 +393,10 @@ class PostgresqlRepository @Inject() (applicationLifecycle: ApplicationLifecycle
   private def getInternalIndices(dbName: String, colName: String): Future[List[IndexDef]] =
     existsCollection(dbName, colName).flatMap { exists =>
       if (exists) database.run(Sql.SELECT_INDEXES_FOR_TABLE(dbName, colName)) map {
-        seq => seq.map(rd => toIndexDef(rd._1, rd._2)).collect {
-          case Some(d) => d
-        }.toList
+        seq =>
+          seq.map(rd => toIndexDef(rd._1, rd._2)).collect {
+            case Some(d) => d
+          }.toList
       }
       else throw new CollectionNotFoundException()
     }
@@ -417,13 +408,12 @@ class PostgresqlRepository @Inject() (applicationLifecycle: ApplicationLifecycle
     getInternalIndices(dbName, colName).map { listIdx =>
       listIdx.find(q => q.name == indexName) match {
         case Some(idf) => idf
-        case None      => throw new IndexNotFoundException(s"Index $indexName on $dbName/$colName not found.")
+        case None => throw new IndexNotFoundException(s"Index $indexName on $dbName/$colName not found.")
       }
     }
 
   override def dropIndex(db: String, collection: String, index: String): Future[Boolean] =
     database.run(Sql.DROP_INDEX(db, collection, index)) map { _ => true }
-
 
   //************************************************************************
   //Private Utility methods
@@ -435,7 +425,6 @@ class PostgresqlRepository @Inject() (applicationLifecycle: ApplicationLifecycle
     //    case Some(false) => throw NotReadyException("Migrations failed, check the logs")
     case _ => throw NotReadyException("Busy migrating databases")
   }
-
 
   private def getPrimaryKey(db: String, coll: String): Future[(String, String)] = {
     type PKeyData = (String, String)
@@ -454,10 +443,9 @@ class PostgresqlRepository @Inject() (applicationLifecycle: ApplicationLifecycle
       toPKeyData(_)
     } map {
       case Some(pk) => pk
-      case None     => throw new InvalidPrimaryKeyException(s"Can't determine pkey configuration")
+      case None => throw new InvalidPrimaryKeyException(s"Can't determine pkey configuration")
     }
   }
-
 
   private def toJsPathList(flds: List[String]): List[JsPath] = {
 
@@ -495,7 +483,6 @@ class PostgresqlRepository @Inject() (applicationLifecycle: ApplicationLifecycle
   //    Json.obj("properties" -> Json.obj(props:_*))
   //  }
 
-
   //These are the SQL statements for managing and retrieving data
   object Sql {
 
@@ -513,11 +500,10 @@ class PostgresqlRepository @Inject() (applicationLifecycle: ApplicationLifecycle
       case true =>
         if (query.sort.isEmpty) "ID"
         else query.sort.map { arr => fldSortSpecToSortExpr(arr) } mkString ","
-      case _    =>
+      case _ =>
         def colName(s: String): String = if (s.trim.startsWith("properties.")) s.trim.substring(11) else s.trim
         if (query.sort.isEmpty) query.metadata.pkey else query.sort.map(f => s"${colName(f.fld)} ${f.direction} ") mkString ","
     }
-
 
     def condition(query: SpatialQuery): Option[String] = {
 
@@ -541,19 +527,18 @@ class PostgresqlRepository @Inject() (applicationLifecycle: ApplicationLifecycle
          #${condition(query).map(c => s"WHERE $c").getOrElse("")}
      """.as[Long].map(_.head)
 
-
     def SELECT_DATA(db: String, col: String, query: SpatialQuery, start: Option[Int] = None, limit: Option[Int] = None) = {
 
       val cond = condition(query)
 
       val limitClause = limit match {
         case Some(lim) => s"\nLIMIT $lim"
-        case _         => ""
+        case _ => ""
       }
 
       val offsetClause = start match {
         case Some(s) => s"\nOFFSET $s"
-        case _       => ""
+        case _ => ""
       }
 
       val projection =
@@ -570,7 +555,6 @@ class PostgresqlRepository @Inject() (applicationLifecycle: ApplicationLifecycle
      """.as[Row](getRowResultFromTable(query.metadata))
 
     }
-
 
     def UPDATE_DATA(db: String, col: String, where: String, json: String, geom: String) = {
       sqlu"""UPDATE #${quote(db)}.#${quote(col)}
@@ -602,7 +586,6 @@ class PostgresqlRepository @Inject() (applicationLifecycle: ApplicationLifecycle
               UNIQUE (COLLECTION, VIEW_NAME)
               )
        """
-
 
     def CREATE_COLLECTION_TABLE(dbname: String, tableName: String) =
       sqlu"""CREATE TABLE #${quote(dbname)}.#${quote(tableName)} (
@@ -644,7 +627,6 @@ class PostgresqlRepository @Inject() (applicationLifecycle: ApplicationLifecycle
       sqlu"""DELETE FROM #${quote(dbname)}.#${quote(tableName)}
         WHERE #$where
      """
-
 
     def LIST_TABLE_NAMES(dbname: String) = {
       sqlu""" select table_name from information_schema.tables
@@ -698,7 +680,6 @@ class PostgresqlRepository @Inject() (applicationLifecycle: ApplicationLifecycle
     def DROP_TABLE(dbname: String, tablename: String) =
       sqlu"drop table #${quote(dbname)}.#${quote(tablename)}"
 
-
     def DELETE_VIEWS_FOR_TABLE(dbname: String, tablename: String) =
       sqlu"""
          DELETE FROM #${quote(dbname)}.#${quote(ViewCollection)}
@@ -727,7 +708,7 @@ class PostgresqlRepository @Inject() (applicationLifecycle: ApplicationLifecycle
          SELECT VIEW_DEF
          FROM #${quote(dbname)}.#${quote(ViewCollection)}
          WHERE COLLECTION = $coll AND VIEW_NAME = $viewName
-     """.as[JsObject].map{_.headOption}
+     """.as[JsObject].map { _.headOption }
 
     def GET_VIEWS(dbname: String, coll: String) = {
       sql"""
@@ -736,7 +717,6 @@ class PostgresqlRepository @Inject() (applicationLifecycle: ApplicationLifecycle
          WHERE COLLECTION = $coll
      """.as[JsObject]
     }
-
 
     //    def CHECK_TRGM_EXTENSION() =
     //    s"""
@@ -767,7 +747,7 @@ class PostgresqlRepository @Inject() (applicationLifecycle: ApplicationLifecycle
          SELECT INDEXNAME, INDEXDEF
          FROM pg_indexes
          WHERE schemaname = $db AND tablename = $col
-     """.as[(String,String)]
+     """.as[(String, String)]
 
     def DROP_INDEX(db: String, col: String, indexName: String) =
       sqlu"""
@@ -776,18 +756,17 @@ class PostgresqlRepository @Inject() (applicationLifecycle: ApplicationLifecycle
 
   }
 
-
   object MappableException {
-    def getStatus(dbe : PSQLException) = dbe.getServerErrorMessage.getSQLState
+    def getStatus(dbe: PSQLException) = dbe.getServerErrorMessage.getSQLState
     def getMessage(dbe: PSQLException) = dbe.getServerErrorMessage.getMessage
-    def unapply(t : Throwable): Option[RuntimeException] =  t match {
-      case t: PSQLException if getStatus( t ).contains( "42P06" ) =>
+    def unapply(t: Throwable): Option[RuntimeException] = t match {
+      case t: PSQLException if getStatus(t).contains("42P06") =>
         Some(DatabaseAlreadyExistsException(getMessage(t)))
-      case t: PSQLException if getStatus( t ).contains( "42P07" ) =>
+      case t: PSQLException if getStatus(t).contains("42P07") =>
         Some(CollectionAlreadyExistsException(getMessage(t)))
-      case t: PSQLException if getStatus( t ).contains( "3F000" ) =>
+      case t: PSQLException if getStatus(t).contains("3F000") =>
         Some(DatabaseNotFoundException(getMessage(t)))
-      case t: PSQLException if getStatus( t ).contains( "42P01" ) =>
+      case t: PSQLException if getStatus(t).contains("42P01") =>
         Some(CollectionNotFoundException(getMessage(t)))
       case _ => None
     }

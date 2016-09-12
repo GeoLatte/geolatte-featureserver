@@ -4,7 +4,6 @@ import org.specs2.mutable.Specification
 import play.api.libs.functional.Reducer
 import play.api.libs.json._
 
-
 /**
  * Created by Karel Maesen, Geovise BVBA on 21/11/14.
  */
@@ -20,7 +19,6 @@ class JsonHelperSpec extends Specification {
       "arr" -> Json.arr(1, 2, 3, 4)
     )
 
-
     "strip contain nested keys, but not arrays " in {
       JsonHelper.flatten(obj) must containTheSameElementsAs(Seq(
         ("id", JsNumber(1)), ("att", JsString("value")), ("nested.foo", JsString("bar")), ("nested2.foo.bar", JsNumber(42))
@@ -29,8 +27,7 @@ class JsonHelperSpec extends Specification {
 
   }
 
-
-   "The JsonHelper.mkProjection( List[JsPath]) " should {
+  "The JsonHelper.mkProjection( List[JsPath]) " should {
 
     val jsonText =
       """
@@ -46,44 +43,42 @@ class JsonHelperSpec extends Specification {
 
     val pathList: List[JsPath] = List(__ \ "geometry", __ \ "type", __ \ "properties" \ "entity" \ "id", __ \ "properties" \ "entity" \ "ident8")
 
+    "create a Reads[Object] that strips all non-mentioned properties from the json" in {
 
-     "create a Reads[Object] that strips all non-mentioned properties from the json" in {
+      val projection = JsonHelper.mkProjection(pathList).get
 
-       val projection = JsonHelper.mkProjection(pathList).get
+      val obj = jsObj.as(projection)
 
-       val obj = jsObj.as(projection)
+      obj must_== Json.parse(projectedJsonText).as[JsObject]
 
-       obj must_== Json.parse(projectedJsonText).as[JsObject]
+    }
 
-     }
+    "be robust w.r.t. to redundant path elements " in {
+      val redundantPaths = __ \ "properties" \ "entity" \ "ident8" :: pathList
 
-     "be robust w.r.t. to redundant path elements " in {
-       val redundantPaths = __ \ "properties" \ "entity" \ "ident8" :: pathList
+      val projection = JsonHelper.mkProjection(redundantPaths).get
 
-       val projection = JsonHelper.mkProjection(redundantPaths).get
+      val obj = jsObj.as(projection)
 
-       val obj = jsObj.as(projection)
+      obj must_== Json.parse(projectedJsonText).as[JsObject]
 
-       obj must_== Json.parse(projectedJsonText).as[JsObject]
+    }
 
-     }
+    "Projection puts JsNull for non-existent (empty) paths" in {
 
-     "Projection puts JsNull for non-existent (empty) paths" in {
+      val withNonExistentPath = pathList :+ (__ \ "properties" \ "entity" \ "doesntexist")
 
-       val withNonExistentPath = pathList :+ (__ \ "properties" \ "entity" \ "doesntexist")
+      val projection = JsonHelper.mkProjection(withNonExistentPath).get
 
-       val projection = JsonHelper.mkProjection(withNonExistentPath).get
+      val obj = jsObj.asOpt(projection)
 
-       val obj = jsObj.asOpt(projection)
+      val expected = Some(Json.obj("properties" ->
+        Json.obj("entity" ->
+          Json.obj("doesntexist" -> JsNull))).deepMerge(Json.parse(projectedJsonText).as[JsObject]))
 
-       val expected = Some(Json.obj("properties" ->
-                      Json.obj("entity" ->
-                        Json.obj("doesntexist" -> JsNull))).deepMerge(Json.parse(projectedJsonText).as[JsObject])
-       )
+      expected must_== obj
 
-       expected must_== obj
-
-     }
+    }
 
   }
 }

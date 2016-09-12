@@ -1,7 +1,6 @@
 package featureserver
 
-
-import scala.concurrent.{ExecutionContext, Future}
+import scala.concurrent.{ ExecutionContext, Future }
 import java.util.concurrent.TimeUnit
 
 import kamon.Kamon
@@ -34,8 +33,5 @@ trait FutureInstrumented extends Instrumented {
     }
     res
   }
-
-
-
 
 }

@@ -1,13 +1,13 @@
 package integration
 
 import org.specs2._
-import org.specs2.main.{ArgProperty, Arguments}
-import org.specs2.matcher.{Expectable, Matcher}
+import org.specs2.main.{ ArgProperty, Arguments }
+import org.specs2.matcher.{ Expectable, Matcher }
 import org.specs2.specification.Step
-import org.specs2.specification.core.{Env, Fragments, SpecStructure}
-import play.api.{Application, Play, libs}
+import org.specs2.specification.core.{ Env, Fragments, SpecStructure }
+import play.api.{ Application, Play, libs }
 import play.api.Play._
-import play.api.libs.json.{JsArray, JsObject, Json, _}
+import play.api.libs.json.{ JsArray, JsObject, Json, _ }
 import play.api.inject.guice.GuiceApplicationBuilder
 import utilities.Utils
 
@@ -23,13 +23,13 @@ abstract class FeatureServerSqlSpecification extends Specification {
 
   //override decorate so we can inject 'include' en 'sequential' arguments
   override def decorate(is: SpecStructure, env: Env) = {
-    val dec = super.decorate( is, env )
-    dec.setArguments(dec.arguments  <| args(sequential=true) )
+    val dec = super.decorate(is, env)
+    dec.setArguments(dec.arguments <| args(sequential = true))
   }
 
-  override def map(fs: =>Fragments) =
-      step(Play.start(app)) ^
-        fs ^
+  override def map(fs: => Fragments) =
+    step(Play.start(app)) ^
+      fs ^
       step(Play.stop(app))
 
 }
@@ -38,25 +38,23 @@ abstract class InDatabaseSpecification extends FeatureServerSqlSpecification {
   import integration.RestApiDriver._
 
   override def map(fs: => Fragments) =
-      step( Play.start( app ) ) ^
-      step( makeDatabase( testDbName ) )  ^
+    step(Play.start(app)) ^
+      step(makeDatabase(testDbName)) ^
       fs ^
-      step( dropDatabase( testDbName ) )  ^
-      step( Play.stop( app ) )
+      step(dropDatabase(testDbName)) ^
+      step(Play.stop(app))
 }
 
 abstract class InCollectionSpecification extends FeatureServerSqlSpecification {
   import integration.RestApiDriver._
 
   override def map(fs: => Fragments) =
-      step( Play.start( app ) ) ^
-      step( makeDatabase( testDbName ) ) ^
-      step( makeCollection( testDbName, testColName ) ) ^
+    step(Play.start(app)) ^
+      step(makeDatabase(testDbName)) ^
+      step(makeCollection(testDbName, testColName)) ^
       fs ^
-      step( dropDatabase( testDbName ) ) ^ 
-      step( Play.stop( app ) )
-
-
+      step(dropDatabase(testDbName)) ^
+      step(Play.stop(app))
 
   //utility and matcher definitions
 
@@ -73,33 +71,36 @@ abstract class InCollectionSpecification extends FeatureServerSqlSpecification {
     (js: JsValue) => {
       val receivedFeatureArray = (js \ "features").as[JsValue]
       (receivedFeatureArray must beFeatures(expected)).isSuccess
-    }, s"Featurecollection Json doesn't contain expected features (${Json.stringify(expected)})")
+    }, s"Featurecollection Json doesn't contain expected features (${Json.stringify(expected)})"
+  )
 
   def matchFeaturesInCsv(expectedColumnHeader: String): Matcher[Seq[String]] = (
     (received: Seq[String]) => {
-      val lines = received.flatMap(l => received(0).split("\n")).map( _.trim )
+      val lines = received.flatMap(l => received(0).split("\n")).map(_.trim)
       val header = lines(0)
       val numSeps = header.split(",").length - 1
-      def countSeps(l:String) = l.filter( _ == ',').length
-      header == expectedColumnHeader && lines.forall( countSeps(_)  == numSeps)
-    }, "Featurecollection CSV doesn't contain expected columns, or has irregular structure")
+      def countSeps(l: String) = l.filter(_ == ',').length
+      header == expectedColumnHeader && lines.forall(countSeps(_) == numSeps)
+    }, "Featurecollection CSV doesn't contain expected columns, or has irregular structure"
+  )
 
   def matchTotalInJson(expectedTotal: Int): Matcher[JsValue] = (
     (recJs: JsValue) => {
       val optTotalReceived = (recJs \ "total").asOpt[Int]
-      ( optTotalReceived must beSome(expectedTotal)).isSuccess
-    }, s"FeatureCollection Json doesn't have expected value for total field ($expectedTotal).")
+      (optTotalReceived must beSome(expectedTotal)).isSuccess
+    }, s"FeatureCollection Json doesn't have expected value for total field ($expectedTotal)."
+  )
 
-  def verify(rec: JsValue, expected: JsArray, sortMatters : Boolean = false) = rec match {
+  def verify(rec: JsValue, expected: JsArray, sortMatters: Boolean = false) = rec match {
     case jsv: JsArray =>
       val received = jsv.value.map(pruneSpecialProperties)
       val ok =
-          if (sortMatters) received.equals(expected.value)
-          else received.toSet.equals(expected.value.toSet) //toSet so test in order independent
+        if (sortMatters) received.equals(expected.value)
+        else received.toSet.equals(expected.value.toSet) //toSet so test in order independent
       val msg = if (!ok) {
         (for (f <- received if !expected.value.contains(f)) yield f).headOption.
           map(f => s" e.g. ${Json.stringify(f)}\nnot found among expected features. Example of expected:\n" +
-          s"${expected.value.headOption.getOrElse("<None expected.>")}")
+            s"${expected.value.headOption.getOrElse("<None expected.>")}")
           .getOrElse("<Missing object in received>")
       } else "Received array matches expected"
       (ok, msg)
@@ -109,26 +110,28 @@ abstract class InCollectionSpecification extends FeatureServerSqlSpecification {
   case class beFeatures(expected: JsArray) extends Matcher[JsValue] {
     def apply[J <: JsValue](r: Expectable[J]) = {
       lazy val (succ, msg) = verify(r.value, expected)
-      result(succ,
+      result(
+        succ,
         msg,
         msg,
-        r)
+        r
+      )
     }
   }
 
-  case class beSomeFeatures(expected: JsArray, sorted : Boolean = false) extends Matcher[Option[JsValue]] {
+  case class beSomeFeatures(expected: JsArray, sorted: Boolean = false) extends Matcher[Option[JsValue]] {
     def apply[J <: Option[JsValue]](r: Expectable[J]) = {
       lazy val (succ, msg) = if (!r.value.isDefined)
         (false, "Expected Some(<features>), received None")
-        else verify(r.value.get, expected)
-      result(succ,
+      else verify(r.value.get, expected)
+      result(
+        succ,
         "received Some(<features>) with features matching expected",
         msg,
-        r)
+        r
+      )
     }
   }
 
-
 }
-
 

@@ -41,9 +41,9 @@ class GeometryReadersSpec extends Specification {
   "The PointsReader" should {
 
     "read a valid point Position" in {
-        val json = Json.parse("[84.5,23.3]")
-        val result = json.validate[Positions].asOpt.get
-        result must_== new Position(84.5, 23.3)
+      val json = Json.parse("[84.5,23.3]")
+      val result = json.validate[Positions].asOpt.get
+      result must_== new Position(84.5, 23.3)
     }
 
     "read a valid 3D point Position" in {
@@ -57,7 +57,6 @@ class GeometryReadersSpec extends Specification {
       val result = json.validate[Positions].asOpt.get
       result must_== new Position(84.5, 23.3, 1.0)
     }
-
 
     "read a valid array of point positions" in {
       val json = Json.parse("[[80.0, 20.3], [90.0, 30.0]]")
@@ -76,7 +75,7 @@ class GeometryReadersSpec extends Specification {
 
   "The GeoJSon reader" should {
 
-    implicit val defaultGeometryReaders = GeometryReads( CrsId.valueOf(4326) )
+    implicit val defaultGeometryReaders = GeometryReads(CrsId.valueOf(4326))
 
     "read a valid POINT GeoJson" in {
       val geom = geomJsonPnt.validate[Geometry].asOpt.get
@@ -118,15 +117,14 @@ class GeometryReadersSpec extends Specification {
       geom.getCrsId must_== CrsId.valueOf(31370)
     }
 
-
     "return a JsError when the coordinates array is invalid" in {
-         val json = Json.parse("""{"type" : "MultiLineString", "coordinates" : [[[80.0, 20.3], 99999], [[80.0, 20.3], [90.0, 30.0]]]}""")
-         val result = json.validate[Geometry]
-         result match {
-           case _ : JsError => success
-           case _ => failure
-         }
-       }
+      val json = Json.parse("""{"type" : "MultiLineString", "coordinates" : [[[80.0, 20.3], 99999], [[80.0, 20.3], [90.0, 30.0]]]}""")
+      val result = json.validate[Geometry]
+      result match {
+        case _: JsError => success
+        case _ => failure
+      }
+    }
   }
 
   "The GeoJSon reader" should {
@@ -140,48 +138,58 @@ class GeometryReadersSpec extends Specification {
 
   // TEST DATA
 
-  val crsJson = Json.parse( """{"type":"name","properties":{"name":"EPSG:31370"}}""")
+  val crsJson = Json.parse("""{"type":"name","properties":{"name":"EPSG:31370"}}""")
 
-  val crsInvalidJson = Json.parse( """{"type":"name","something-else":{"name":"EPSG:4326"}}""")
+  val crsInvalidJson = Json.parse("""{"type":"name","something-else":{"name":"EPSG:4326"}}""")
 
-  val crsUnparseableEPGSJson = Json.parse( """{"type":"name","properties":{"name":"no valid code"}}""")
+  val crsUnparseableEPGSJson = Json.parse("""{"type":"name","properties":{"name":"no valid code"}}""")
 
   val geomJsonPnt = Json.obj("type" -> "Point", "coordinates" -> Json.arr(-87.067872, 33.093221))
 
   val geomJsonPntWithCrs = Json.obj("type" -> "Point", "crs" -> crsJson, "coordinates" -> Json.arr(-87.067872, 33.093221))
 
-  val geomJsonLineString = Json.obj("type" -> "LineString",
-    "coordinates" -> Json.arr(Json.arr(-87.067872, 33.093221), Json.arr(90.2, 40.0)))
+  val geomJsonLineString = Json.obj(
+    "type" -> "LineString",
+    "coordinates" -> Json.arr(Json.arr(-87.067872, 33.093221), Json.arr(90.2, 40.0))
+  )
 
-  val geomJsonLineStringZ = Json.obj("type" -> "LineString",
-    "coordinates" -> Json.arr(Json.arr(-87.067872, 33.093221, 1.0), Json.arr(90.2, 40.0, 3.0)))
+  val geomJsonLineStringZ = Json.obj(
+    "type" -> "LineString",
+    "coordinates" -> Json.arr(Json.arr(-87.067872, 33.093221, 1.0), Json.arr(90.2, 40.0, 3.0))
+  )
 
   val geomJsonLineStringZWithCrs = Json.obj("type" -> "LineString", "crs" -> crsJson,
     "coordinates" -> Json.arr(Json.arr(-87.067872, 33.093221, 1.0), Json.arr(90.2, 40.0, 3.0)))
 
+  val geomJsonLineStringZM = Json.obj(
+    "type" -> "LineString",
+    "coordinates" -> Json.arr(Json.arr(-87.067872, 33.093221, 0, 1.0), Json.arr(90.2, 40.0, 0, 3.0))
+  )
 
-  val geomJsonLineStringZM = Json.obj("type" -> "LineString",
-    "coordinates" -> Json.arr(Json.arr(-87.067872, 33.093221, 0, 1.0), Json.arr(90.2, 40.0, 0, 3.0)))
-
-
-  val geomJsonMultiLineString = Json.obj("type" -> "MultiLineString",
+  val geomJsonMultiLineString = Json.obj(
+    "type" -> "MultiLineString",
     "coordinates" -> Json.arr(
       Json.arr(
-        Json.arr(-87.067872, 33.093221), Json.arr(90.2, 40.0))
-      ,
+        Json.arr(-87.067872, 33.093221), Json.arr(90.2, 40.0)
+      ),
       Json.arr(
-        Json.arr(-87.067872, 33.093221), Json.arr(90.2, 40.0))
-    ))
-
-  val jsFeature = Json.obj("id" -> 1,
-    "properties" -> Json.obj("foo" -> "bar", "bar" -> Json.obj("inl2" -> 3)),
-    "geometry" -> geomJsonLineString)
-
-  val jsNoIdFeature = Json.obj("properties" -> Json.obj("foo" -> "bar", "bar" -> Json.obj("inl2" -> 3)),
-    "geometry" -> geomJsonLineString)
-
-  val noGeometry = Json.obj("properties" -> Json.obj("foo" -> "bar", "bar" -> Json.obj("inl2" -> 3))
+        Json.arr(-87.067872, 33.093221), Json.arr(90.2, 40.0)
+      )
+    )
   )
+
+  val jsFeature = Json.obj(
+    "id" -> 1,
+    "properties" -> Json.obj("foo" -> "bar", "bar" -> Json.obj("inl2" -> 3)),
+    "geometry" -> geomJsonLineString
+  )
+
+  val jsNoIdFeature = Json.obj(
+    "properties" -> Json.obj("foo" -> "bar", "bar" -> Json.obj("inl2" -> 3)),
+    "geometry" -> geomJsonLineString
+  )
+
+  val noGeometry = Json.obj("properties" -> Json.obj("foo" -> "bar", "bar" -> Json.obj("inl2" -> 3)))
 
   val noProperties = Json.obj("geometry" -> geomJsonLineString)
 

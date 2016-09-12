@@ -27,14 +27,13 @@ class CollectionAPISpec extends InDatabaseSpecification {
   import UtilityMethods._
 
   def e1 = makeCollection(testDbName, testColName, inMetadata)
-    .applyMatcher( _.status must equalTo(CREATED))
+    .applyMatcher(_.status must equalTo(CREATED))
 
   def e2 = makeCollection(testDbName, testColName, inMetadata)
-      .applyMatcher( _.status must equalTo(CONFLICT))
+    .applyMatcher(_.status must equalTo(CONFLICT))
 
   def e6 = getDatabase(testDbName).applyMatcher(res =>
-    (res.status must equalTo(OK)) and (res.responseBody must beSome(equalTo(outArray)))
-  )
+    (res.status must equalTo(OK)) and (res.responseBody must beSome(equalTo(outArray))))
 
   def e3 = getCollection(testDbName, testColName).applyMatcher(res => {
     (res.status must equalTo(OK)) and (res.responseBody must beSome(equalTo(outMetadata)))
@@ -47,11 +46,10 @@ class CollectionAPISpec extends InDatabaseSpecification {
   def e7 = deleteCollection(testDbName, testColName).applyMatcher(_.status must equalTo(OK))
 
   def e8 = getDatabase(testDbName).applyMatcher(res =>
-    (res.status must equalTo(OK)) and (res.responseBody must beSome(equalTo(Json.arr())))
-  )
+    (res.status must equalTo(OK)) and (res.responseBody must beSome(equalTo(Json.arr()))))
 
   def e9 = makeCollection("doesntexist", testColName, inMetadata)
-    .applyMatcher( _.status must equalTo(NOT_FOUND))
+    .applyMatcher(_.status must equalTo(NOT_FOUND))
 
   // the inbound metadata
   val inMetadata = Json.obj(

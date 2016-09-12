@@ -16,11 +16,11 @@ package object Exceptions {
 
   case class DatabaseAlreadyExistsException(msg: String = "") extends NoSqlException(msg)
 
-  case class CollectionAlreadyExistsException(msg: String ="") extends NoSqlException(msg)
+  case class CollectionAlreadyExistsException(msg: String = "") extends NoSqlException(msg)
 
   case class DatabaseCreationException(msg: String = "") extends NoSqlException(msg)
 
-  case class DatabaseDeleteException(msg: String= "") extends NoSqlException(msg)
+  case class DatabaseDeleteException(msg: String = "") extends NoSqlException(msg)
 
   case class InvalidQueryException(msg: String = "") extends NoSqlException(msg)
 

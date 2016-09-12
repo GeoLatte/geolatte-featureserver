@@ -11,20 +11,18 @@ import play.api.libs.functional.syntax._
 import querylang.BooleanExpr
 
 import scala.concurrent.Future
-import scala.util.{Failure, Success}
-
+import scala.util.{ Failure, Success }
 
 case class Metadata(
-                     name: String,
-                     envelope: Envelope,
-                     level : Int,
-                     idType: String,
-                     count: Long = 0,
-                     geometryColumn: String = "GEOMETRY",
-                     pkey: String = "id",
-                     jsonTable: Boolean = true // is table defined by featureserver Server? or registered
-                   )
-
+  name: String,
+  envelope: Envelope,
+  level: Int,
+  idType: String,
+  count: Long = 0,
+  geometryColumn: String = "GEOMETRY",
+  pkey: String = "id",
+  jsonTable: Boolean = true // is table defined by featureserver Server? or registered
+)
 
 object MetadataIdentifiers {
   val MetadataCollectionPrefix = "geolatte_nosql_"
@@ -35,7 +33,7 @@ object MetadataIdentifiers {
   val CollectionField = "collection"
   val IdTypeField = "id-type"
   val CountField = "count"
-  val GeometryColumnField  = "geometry-column"
+  val GeometryColumnField = "geometry-column"
   val PkeyField = "primary-key"
   val IsJsonField = "is-json"
 }
@@ -45,18 +43,15 @@ object Metadata {
   import MetadataIdentifiers._
 
   //added so that MetadataReads compiles
-  def fromReads(name: String, envelope:Envelope, level: Int, idType: String): Metadata =
-      this(name, envelope,level, idType)
+  def fromReads(name: String, envelope: Envelope, level: Int, idType: String): Metadata =
+    this(name, envelope, level, idType)
 
   implicit val MetadataReads = (
-      (__ \ CollectionField).read[String] and
-      (__ \ ExtentField).read[Envelope](EnvelopeFormats) and
-      (__ \ IndexLevelField).read[Int] and
-      ( __ \ IdTypeField).read[String]( Reads.filter[String]
-          ( ValidationError("Requires 'text' or 'decimal") )
-          ( tpe => tpe == "text" || tpe == "decimal" )
-      )
-    )(Metadata.fromReads _)
+    (__ \ CollectionField).read[String] and
+    (__ \ ExtentField).read[Envelope](EnvelopeFormats) and
+    (__ \ IndexLevelField).read[Int] and
+    (__ \ IdTypeField).read[String](Reads.filter[String](ValidationError("Requires 'text' or 'decimal"))(tpe => tpe == "text" || tpe == "decimal"))
+  )(Metadata.fromReads _)
 }
 
 sealed trait Direction
@@ -70,7 +65,7 @@ object DESC extends Direction {
 }
 
 object Direction {
-  def unapply(s: String) : Option[Direction] =
+  def unapply(s: String): Option[Direction] =
     if (s.toUpperCase == "DESC") Some(DESC)
     else if (s.toUpperCase == "ASC") Some(ASC)
     else None
@@ -78,16 +73,14 @@ object Direction {
 
 case class FldSortSpec(fld: String, direction: Direction)
 
-case class SpatialQuery (
-                          windowOpt: Option[Envelope] = None,
-                          intersectionGeometryWktOpt: Option[String] = None,
-                          queryOpt: Option[BooleanExpr] = None,
-                          projection: List[String] = List(),
-                          sort: List[FldSortSpec] = List(),
-                          metadata: Metadata
-                        )
-
-
+case class SpatialQuery(
+  windowOpt: Option[Envelope] = None,
+  intersectionGeometryWktOpt: Option[String] = None,
+  queryOpt: Option[BooleanExpr] = None,
+  projection: List[String] = List(),
+  sort: List[FldSortSpec] = List(),
+  metadata: Metadata
+)
 
 trait FeatureWriter {
 
@@ -95,9 +88,9 @@ trait FeatureWriter {
 
 }
 
-
-/***
-  * The feature repository
+/**
+ * *
+ * The feature repository
  * Created by Karel Maesen, Geovise BVBA on 08/12/14.
  */
 trait Repository {
@@ -110,9 +103,9 @@ trait Repository {
 
   def listDatabases: Future[List[String]]
 
-  def createDb(dbname: String) : Future[Boolean]
+  def createDb(dbname: String): Future[Boolean]
 
-  def dropDb(dbname: String) : Future[Boolean]
+  def dropDb(dbname: String): Future[Boolean]
 
   def count(database: String, collection: String): Future[Long]
 
@@ -122,24 +115,24 @@ trait Repository {
 
   def existsCollection(dbName: String, colName: String): Future[Boolean]
 
-  def createCollection(dbName: String, colName: String, spatialSpec: Metadata) : Future[Boolean]
+  def createCollection(dbName: String, colName: String, spatialSpec: Metadata): Future[Boolean]
 
-  def registerCollection(db: String, collection: String, metadata: Metadata) : Future[Boolean]
+  def registerCollection(db: String, collection: String, metadata: Metadata): Future[Boolean]
 
-  def deleteCollection(dbName: String, colName: String) : Future[Boolean]
+  def deleteCollection(dbName: String, colName: String): Future[Boolean]
 
   def query(database: String, collection: String, spatialQuery: SpatialQuery, start: Option[Int] = None,
-            limit: Option[Int] = None): Future[CountedQueryResult]
+    limit: Option[Int] = None): Future[CountedQueryResult]
 
-  def insert(database: String, collection: String, json: JsObject) : Future[Boolean]
+  def insert(database: String, collection: String, json: JsObject): Future[Boolean]
 
-  def upsert(database: String, collection: String, json: JsObject) : Future[Boolean]
+  def upsert(database: String, collection: String, json: JsObject): Future[Boolean]
 
-  def delete(database: String, collection: String, query: BooleanExpr) : Future[Boolean]
+  def delete(database: String, collection: String, query: BooleanExpr): Future[Boolean]
 
-  def update(database: String, collection: String, query: BooleanExpr, updateSpec: JsObject) : Future[Int]
+  def update(database: String, collection: String, query: BooleanExpr, updateSpec: JsObject): Future[Int]
 
-  def writer(database: String, collection: String) : FeatureWriter
+  def writer(database: String, collection: String): FeatureWriter
 
   /**
    * Saves a view for the specified database and collection.
@@ -157,13 +150,12 @@ trait Repository {
 
   def dropView(database: String, collection: String, id: String): Future[Boolean]
 
+  def createIndex(dbName: String, colName: String, indexDef: IndexDef): Future[Boolean]
 
-  def createIndex(dbName: String, colName: String, indexDef: IndexDef) : Future[Boolean]
-
-  def getIndices(database: String, collection: String) : Future[List[String]]
+  def getIndices(database: String, collection: String): Future[List[String]]
 
   def getIndex(database: String, collection: String, index: String): Future[IndexDef]
 
-  def dropIndex(database: String, collection: String, index: String) : Future[Boolean]
+  def dropIndex(database: String, collection: String, index: String): Future[Boolean]
 
 }

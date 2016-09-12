@@ -14,7 +14,8 @@ class MetadataFormatSpec extends Specification {
 
     "validate " in {
 
-      val jsMd = Json.obj("extent" -> Json.obj(
+      val jsMd = Json.obj(
+        "extent" -> Json.obj(
         "crs" -> 31370,
         "envelope" -> Json.arr(0, 0, 300000, 300000)
       ),

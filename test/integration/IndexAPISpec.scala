@@ -7,7 +7,6 @@ import play.api.libs.json._
  */
 class IndexAPISpec extends InCollectionSpecification {
 
-
   def is = s2"""
 
       The PUT on /index should:
@@ -36,49 +35,43 @@ class IndexAPISpec extends InCollectionSpecification {
   import UtilityMethods._
 
   val indexDef = Json.obj(
-    "path" -> "a.b" ,
+    "path" -> "a.b",
     "type" -> "text"
   )
 
+  def e1 = putIndex(testDbName, "NonExistingCollection", "my_idx", indexDef) applyMatcher (_.status must equalTo(NOT_FOUND))
 
-  def e1 = putIndex(testDbName, "NonExistingCollection", "my_idx", indexDef) applyMatcher( _.status must equalTo(NOT_FOUND))
+  def e2 = putIndex(testDbName, testColName, "my_idx", Json.obj("bla" -> 2)) applyMatcher (_.status must equalTo(BAD_REQUEST))
 
-  def e2 = putIndex(testDbName, testColName, "my_idx", Json.obj("bla" -> 2)) applyMatcher( _.status must equalTo(BAD_REQUEST))
+  def e3 = putIndex(testDbName, testColName, "my_idx", indexDef) applyMatcher (_.status must equalTo(CREATED))
 
-  def e3 = putIndex(testDbName, testColName, "my_idx", indexDef) applyMatcher( _.status must equalTo(CREATED))
+  def e4 = putIndex(testDbName, testColName, "my_idx", indexDef) applyMatcher (_.status must equalTo(CONFLICT))
 
+  def e5 = getIndices(testDbName, "NonexistingCollection") applyMatcher (_.status must equalTo(NOT_FOUND))
 
-  def e4 = putIndex(testDbName, testColName, "my_idx", indexDef) applyMatcher( _.status must equalTo(CONFLICT))
-
-  def e5 = getIndices(testDbName, "NonexistingCollection") applyMatcher(_.status must equalTo(NOT_FOUND))
-
-  def e6 = getIndices(testDbName, testColName) applyMatcher( res =>
+  def e6 = getIndices(testDbName, testColName) applyMatcher (res =>
     (res.status must equalTo(OK)) and
       (res.responseBody must beSome(
         Json.arr(
           Json.obj("name" -> "my_idx", "url" -> "/api/databases/xfstestdb/xfstestcoll/indexes/my_idx")
         )
-      ))
-    )
+      )))
 
-  def e7 = getIndex(testDbName, testColName, "doesntexist") applyMatcher( _.status must equalTo(NOT_FOUND) )
+  def e7 = getIndex(testDbName, testColName, "doesntexist") applyMatcher (_.status must equalTo(NOT_FOUND))
 
-  def e8 = getIndex(testDbName, testColName, "my_idx") applyMatcher{ resp =>
+  def e8 = getIndex(testDbName, testColName, "my_idx") applyMatcher { resp =>
     (resp.status must equalTo(OK)) and
-      (resp.responseBody must beSome( Json.obj("name" -> "my_idx", "path" -> "a.b", "type" -> "text", "regex" -> false)) )
+      (resp.responseBody must beSome(Json.obj("name" -> "my_idx", "path" -> "a.b", "type" -> "text", "regex" -> false)))
   }
 
-  def e9 = deleteIndex(testDbName, testColName, "my_idx") applyMatcher( _.status must equalTo(OK))
+  def e9 = deleteIndex(testDbName, testColName, "my_idx") applyMatcher (_.status must equalTo(OK))
 
-  def e10 = getIndex(testDbName, testColName, "my_idx") applyMatcher( _.status must equalTo(NOT_FOUND) )
+  def e10 = getIndex(testDbName, testColName, "my_idx") applyMatcher (_.status must equalTo(NOT_FOUND))
 
-  def e11 = getIndices(testDbName, testColName) applyMatcher( res =>
+  def e11 = getIndices(testDbName, testColName) applyMatcher (res =>
     (res.status must equalTo(OK)) and
       (res.responseBody must beSome(
         Json.arr()
-          )
-        )
-    )
-
+      )))
 
 }

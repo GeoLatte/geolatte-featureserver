@@ -1,7 +1,7 @@
 package featureserver
 
 import org.geolatte.geom._
-import org.geolatte.geom.curve.{MortonCode, MortonContext}
+import org.geolatte.geom.curve.{ MortonCode, MortonContext }
 import play.api.data.validation.ValidationError
 import play.api.libs.functional.syntax._
 import play.api.libs.json.Reads._
@@ -19,16 +19,16 @@ object FeatureTransformers {
    * @param extent the spatial extent
    * @return
    */
-  def envelopeTransformer(extent: Envelope) : Reads[Polygon] =
-    ( __ \ 'geometry \ 'coordinates ).json.pick[JsArray] andThen
-      PositionReads.map {pos =>
+  def envelopeTransformer(extent: Envelope): Reads[Polygon] =
+    (__ \ 'geometry \ 'coordinates).json.pick[JsArray] andThen
+      PositionReads.map { pos =>
         pos.boundingBox
       }.map { bbox =>
         toPolygon(bbox.toEnvelope(extent.getCrsId))
       }
 
-  def toPolygon(envelope: Envelope) : Polygon = {
-    val builder = PointSequenceBuilders.fixedSized(5, DimensionalFlag.d2D,envelope.getCrsId)
+  def toPolygon(envelope: Envelope): Polygon = {
+    val builder = PointSequenceBuilders.fixedSized(5, DimensionalFlag.d2D, envelope.getCrsId)
     builder.add(envelope.getMinX, envelope.getMinY)
     builder.add(envelope.getMaxX, envelope.getMinY)
     builder.add(envelope.getMaxX, envelope.getMaxY)
@@ -37,11 +37,10 @@ object FeatureTransformers {
     new Polygon(builder.toPointSequence)
   }
 
-  def validator(idType: String) : Reads[JsObject] = idType match {
+  def validator(idType: String): Reads[JsObject] = idType match {
     case "decimal" => (__ \ "id").read[Long] andKeep __.read[JsObject]
-    case "text"  =>   (__ \ "id").read[String] andKeep __.read[JsObject]
+    case "text" => (__ \ "id").read[String] andKeep __.read[JsObject]
     case _ => throw new IllegalArgumentException("Invalid metadata")
   }
-
 
 }

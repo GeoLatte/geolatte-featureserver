@@ -7,8 +7,8 @@ import config.Constants.Format
 import featureserver.Repository
 import play.api.Logger
 import play.api.libs.json._
-import play.api.mvc.{BodyParsers, Result}
-import utilities.{JsonHelper, QueryParam, SupportedMediaTypes}
+import play.api.mvc.{ BodyParsers, Result }
+import utilities.{ JsonHelper, QueryParam, SupportedMediaTypes }
 
 import scala.concurrent.Future
 
@@ -22,55 +22,56 @@ class ViewController @Inject() (val repository: Repository) extends AbstractFeat
   }
 
   def put(db: String, collection: String, viewName: String) = repositoryAction(BodyParsers.parse.tolerantJson) {
-    implicit req => {
-      req.body.validate(ViewDefIn) match {
-        case JsError(er) =>
-          Logger.warn(er.mkString("\n"))
-          Future.successful(BadRequest("Invalid view definition: " + er.mkString("\n")))
+    implicit req =>
+      {
+        req.body.validate(ViewDefIn) match {
+          case JsError(er) =>
+            Logger.warn(er.mkString("\n"))
+            Future.successful(BadRequest("Invalid view definition: " + er.mkString("\n")))
 
-        case JsSuccess(js, _) =>
-          repository.saveView(db, collection, js++Json.obj("name" -> viewName))
-            .map[Result] (updatedExisting =>
-                if (updatedExisting ) Ok
-                else Created.withHeaders("Location" -> controllers.routes.ViewController.get(db, collection, viewName).url)
-            ).recover(commonExceptionHandler(db, collection))
+          case JsSuccess(js, _) =>
+            repository.saveView(db, collection, js ++ Json.obj("name" -> viewName))
+              .map[Result](updatedExisting =>
+                if (updatedExisting) Ok
+                else Created.withHeaders("Location" -> controllers.routes.ViewController.get(db, collection, viewName).url)).recover(commonExceptionHandler(db, collection))
+        }
       }
-    }
   }
 
   def list(db: String, collection: String) = repositoryAction {
-    implicit req => {
-      implicit val qstr = req.queryString
-      QueryParams.NAME.extract.map(name =>
-        repository.getView(db, collection, name)
-          .map(viewDef2Result(db, collection))
-      ).orElse {
-        Some(
-          repository.getViews(db, collection)
-            .map(res => res.map(el => format(db, collection)(el)))
-            .map(res => Ok(JsArray(res)).as(SupportedMediaTypes(Format.JSON).toString()))
-        )
-      }.get.recover(commonExceptionHandler(db, collection))
-    }
+    implicit req =>
+      {
+        implicit val qstr = req.queryString
+        QueryParams.NAME.extract.map(name =>
+          repository.getView(db, collection, name)
+            .map(viewDef2Result(db, collection))).orElse {
+          Some(
+            repository.getViews(db, collection)
+              .map(res => res.map(el => format(db, collection)(el)))
+              .map(res => Ok(JsArray(res)).as(SupportedMediaTypes(Format.JSON).toString()))
+          )
+        }.get.recover(commonExceptionHandler(db, collection))
+      }
   }
 
-
   def get(db: String, collection: String, id: String) = repositoryAction {
-    implicit req => {
-      repository.getView(db, collection, id)
-        .map(viewDef2Result(db, collection))
-        .recover(commonExceptionHandler(db, collection))
-    }
+    implicit req =>
+      {
+        repository.getView(db, collection, id)
+          .map(viewDef2Result(db, collection))
+          .recover(commonExceptionHandler(db, collection))
+      }
   }
 
   def delete(db: String, collection: String, view: String) = repositoryAction {
-    implicit req => {
-      repository.dropView(db, collection, view).map(v => {
-        Logger.info(s"Result of drop of view: $view: $v")
-        Ok("View dropped")
-      })
-        .recover(commonExceptionHandler(db, collection))
-    }
+    implicit req =>
+      {
+        repository.dropView(db, collection, view).map(v => {
+          Logger.info(s"Result of drop of view: $view: $v")
+          Ok("View dropped")
+        })
+          .recover(commonExceptionHandler(db, collection))
+      }
   }
 
   private def format(db: String, col: String)(viewDef: JsObject): JsObject = {

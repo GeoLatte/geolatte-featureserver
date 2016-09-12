@@ -14,7 +14,6 @@ object Migrations {
 
   import Utils._
 
-
   private def statements(schema: String) = List(
 
     sqlu"""
@@ -24,7 +23,8 @@ object Migrations {
     sqlu"""
        alter table #$schema.geolatte_nosql_collections ADD COLUMN  geometry_col VARCHAR(255);
        alter table #$schema.geolatte_nosql_collections ADD COLUMN  pkey VARCHAR(255);
-     """)
+     """
+  )
 
   def list(schema: String) = for {
     (stmt, index) <- statements(schema).zipWithIndex
@@ -65,7 +65,6 @@ object Migrations {
   //TODO -- replace sequence here with DBIO combinators
   private def applyMigrations(migrations: List[Migration])(implicit db: Database): Future[Boolean] =
     sequence(migrations)(applyMigration _)
-
 
   private def registerMigrationStmt(migration: Migration) = {
     def toString(action: SqlAction[_, _, _]): String = action.statements.toList.mkString(";")

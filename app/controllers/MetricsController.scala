@@ -6,10 +6,10 @@ import javax.inject.Inject
 import com.monsanto.arch.kamon.prometheus.Prometheus
 import com.monsanto.arch.kamon.prometheus.PrometheusExtension._
 import akka.pattern.ask
-import com.monsanto.arch.kamon.prometheus.metric.{MetricFamily, TextFormat => KamonPrometheusTextFormat}
+import com.monsanto.arch.kamon.prometheus.metric.{ MetricFamily, TextFormat => KamonPrometheusTextFormat }
 import io.prometheus.client.CollectorRegistry
-import io.prometheus.client.exporter.common.{TextFormat => PrometheusTextFormat}
-import featureserver.{FutureInstrumented, Repository}
+import io.prometheus.client.exporter.common.{ TextFormat => PrometheusTextFormat }
+import featureserver.{ FutureInstrumented, Repository }
 import utilities.Utils._
 import play.api.mvc._
 
@@ -18,8 +18,7 @@ import play.api.libs.concurrent.Execution.Implicits.defaultContext
 
 import scala.concurrent.Future
 
-
-class MetricsController @Inject() (val repository: Repository) extends Controller with FutureInstrumented{
+class MetricsController @Inject() (val repository: Repository) extends Controller with FutureInstrumented {
 
   val AcceptsTextPlain = Accepting("text/plain")
   val AcceptsProtoBuf = Accepting("application/vnd.google.protobuf")
@@ -27,9 +26,7 @@ class MetricsController @Inject() (val repository: Repository) extends Controlle
   val textContentType = "text/plain; version=0.0.4"
   val protoBufContentType = "application/vnd.google.protobuf; proto=io.prometheus.client.MetricFamily; encoding=delimited"
 
-
   implicit val timeout: akka.util.Timeout = 5.seconds
-
 
   def getKamonSamples: Future[String] = {
 
@@ -41,16 +38,16 @@ class MetricsController @Inject() (val repository: Repository) extends Controlle
     fSnapshot
       .map {
         KamonPrometheusTextFormat.format(_)
-      }.recoverWith{case ex =>
-        withWarning(s"No Kamon metrics snapshot, because $ex") {
-          Future.successful("")
-        }
+      }.recoverWith {
+        case ex =>
+          withWarning(s"No Kamon metrics snapshot, because $ex") {
+            Future.successful("")
+          }
       }
   }
 
-
   def get() = Action.async { implicit req =>
-    futureTimed("metrics-response-time"){
+    futureTimed("metrics-response-time") {
       for {
         kamonMetrics <- getKamonSamples
         prometheusMetrics = getPrometheusSamples
@@ -67,7 +64,5 @@ class MetricsController @Inject() (val repository: Repository) extends Controlle
     out.toString("UTF-8")
   }
 
-
 }
-
 
