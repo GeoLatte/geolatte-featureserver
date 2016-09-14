@@ -7,7 +7,7 @@ import play.api.mvc.AnyContentAsEmpty
  * @author Karel Maesen, Geovise BVBA
  *         creation-date: 10/26/13
  */
-class DatabaseAPISpec extends FeatureServerSqlSpecification {
+class DatabaseAPISpec extends FeatureServerSpecification {
 
   //These specifications need to be sequential (we test for objects created in previous steps/examples
   def is = s2"""

@@ -15,7 +15,7 @@ import utilities.Utils
  * @author Karel Maesen, Geovise BVBA
  *         creation-date: 7/22/13
  */
-class DatabasesController @Inject() (val repository: Repository) extends AbstractFeatureServerSqlController {
+class DatabasesController @Inject() (val repository: Repository) extends AbstractFeatureServerController {
 
   import config.AppExecutionContexts.streamContext
 

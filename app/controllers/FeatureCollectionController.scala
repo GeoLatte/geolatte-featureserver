@@ -29,7 +29,7 @@ import utilities.{ EnumeratorUtility, QueryParam, Utils }
 
 import scala.util.{ Failure, Success, Try }
 
-class FeatureCollectionController @Inject() (val repository: Repository) extends AbstractFeatureServerSqlController with FutureInstrumented {
+class FeatureCollectionController @Inject() (val repository: Repository) extends AbstractFeatureServerController with FutureInstrumented {
 
   import AppExecutionContexts.streamContext
   import config.Constants._

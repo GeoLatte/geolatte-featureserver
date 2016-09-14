@@ -16,7 +16,7 @@ import utilities.Utils
  * @author Karel Maesen, Geovise BVBA
  *         creation-date: 12/3/13
  */
-abstract class FeatureServerSqlSpecification extends Specification
+abstract class FeatureServerSpecification extends Specification
     with RestApiDriver {
 
   val testDbName = "xfstestdb"
@@ -34,7 +34,7 @@ abstract class FeatureServerSqlSpecification extends Specification
 
 }
 
-abstract class InDatabaseSpecification extends FeatureServerSqlSpecification {
+abstract class InDatabaseSpecification extends FeatureServerSpecification {
 
   override def map(fs: => Fragments) =
     super.map(step(makeDatabase(testDbName)) ^
@@ -43,7 +43,7 @@ abstract class InDatabaseSpecification extends FeatureServerSqlSpecification {
 
 }
 
-abstract class InCollectionSpecification extends FeatureServerSqlSpecification {
+abstract class InCollectionSpecification extends FeatureServerSpecification {
 
   override def map(fs: => Fragments) = super.map(
     step(makeDatabase(testDbName)) ^

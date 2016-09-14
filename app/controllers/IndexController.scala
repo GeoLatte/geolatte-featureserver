@@ -11,7 +11,7 @@ import play.api.mvc.{ BodyParsers, Result }
 
 import scala.concurrent.Future
 
-class IndexController @Inject() (val repository: Repository) extends AbstractFeatureServerSqlController {
+class IndexController @Inject() (val repository: Repository) extends AbstractFeatureServerController {
 
   import AppExecutionContexts._
 

@@ -21,7 +21,7 @@ import scala.util.{ Failure, Success, Try }
  * @author Karel Maesen, Geovise BVBA
  *         creation-date: 7/25/13
  */
-class TxController @Inject() (val repository: Repository) extends AbstractFeatureServerSqlController {
+class TxController @Inject() (val repository: Repository) extends AbstractFeatureServerController {
 
   import AppExecutionContexts.streamContext
 

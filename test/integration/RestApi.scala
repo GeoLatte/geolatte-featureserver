@@ -105,7 +105,7 @@ object ResultCheck {
 
 trait RestApiDriver {
 
-  this: FeatureServerSqlSpecification =>
+  this: FeatureServerSpecification =>
 
   import API._
   import UtilityMethods._

@@ -24,7 +24,7 @@ import scala.language.{ implicitConversions, reflectiveCalls }
  * @author Karel Maesen, Geovise BVBA
  *         creation-date: 10/11/13
  */
-trait AbstractFeatureServerSqlController extends Controller with FutureInstrumented {
+trait AbstractFeatureServerController extends Controller with FutureInstrumented {
 
   def repository: Repository
 

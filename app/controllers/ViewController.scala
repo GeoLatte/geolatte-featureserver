@@ -12,7 +12,7 @@ import utilities.{ JsonHelper, QueryParam, SupportedMediaTypes }
 
 import scala.concurrent.Future
 
-class ViewController @Inject() (val repository: Repository) extends AbstractFeatureServerSqlController {
+class ViewController @Inject() (val repository: Repository) extends AbstractFeatureServerController {
 
   import AppExecutionContexts.streamContext
   import Formats._
