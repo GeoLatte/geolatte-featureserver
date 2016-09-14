@@ -19,7 +19,7 @@ trait FutureInstrumented extends Instrumented {
    * @param name timer name
    * @param f Future-valued action
    * @param ec Execution context
-   * @tparam A Type of acton result
+   * @tparam A Type of acton resource
    * @return the future produced by the action
    */
   def futureTimed[A](name: String, start: Long = System.nanoTime())(f: => Future[A])(implicit ec: ExecutionContext): Future[A] = {

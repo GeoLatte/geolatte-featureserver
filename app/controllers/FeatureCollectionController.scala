@@ -3,11 +3,6 @@ package controllers
 import javax.inject.Inject
 
 import Exceptions._
-import querylang.{ BooleanAnd, BooleanExpr, QueryParser }
-
-import scala.collection.mutable.ListBuffer
-import scala.language.reflectiveCalls
-import scala.language.implicitConversions
 import config.AppExecutionContexts
 import featureserver._
 import featureserver.json.GeometryReaders._
@@ -18,15 +13,14 @@ import org.supercsv.prefs.CsvPreference
 import org.supercsv.util.CsvContext
 import play.api.Logger
 import play.api.libs.iteratee._
-import play.api.libs.json._
+import play.api.libs.json.{ JsBoolean, JsNumber, JsString, _ }
 import play.api.mvc._
-
-import scala.concurrent.Future
-import play.api.libs.json.JsString
-import play.api.libs.json.JsBoolean
-import play.api.libs.json.JsNumber
+import querylang.{ BooleanAnd, BooleanExpr, QueryParser }
 import utilities.{ EnumeratorUtility, QueryParam, Utils }
 
+import scala.collection.mutable.ListBuffer
+import scala.concurrent.Future
+import scala.language.{ implicitConversions, reflectiveCalls }
 import scala.util.{ Failure, Success, Try }
 
 class FeatureCollectionController @Inject() (val repository: Repository) extends AbstractFeatureServerController with FutureInstrumented {
@@ -117,22 +111,32 @@ class FeatureCollectionController @Inject() (val repository: Repository) extends
   }
 
   def query(db: String, collection: String) =
-    repositoryAction(implicit request =>
+    RepositoryAction(implicit request =>
       futureTimed("featurecollection-query") {
+
         implicit val queryStr = request.queryString
 
         implicit val format = QueryParams.FMT.extract
         implicit val filename = QueryParams.FILENAME.extract
 
+        val ct = RequestContext(request, format, filename)
+
         featuresToResult(db, collection, request) {
-          case (opt, x) => enumJsonToResult(x)
+          case (optTotal, features) => {
+            val (writeable, contentType) = ResourceWriteables.selectWriteable(ct)
+            val result = Ok.chunked(FeatureStream(optTotal, features).asSource(writeable)).as(contentType)
+            filename match {
+              case Some(fn) => result.withHeaders(headers = ("content-disposition", s"attachment; filename=$fn"))
+              case _ => result
+            }
+          }
         }
       })
 
-  def list(db: String, collection: String) = repositoryAction(
+  def list(db: String, collection: String) = RepositoryAction(
     implicit request => futureTimed("featurecollection-list") {
       featuresToResult(db, collection, request) {
-        case (optTotal, features) => toSimpleResult(FeaturesResource(optTotal, features))
+        case (optTotal, features) => Ok.chunked(FeaturesResource(optTotal, features).asSource)
       }
     }
   )
@@ -140,12 +144,12 @@ class FeatureCollectionController @Inject() (val repository: Repository) extends
   def featuresToResult(db: String, collection: String, request: Request[AnyContent])(toResult: ((Option[Long], Enumerator[JsObject])) => Result): Future[Result] = {
     repository.metadata(db, collection).flatMap(md => {
       val featureCollectionRequest = extractFeatureCollectionRequest(request)
-      Logger.info(s"Query $featureCollectionRequest on $db, collection $collection")
+      Logger.debug(s"Query $featureCollectionRequest on $db, collection $collection")
       doQuery(db, collection, md, featureCollectionRequest).map[Result] { toResult }
     }).recover(commonExceptionHandler(db, collection))
   }
 
-  def download(db: String, collection: String) = repositoryAction {
+  def download(db: String, collection: String) = RepositoryAction {
     implicit request =>
       {
         Logger.info(s"Downloading $db/$collection.")
@@ -153,13 +157,20 @@ class FeatureCollectionController @Inject() (val repository: Repository) extends
 
         implicit val format = QueryParams.FMT.extract
         implicit val filename = QueryParams.FILENAME.extract
+        val ct = RequestContext(request, format, filename)
         (for {
           md <- repository.metadata(db, collection)
-          (_, x) <- repository.query(db, collection, SpatialQuery(metadata = md))
-        } yield toSimpleResult(enumJsonToResult(x)))
-          .recover {
-            commonExceptionHandler(db, collection)
+          (optTotal, features) <- repository.query(db, collection, SpatialQuery(metadata = md))
+        } yield {
+          val (writeable, contentType) = ResourceWriteables.selectWriteable(ct)
+          val result = Ok.chunked(FeatureStream(optTotal, features).asSource(writeable)).as(contentType)
+          filename match {
+            case Some(fn) => result.withHeaders(headers = ("content-disposition", s"attachment; filename=$fn"))
+            case _ => result
           }
+        }).recover {
+          commonExceptionHandler(db, collection)
+        }
       }
   }
 
@@ -170,7 +181,7 @@ class FeatureCollectionController @Inject() (val repository: Repository) extends
     })
 
   /**
-   * converts a JsObject Enumerator to an RenderableStreamingResource supporting both Json and Csv output
+   * converts a JsObject Enumerator to an StreamingResource supporting both Json and Csv output
    *
    * Limitations: when the passed Json is not a valid GeoJson object, this will pass a stream of empty points
    *
@@ -179,7 +190,7 @@ class FeatureCollectionController @Inject() (val repository: Repository) extends
    * @return
    */
   implicit def enumJsonToResult(enum: Enumerator[JsObject])(implicit req: RequestHeader) =
-    new JsonStreamable with CsvStreamable {
+    {
 
       val encoder = new DefaultCsvEncoder()
 
@@ -202,7 +213,7 @@ class FeatureCollectionController @Inject() (val repository: Repository) extends
         val jsObj = (js \ "properties").asOpt[JsObject].getOrElse(JsObject(List()))
         val attributes = expand(jsObj).collect(selector)
         val geom = geomToString((js \ "geometry").asOpt(GeometryReads(CrsId.UNDEFINED)).getOrElse(Point.createEmpty()))
-        val idOpt = (js \ "_id" \ "$oid").asOpt[String].map(v => ("_id", v)).getOrElse(("_id", "null"))
+        val idOpt = (js \ "id").asOpt[String].map(v => ("id", v)).getOrElse(("_id", "null"))
         selector(idOpt) +: geom +: attributes
       }
 
@@ -226,12 +237,11 @@ class FeatureCollectionController @Inject() (val repository: Repository) extends
         case Success(v) => v
         case Failure(t) =>
           Utils.withError(s"Failure to encode $js in CSV. Message is: ")("")
-
       }
 
       def toJsonStream = enum
 
-      override def toCsvStream: Enumerator[String] = EnumeratorUtility.withIndex(enum).map[String](toCsv.tupled)
+      def toCsvStream: Enumerator[String] = EnumeratorUtility.withIndex(enum).map[String](toCsv.tupled)
         .through(Enumeratee.filterNot(_.isEmpty))
 
     }

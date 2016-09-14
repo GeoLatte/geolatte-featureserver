@@ -24,7 +24,7 @@ package object Exceptions {
 
   case class InvalidQueryException(msg: String = "") extends NoSqlException(msg)
 
-  case class MediaObjectNotFoundException(msg: String = "") extends NoSqlException(msg)
+  case class UnsupportedMediaException(msg: String = "") extends NoSqlException(msg)
 
   case class ViewObjectNotFoundException(msg: String = "") extends NoSqlException(msg)
 

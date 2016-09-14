@@ -21,7 +21,7 @@ class ViewController @Inject() (val repository: Repository) extends AbstractFeat
     val NAME = QueryParam("name", (s) => Some(s))
   }
 
-  def put(db: String, collection: String, viewName: String) = repositoryAction(BodyParsers.parse.tolerantJson) {
+  def put(db: String, collection: String, viewName: String) = RepositoryAction(BodyParsers.parse.tolerantJson) {
     implicit req =>
       {
         req.body.validate(ViewDefIn) match {
@@ -38,7 +38,7 @@ class ViewController @Inject() (val repository: Repository) extends AbstractFeat
       }
   }
 
-  def list(db: String, collection: String) = repositoryAction {
+  def list(db: String, collection: String) = RepositoryAction {
     implicit req =>
       {
         implicit val qstr = req.queryString
@@ -54,7 +54,7 @@ class ViewController @Inject() (val repository: Repository) extends AbstractFeat
       }
   }
 
-  def get(db: String, collection: String, id: String) = repositoryAction {
+  def get(db: String, collection: String, id: String) = RepositoryAction {
     implicit req =>
       {
         repository.getView(db, collection, id)
@@ -63,7 +63,7 @@ class ViewController @Inject() (val repository: Repository) extends AbstractFeat
       }
   }
 
-  def delete(db: String, collection: String, view: String) = repositoryAction {
+  def delete(db: String, collection: String, view: String) = RepositoryAction {
     implicit req =>
       {
         repository.dropView(db, collection, view).map(v => {

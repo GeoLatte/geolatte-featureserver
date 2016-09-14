@@ -14,8 +14,9 @@ import scala.concurrent.Future
 class IndexController @Inject() (val repository: Repository) extends AbstractFeatureServerController {
 
   import AppExecutionContexts._
+  import ResourceWriteables._
 
-  def put(db: String, collection: String, indexName: String) = repositoryAction(BodyParsers.parse.tolerantJson) {
+  def put(db: String, collection: String, indexName: String) = RepositoryAction(BodyParsers.parse.tolerantJson) {
     implicit req =>
       {
         req.body.validate[IndexDef] match {
@@ -32,25 +33,29 @@ class IndexController @Inject() (val repository: Repository) extends AbstractFea
       }
   }
 
-  def list(db: String, collection: String) = repositoryAction {
+  def list(db: String, collection: String) = RepositoryAction {
     implicit req =>
       {
-        repository.getIndices(db, collection).map[Result] { indexNames => IndexDefsResource(db, collection, indexNames) }
+        repository.getIndices(db, collection)
+          .map { IndexDefsResource(db, collection, _) }
+          .map { Ok(_) }
       }.recover(commonExceptionHandler(db, collection))
   }
 
-  def get(db: String, collection: String, index: String) = repositoryAction {
+  def get(db: String, collection: String, index: String) = RepositoryAction {
     implicit req =>
-      {
-        repository.getIndex(db, collection, index).map[Result] { indexDef => IndexDefResource(db, collection, indexDef) }
-      }.recover(commonExceptionHandler(db, collection))
+      repository.getIndex(db, collection, index)
+        .map { IndexDefResource(db, collection, _) }
+        .map { Ok(_) }
+        .recover(commonExceptionHandler(db, collection))
+
   }
 
-  def delete(db: String, collection: String, index: String) = repositoryAction {
+  def delete(db: String, collection: String, index: String) = RepositoryAction {
     implicit req =>
-      {
-        repository.dropIndex(db, collection, index).map[Result] { _ => Ok }
-      }.recover(commonExceptionHandler(db, collection))
+      repository.dropIndex(db, collection, index)
+        .map[Result] { _ => Ok }
+        .recover(commonExceptionHandler(db, collection))
   }
 
 }

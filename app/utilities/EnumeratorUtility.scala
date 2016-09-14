@@ -1,5 +1,6 @@
 package utilities
 
+import akka.util.ByteString
 import play.api.libs.iteratee._
 
 import scala.concurrent.ExecutionContext
@@ -31,12 +32,10 @@ object EnumeratorUtility {
   }
 
   //this is due to James Roper (see https://groups.google.com/forum/#!topic/play-framework/PrPTIrLdPmY)
-  class CommaSeparate(sep: String)(implicit dex: ExecutionContext) extends Enumeratee.CheckDone[String, String] {
-    val start = System.currentTimeMillis()
-
-    def continue[A](k: K[String, A]) = Cont {
+  class CommaSeparate(sep: String)(implicit dex: ExecutionContext) extends Enumeratee.CheckDone[ByteString, ByteString] {
+    def continue[A](k: K[ByteString, A]) = Cont {
       case in @ (Input.Empty) => this &> k(in)
-      case in: Input.El[String] => Enumeratee.map[String](sep + _) &> k(in)
+      case in: Input.El[ByteString] => Enumeratee.map[ByteString](ByteString(sep) ++ _) &> k(in)
       case Input.EOF => Done(Cont(k), Input.EOF)
     }
   }

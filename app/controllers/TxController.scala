@@ -42,7 +42,7 @@ class TxController @Inject() (val repository: Repository) extends AbstractFeatur
     case _ => Failure(new RuntimeException("Query expression is not a string"))
   }
 
-  def remove(db: String, col: String) = repositoryAction {
+  def remove(db: String, col: String) = RepositoryAction {
     implicit request =>
       {
         extract[JsString](request.body.asJson, "query") flatMap (parse(_)) match {
@@ -54,7 +54,7 @@ class TxController @Inject() (val repository: Repository) extends AbstractFeatur
       }
   }
 
-  def update(db: String, col: String) = repositoryAction {
+  def update(db: String, col: String) = RepositoryAction {
     implicit request =>
       {
         val tq = extract[JsString](request.body.asJson, "query").flatMap(parse(_))
@@ -70,7 +70,7 @@ class TxController @Inject() (val repository: Repository) extends AbstractFeatur
       }
   }
 
-  def upsert(db: String, col: String) = repositoryAction {
+  def upsert(db: String, col: String) = RepositoryAction {
     implicit request =>
       request.body.asJson match {
         case Some(obj: JsObject) => repository.upsert(db, col, obj)
