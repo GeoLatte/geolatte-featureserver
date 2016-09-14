@@ -28,7 +28,6 @@ class DatabaseAPISpec extends FeatureServerSqlSpecification {
 
   """
 
-  import integration.RestApiDriver._
   import integration.UtilityMethods._
 
   def e1 = getDatabases.applyMatcher { it => it.status must equalTo(OK) and (it.responseBody must beSome(beAnInstanceOf[JsArray])) }
@@ -47,7 +46,7 @@ class DatabaseAPISpec extends FeatureServerSqlSpecification {
 
   def e8 = getDatabases.applyMatcher(testResponseContains(testDbName, 0))
 
-  def cleanup = { RestApiDriver.dropDatabase(testDbName); success }
+  def cleanup = { dropDatabase(testDbName); success }
 
   def testResponseContains(dbName: String, numTimes: Int) = (res: FakeRequestResult[Nothing, AnyContentAsEmpty.type, JsValue]) => {
     val jsArrOpt: Option[JsArray] = res.responseBody

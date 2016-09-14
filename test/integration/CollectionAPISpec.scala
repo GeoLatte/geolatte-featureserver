@@ -23,7 +23,6 @@ class CollectionAPISpec extends InDatabaseSpecification {
 
     """
 
-  import RestApiDriver._
   import UtilityMethods._
 
   def e1 = makeCollection(testDbName, testColName, inMetadata)

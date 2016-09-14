@@ -30,7 +30,6 @@ class ViewDefsAPISpec extends InCollectionSpecification {
 
   //import default values
   import UtilityMethods._
-  import RestApiDriver._
 
   val viewName = "view-1"
   val jsInViewDef = Json.obj("query" -> JsString("id = 1"), "projection" -> Json.arr("foo", "bar"))

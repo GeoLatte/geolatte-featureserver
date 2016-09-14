@@ -46,7 +46,6 @@ class TransactionAPISpec extends InCollectionSpecification {
   """
 
   //import default values
-  import RestApiDriver._
   import UtilityMethods._
   import Gen._
 

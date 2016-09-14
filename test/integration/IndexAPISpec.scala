@@ -31,7 +31,6 @@ class IndexAPISpec extends InCollectionSpecification {
 
   """
 
-  import RestApiDriver._
   import UtilityMethods._
 
   val indexDef = Json.obj(

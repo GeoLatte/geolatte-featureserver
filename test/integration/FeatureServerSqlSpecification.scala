@@ -9,17 +9,20 @@ import play.api.{ Application, Play, libs }
 import play.api.Play._
 import play.api.libs.json.{ JsArray, JsObject, Json, _ }
 import play.api.inject.guice.GuiceApplicationBuilder
+import play.api.test.WithApplication
 import utilities.Utils
 
 /**
  * @author Karel Maesen, Geovise BVBA
  *         creation-date: 12/3/13
  */
-abstract class FeatureServerSqlSpecification extends Specification {
+abstract class FeatureServerSqlSpecification extends Specification
+    with RestApiDriver {
 
-  val app: Application = new GuiceApplicationBuilder().build()
   val testDbName = "xfstestdb"
   val testColName = "xfstestcoll"
+
+  implicit val currentApp = GuiceApplicationBuilder().build()
 
   //override decorate so we can inject 'include' en 'sequential' arguments
   override def decorate(is: SpecStructure, env: Env) = {
@@ -27,34 +30,27 @@ abstract class FeatureServerSqlSpecification extends Specification {
     dec.setArguments(dec.arguments <| args(sequential = true))
   }
 
-  override def map(fs: => Fragments) =
-    step(Play.start(app)) ^
-      fs ^
-      step(Play.stop(app))
+  override def map(fs: => Fragments) = fs ^ step(currentApp.stop())
 
 }
 
 abstract class InDatabaseSpecification extends FeatureServerSqlSpecification {
-  import integration.RestApiDriver._
 
   override def map(fs: => Fragments) =
-    step(Play.start(app)) ^
-      step(makeDatabase(testDbName)) ^
+    super.map(step(makeDatabase(testDbName)) ^
       fs ^
-      step(dropDatabase(testDbName)) ^
-      step(Play.stop(app))
+      step(dropDatabase(testDbName)))
+
 }
 
 abstract class InCollectionSpecification extends FeatureServerSqlSpecification {
-  import integration.RestApiDriver._
 
-  override def map(fs: => Fragments) =
-    step(Play.start(app)) ^
-      step(makeDatabase(testDbName)) ^
+  override def map(fs: => Fragments) = super.map(
+    step(makeDatabase(testDbName)) ^
       step(makeCollection(testDbName, testColName)) ^
       fs ^
-      step(dropDatabase(testDbName)) ^
-      step(Play.stop(app))
+      step(dropDatabase(testDbName))
+  )
 
   //utility and matcher definitions
 

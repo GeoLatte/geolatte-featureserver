@@ -54,7 +54,6 @@ class FeatureCollectionAPISpec extends InCollectionSpecification {
 
   //import default values
   import UtilityMethods._
-  import RestApiDriver._
 
   //Generators for data
   val propertyObjGenerator = Gen.properties("foo" -> Gen.oneOf("bar1", "bar2", "bar3"), "num" -> Gen.oneOf(1, 2, 3), "something" -> Gen.oneOf("else", "bad"))

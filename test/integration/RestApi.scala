@@ -103,14 +103,14 @@ object ResultCheck {
   def unapply[B, T, R](fr: FakeRequestResult[B, T, R]): Option[(Int, Option[R])] = Some(fr.status, fr.responseBody)
 }
 
-object RestApiDriver {
+trait RestApiDriver {
+
+  this: FeatureServerSqlSpecification =>
 
   import API._
   import UtilityMethods._
 
   import scala.reflect.runtime.universe._
-
-  lazy implicit val application: Application = GuiceApplicationBuilder().build()
 
   def makeDatabase(dbName: String) = {
     Logger.info("START CREATING DATABASE OR SCHEMA")
