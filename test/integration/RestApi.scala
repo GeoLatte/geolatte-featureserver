@@ -9,8 +9,9 @@ import org.geolatte.geom._
 import org.geolatte.geom.crs.CrsId
 import org.geolatte.geom.curve.{ MortonCode, MortonContext }
 import org.specs2.matcher._
-import play.api.Logger
+import play.api.{ Application, Logger }
 import play.api.http._
+import play.api.inject.guice.{ GuiceApplicationBuilder, GuiceApplicationLoader }
 import play.api.libs.json._
 import play.api.mvc._
 import play.api.test._
@@ -32,20 +33,21 @@ import scala.language.implicitConversions
  * @tparam R Type of result body content
  */
 case class FakeRequestResult[B, T, R](
-  url: String,
+    url: String,
     format: Option[Future[Result] => R] = None,
     requestBody: Option[B] = None,
     mkRequest: (String, Option[B]) => FakeRequest[T]
 )(
     implicit
-    val w: Writeable[T]
+    val w: Writeable[T],
+    val app: Application
 ) {
 
   import UtilityMethods._
 
   val wrappedResult: Future[Result] = {
     val req = mkRequest(url, requestBody)
-    route(req) match {
+    route(app, req) match {
       case Some(res) => withInfo(s"Result for $url: $res") {
         res
       }
@@ -69,7 +71,7 @@ object FakeRequestResult {
 
   import scala.reflect.runtime.universe._
 
-  def GET[T: TypeTag](url: String, format: Future[Result] => T): FakeRequestResult[Nothing, AnyContentAsEmpty.type, T] =
+  def GET[T: TypeTag](url: String, format: Future[Result] => T)(implicit app: Application): FakeRequestResult[Nothing, AnyContentAsEmpty.type, T] =
     format match {
       case fmt if typeOf[T] <:< typeOf[JsValue] =>
         val mediaType = Constants.Format.JSON
@@ -81,15 +83,16 @@ object FakeRequestResult {
 
     }
 
-  def PUT(url: String, body: Option[JsValue] = None) =
+  def PUT(url: String, body: Option[JsValue] = None)(implicit app: Application) =
     new FakeRequestResult(url = url, requestBody = body, mkRequest = makePutRequest)
 
-  def DELETE(url: String) = new FakeRequestResult[JsValue, AnyContentAsEmpty.type, JsValue](url = url, mkRequest = makeDeleteRequest)
+  def DELETE(url: String)(implicit app: Application) =
+    new FakeRequestResult[JsValue, AnyContentAsEmpty.type, JsValue](url = url, mkRequest = makeDeleteRequest)
 
-  def POSTJson(url: String, body: JsValue, format: Future[Result] => JsValue) =
+  def POSTJson(url: String, body: JsValue, format: Future[Result] => JsValue)(implicit app: Application) =
     new FakeRequestResult(url = url, format = Some(format), requestBody = Some(body), mkRequest = makePostRequestJson)
 
-  def POSTRaw(url: String, body: ByteString, format: Future[Result] => JsValue) =
+  def POSTRaw(url: String, body: ByteString, format: Future[Result] => JsValue)(implicit app: Application) =
     new FakeRequestResult(url = url, format = Some(format), requestBody = Some(body), mkRequest = makePostRequestRaw)
 
 }
@@ -106,6 +109,8 @@ object RestApiDriver {
   import UtilityMethods._
 
   import scala.reflect.runtime.universe._
+
+  lazy implicit val application: Application = GuiceApplicationBuilder().build()
 
   def makeDatabase(dbName: String) = {
     Logger.info("START CREATING DATABASE OR SCHEMA")

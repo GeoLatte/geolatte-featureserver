@@ -34,8 +34,8 @@ class FeatureCollectionAPISpec extends InCollectionSpecification {
         support the SORT parameter                                                  $e8b
         support the SORT-DIRECTION parameter                                        $e8c
         support the QUERY parameter                                                 $e9
-      support the WITH-VIEW query-param                                             $e14
-      support the WITH-VIEW query-param and a view with no projection clause        $e15
+        support the WITH-VIEW query-param                                             $e14
+        support the WITH-VIEW query-param and a view with no projection clause        $e15
         BAD_REQUEST response code if the PROJECTION parameter is empty or invalid   $e10
         BAD_REQUEST response code if the Query parameter is an invalid expression   $e11
 

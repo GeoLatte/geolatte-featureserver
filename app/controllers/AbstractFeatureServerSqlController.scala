@@ -6,9 +6,13 @@ import config.AppExecutionContexts.streamContext
 import config.Constants.{ Format, Version }
 import featureserver._
 import Exceptions._
+import akka.stream.scaladsl.Source
+import akka.util.ByteString
 import play.Logger
+import play.api.http.MediaType
 import play.api.libs.iteratee._
 import play.api.libs.json._
+import play.api.libs.streams.Streams
 import play.api.mvc._
 import utilities.EnumeratorUtility.CommaSeparate
 import utilities.SupportedMediaTypes
@@ -45,13 +49,17 @@ trait AbstractFeatureServerSqlController extends Controller with FutureInstrumen
       case _ => (Format.JSON, Version.default)
     }
 
+    def mkChunked(status: Status, mediaType: MediaType, content: Source[ByteString, _]): Result = {
+      status.chunked(content).as(mediaType.toString)
+    }
+
     val simpleresult =
       (result, fmt) match {
         case (r: Jsonable, Format.JSON) => Ok(r.toJson).as(SupportedMediaTypes(Format.JSON, v).toString)
         case (r: Csvable, Format.CSV) => Ok(r.toCsv).as(SupportedMediaTypes(Format.CSV, v).toString)
-        case (r: JsonStreamable, Format.JSON) => Ok.chunked(toStream(r.toJsonStream)).as(SupportedMediaTypes(Format.JSON, v).toString)
-        case (r: CsvStreamable, Format.CSV) => Ok.chunked(toStream(r.toCsvStream)).as(SupportedMediaTypes(Format.CSV, v).toString)
-        case (r: JsonStringStreamable, Format.JSON) => Ok.chunked(toStream(r.toJsonStringStream)).as(SupportedMediaTypes(Format.JSON, v).toString)
+        case (r: JsonStreamable, Format.JSON) => mkChunked(Ok, SupportedMediaTypes(Format.JSON), toStream(r.toJsonStream))
+        case (r: CsvStreamable, Format.CSV) => mkChunked(Ok, SupportedMediaTypes(Format.CSV, v), toStream(r.toCsvStream))
+        case (r: JsonStringStreamable, Format.JSON) => mkChunked(Ok, SupportedMediaTypes(Format.JSON, v), toStream(r.toJsonStringStream))
         case _ => UnsupportedMediaType("No supported media type: " + request.acceptedTypes.mkString(";"))
       }
 
@@ -63,9 +71,9 @@ trait AbstractFeatureServerSqlController extends Controller with FutureInstrumen
 
   //Note: this can't be made implicit, because in the case of A == JsValue, Ok.stream accepts features enum, and
   // this code won't be called
-  def toStream[A](features: Enumerator[A])(implicit toStr: A => String): Enumerator[Array[Byte]] = {
+  def toStream[A](features: Enumerator[A])(implicit toStr: A => String): Source[ByteString, _] = {
 
-    val finalSeparatorEnumerator = Enumerator.enumerate(List(config.Constants.chunkSeparator.getBytes("UTF-8")))
+    val finalSeparatorEnumerator = Enumerator.enumerate(List(ByteString(config.Constants.chunkSeparator)))
 
     val startTime = System.nanoTime()
 
@@ -87,8 +95,9 @@ trait AbstractFeatureServerSqlController extends Controller with FutureInstrumen
 
     val commaSeparate = new CommaSeparate(config.Constants.chunkSeparator)
     val jsons = features.map(f => toStr(f)) &> commaSeparate
-    val toBytes = Enumeratee.map[String](_.getBytes("UTF-8"))
-    (jsons &> toBytes) andThen finalSeparatorEnumerator andThen enumInput(Input.EOF) //Enumerator.eof
+    val toBytes = Enumeratee.map[String](ByteString(_))
+    val enumerator = (jsons &> toBytes) andThen finalSeparatorEnumerator andThen enumInput(Input.EOF)
+    Source.fromPublisher(Streams.enumeratorToPublisher(enumerator))
   }
 
   def commonExceptionHandler(db: String, col: String = ""): PartialFunction[Throwable, Result] = {

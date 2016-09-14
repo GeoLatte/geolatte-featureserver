@@ -42,7 +42,6 @@ object FeatureServerBuild extends Build {
     "com.typesafe.slick" %% "slick" % "3.2.0-M1",
     "com.typesafe.slick" %% "slick-hikaricp" % "3.2.0-M1",
     "postgresql" % "postgresql" % "9.1-901.jdbc4"
-//    "com.typesafe.play"           %%    "play-streams-experimental" % playVersion
   )
 
   val kamonVersion = "0.6.2"
@@ -78,7 +77,7 @@ object FeatureServerBuild extends Build {
     version := appVersion,
     organization := "org.geolatte",
     scalaVersion := "2.11.8",
-    scalacOptions ++= Seq( "-feature", "-language:postfixOps", "-language:implicitConversions" ),
+    scalacOptions ++= Seq( "-feature", "-language:postfixOps", "-language:implicitConversions" , "-deprecation"),
     resolvers ++= commonResolvers
   )
 

@@ -4,9 +4,6 @@ import play.api.libs.json._
 
 import scala.util.Try
 
-/**
- * Created by Karel Maesen, Geovise BVBA on 09/09/16.
- */
 object JsonUtils {
 
   def toJsValue(value: Any): JsValue = value match {
@@ -15,7 +12,7 @@ object JsonUtils {
     case v: Int => JsNumber(v)
     case v: Long => JsNumber(v)
     case b: Boolean => JsBoolean(b)
-    case f: Float => JsNumber(BigDecimal(f))
+    case f: Float => JsNumber(BigDecimal(f.toDouble))
     case d: Double => JsNumber(BigDecimal(d))
     case b: BigDecimal => JsNumber(b)
     case e => Utils.withTrace(s"Converting value $e (${e.getClass.getCanonicalName}) by toString method")(
@@ -26,7 +23,7 @@ object JsonUtils {
   def toGeoJson(idColumn: String, geomCol: String, propertyMap: Map[String, Any]): JsObject = {
     val props = for {
       (key, value) <- propertyMap if key != idColumn && key != geomCol && key != "__geojson"
-    } yield (key -> toJsValue(value))
+    } yield key -> toJsValue(value)
 
     val flds: Seq[(String, JsValue)] = Seq(
       "id" -> toJsValue(propertyMap(idColumn)),

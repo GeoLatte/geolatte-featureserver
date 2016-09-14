@@ -71,7 +71,7 @@ object Utils {
 
   def toFuture[T](result: JsResult[T]): Future[T] = result match {
     case JsSuccess(t, _) => Future.successful(t)
-    case JsError(errs) => Future.failed(new InvalidRequestException(Json.stringify(JsError.toFlatJson(errs))))
+    case JsError(errs) => Future.failed(new InvalidRequestException(Json.stringify(JsError.toJson(errs))))
   }
 
   implicit class FuturableOption[T](opt: Option[T]) {

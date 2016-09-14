@@ -16,9 +16,9 @@ class MetadataFormatSpec extends Specification {
 
       val jsMd = Json.obj(
         "extent" -> Json.obj(
-        "crs" -> 31370,
-        "envelope" -> Json.arr(0, 0, 300000, 300000)
-      ),
+          "crs" -> 31370,
+          "envelope" -> Json.arr(0, 0, 300000, 300000)
+        ),
         "index-level" -> 8,
         "id-type" -> "decimal"
       )

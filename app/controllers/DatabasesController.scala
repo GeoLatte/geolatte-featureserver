@@ -37,14 +37,14 @@ class DatabasesController @Inject() (val repository: Repository) extends Abstrac
   def putDb(db: String) = repositoryAction(
     implicit request => repository.createDb(db).map(_ => Created(s"database $db created")).recover {
       case ex: DatabaseAlreadyExistsException => Conflict(ex.getMessage)
-      case ex: DatabaseCreationException => {
+      case ex: DatabaseCreationException =>
         Logger.error("Error: creating database", ex)
         InternalServerError(ex.getMessage)
-      }
-      case t => {
+
+      case t =>
         Logger.error("Error: creating database", t)
         InternalServerError(s"${t.getMessage}")
-      }
+
     }
   )
 
@@ -65,7 +65,7 @@ class DatabasesController @Inject() (val repository: Repository) extends Abstrac
 
           case JsNull => Left(Json.obj("error" -> "Received empty request body (null json)."))
           case js: JsValue => js.validate(Formats.CollectionReadsForJsonTable).fold(
-            invalid = errs => Left(JsError.toFlatJson(errs)),
+            invalid = errs => Left(JsError.toJson(errs)),
             valid = v => Right(v)
           )
           case _ => Left(Json.obj("error" -> "Received no request body."))
@@ -75,7 +75,7 @@ class DatabasesController @Inject() (val repository: Repository) extends Abstrac
           repository.createCollection(db, col, metadata).map(_ => Created(s"$db/$col ")).recover {
             case ex: DatabaseNotFoundException => NotFound(s"No database $db")
             case ex: CollectionAlreadyExistsException => Conflict(s"Collection $db/$col already exists.")
-            case ex: Throwable => InternalServerError(s"${Utils.withError(s"${ex}") { ex.getMessage }}")
+            case ex: Throwable => InternalServerError(s"${Utils.withError(s"$ex") { ex.getMessage }}")
           }
         }
 
@@ -93,7 +93,7 @@ class DatabasesController @Inject() (val repository: Repository) extends Abstrac
       {
         import Utils._
         (for {
-          js <- request.body.asJson.future(new InvalidRequestException(s"Empty or Invalid JsonRequest body"))
+          js <- request.body.asJson.future(InvalidRequestException(s"Empty or Invalid JsonRequest body"))
           metadata <- js.validate(Formats.CollectionReadsForRegisteredTable).future
           _ <- repository.registerCollection(db, metadata.name, metadata)
         } yield Created(s"db/${metadata.name}")).recover {
