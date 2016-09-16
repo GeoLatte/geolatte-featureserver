@@ -3,20 +3,18 @@ package controllers
 import javax.inject.Inject
 
 import Exceptions._
-import akka.stream.scaladsl.{ JsonFraming, Keep, Sink }
+import akka.stream.scaladsl.{JsonFraming, Keep, Sink}
 import config.AppExecutionContexts
-import persistence.{ FeatureWriter, Repository }
+import persistence.querylang.{BooleanExpr, QueryParser}
+import persistence.{FeatureWriter, Repository}
 import play.api.libs.json._
-import play.api.mvc._
-import persistence.querylang.{ BooleanExpr, QueryParser }
 import play.api.libs.streams.Accumulator
+import play.api.mvc._
 import utilities.Utils
 
-import scala.concurrent.{ ExecutionContext, Future }
+import scala.concurrent.Future
 import scala.reflect.ClassTag
-import scala.util.{ Failure, Success, Try }
-
-//TODO -- this should use repository, rather than directly perform updates
+import scala.util.{Failure, Success, Try}
 
 /**
  * @author Karel Maesen, Geovise BVBA
@@ -102,6 +100,7 @@ class TxController @Inject() (val repository: Repository) extends FeatureServerC
   private def bodyParser(writer: FeatureWriter, sep: String) = BodyParser("GeoJSON feature BodyParser") { request =>
     {
       //TODO -- the "magic" numbers should be documented and configurable.
+      //TODO -- Better to refactor FeatureWriter to a Sink, and have factory method for that Sink in the Repository
       val flow = JsonFraming.objectScanner(1024 * 1024)
         .map(_.utf8String)
         .map(s => Utils.withInfo(s"seen: $s") { s })
@@ -116,4 +115,5 @@ class TxController @Inject() (val repository: Repository) extends FeatureServerC
   }
 
 }
+
 
