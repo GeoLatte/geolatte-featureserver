@@ -2,7 +2,7 @@ package controllers
 
 import javax.inject.Inject
 
-import featureserver.{ Metadata, Repository }
+import persistence.{ Metadata, Repository }
 import play.api.mvc._
 import play.api.libs.json._
 
@@ -15,7 +15,7 @@ import utilities.Utils
  * @author Karel Maesen, Geovise BVBA
  *         creation-date: 7/22/13
  */
-class DatabasesController @Inject() (val repository: Repository) extends AbstractFeatureServerController {
+class DatabasesController @Inject() (val repository: Repository) extends FeatureServerController {
 
   import config.AppExecutionContexts.streamContext
 

@@ -1,7 +1,7 @@
-package featureserver.json
+package persistence.json
 
 import controllers.Formats
-import featureserver.Metadata
+import persistence.Metadata
 import org.specs2.mutable.Specification
 import play.api.libs.json.Json
 

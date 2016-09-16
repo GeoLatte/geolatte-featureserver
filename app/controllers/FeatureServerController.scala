@@ -1,7 +1,7 @@
 package controllers
 
 import Exceptions._
-import featureserver._
+import persistence._
 import play.Logger
 import play.api.mvc._
 
@@ -21,7 +21,7 @@ object RepositoryAction {
 
 }
 
-trait AbstractFeatureServerController extends Controller with FutureInstrumented {
+trait FeatureServerController extends Controller with FutureInstrumented {
 
   def repository: Repository
 

@@ -1,14 +1,14 @@
-package featureserver.mongodb
+package persistence.mongodb
 
 import akka.util.ByteString
-import featureserver.FeatureWriter
+import persistence.FeatureWriter
 import org.specs2.mutable.Specification
 import play.api.libs.iteratee._
 
 import scala.concurrent.{ Await, Future }
 import scala.concurrent.duration.Duration
 import play.api.libs.json.JsObject
-import featureserver.json.Gen
+import persistence.json.Gen
 import org.geolatte.geom.Envelope
 import utilities.ReactiveGeoJson
 

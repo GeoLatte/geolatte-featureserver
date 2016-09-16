@@ -1,4 +1,4 @@
-package featureserver.postgresql
+package persistence.postgresql
 
 import play.api.Logger
 

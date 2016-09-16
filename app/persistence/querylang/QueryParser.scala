@@ -1,4 +1,4 @@
-package querylang
+package persistence.querylang
 
 import org.parboiled2._
 import scala.util.{ Try, Success, Failure }

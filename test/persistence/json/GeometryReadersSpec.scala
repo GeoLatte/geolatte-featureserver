@@ -1,8 +1,8 @@
-package featureserver.json
+package persistence.json
 
 import org.specs2.mutable.Specification
 import play.api.libs.json._
-import featureserver.json.GeometryReaders._
+import utilities.GeometryReaders._
 import org.geolatte.geom.builder.DSL._
 import org.geolatte.geom._
 import org.geolatte.geom.crs.CrsId

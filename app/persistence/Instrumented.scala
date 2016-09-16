@@ -1,4 +1,4 @@
-package featureserver
+package persistence
 
 import scala.concurrent.{ ExecutionContext, Future }
 import java.util.concurrent.TimeUnit

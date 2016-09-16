@@ -4,10 +4,10 @@ import javax.inject.Inject
 
 import Exceptions._
 import config.AppExecutionContexts
-import featureserver.Repository
+import persistence.Repository
 import play.api.libs.json._
 import play.api.mvc._
-import querylang.{ BooleanExpr, QueryParser }
+import persistence.querylang.{ BooleanExpr, QueryParser }
 import utilities.ReactiveGeoJson
 import utilities.ReactiveGeoJson.State
 
@@ -21,7 +21,7 @@ import scala.util.{ Failure, Success, Try }
  * @author Karel Maesen, Geovise BVBA
  *         creation-date: 7/25/13
  */
-class TxController @Inject() (val repository: Repository) extends AbstractFeatureServerController {
+class TxController @Inject() (val repository: Repository) extends FeatureServerController {
 
   import AppExecutionContexts.streamContext
 

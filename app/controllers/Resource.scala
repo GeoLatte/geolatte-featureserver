@@ -4,8 +4,8 @@ import Exceptions.UnsupportedMediaException
 import akka.stream.scaladsl.Source
 import akka.util.ByteString
 import config.Constants
-import featureserver.json.GeometryReaders._
-import featureserver.{ Metadata, MetadataIdentifiers }
+import utilities.GeometryReaders._
+import persistence.{ Metadata, MetadataIdentifiers }
 import org.apache.commons.codec.binary.Base64
 import org.geolatte.geom.crs.CrsId
 import org.geolatte.geom.{ Envelope, Geometry, Point }

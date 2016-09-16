@@ -1,4 +1,4 @@
-package featureserver
+package persistence
 
 import org.geolatte.geom._
 import org.geolatte.geom.curve.{ MortonCode, MortonContext }
@@ -12,7 +12,7 @@ import play.api.libs.json._
  */
 object FeatureTransformers {
 
-  import featureserver.json.GeometryReaders._
+  import utilities.GeometryReaders._
 
   /**
    * Extracts the Envelope from the GeoJson

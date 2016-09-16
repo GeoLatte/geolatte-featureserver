@@ -1,6 +1,6 @@
-package featureserver.postgresql
+package persistence.postgresql
 
-import featureserver.{ FeatureTransformers, FeatureWriter, Metadata, Repository }
+import persistence.{ FeatureTransformers, FeatureWriter, Metadata, Repository }
 import org.geolatte.geom.Polygon
 import play.api.Logger
 import play.api.libs.json.{ JsObject, Reads }

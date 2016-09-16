@@ -1,7 +1,7 @@
-package featureserver.json
+package persistence.json
 
-import featureserver.json.Gen._
-import featureserver.{ FeatureTransformers, Metadata }
+import persistence.json.Gen._
+import persistence.{ FeatureTransformers, Metadata }
 import org.geolatte.geom.DimensionalFlag._
 import org.geolatte.geom._
 import org.geolatte.geom.crs.CrsId

@@ -9,7 +9,7 @@ import akka.pattern.ask
 import com.monsanto.arch.kamon.prometheus.metric.{ MetricFamily, TextFormat => KamonPrometheusTextFormat }
 import io.prometheus.client.CollectorRegistry
 import io.prometheus.client.exporter.common.{ TextFormat => PrometheusTextFormat }
-import featureserver.{ FutureInstrumented, Repository }
+import persistence.{ FutureInstrumented, Repository }
 import utilities.Utils._
 import play.api.mvc._
 

@@ -52,25 +52,25 @@ class SupportedMediaTypeSpec extends Specification {
   }
 
   "The VersionAwareAccepting " should {
-    satisfySpec("application/vnd.geolatte-featureserver+json", "1.0", Some(Format.JSON -> Version.v1_0))
-    satisfySpec("application/vnd.geolatte-featureserver+json", null, Some(Format.JSON -> Version.v1_0))
+    satisfySpec("application/vnd.geolatte-persistence+json", "1.0", Some(Format.JSON -> Version.v1_0))
+    satisfySpec("application/vnd.geolatte-persistence+json", null, Some(Format.JSON -> Version.v1_0))
     satisfySpec("application/json", null, Some(Format.JSON -> Version.v1_0))
     satisfySpec("application/json", "1.0", Some(Format.JSON -> Version.v1_0))
-    satisfySpec("application/vnd.geolatte-featureserver+csv", "1.0", Some(Format.CSV -> Version.v1_0))
-    satisfySpec("application/vnd.geolatte-featureserver+csv", null, Some(Format.CSV -> Version.v1_0))
+    satisfySpec("application/vnd.geolatte-persistence+csv", "1.0", Some(Format.CSV -> Version.v1_0))
+    satisfySpec("application/vnd.geolatte-persistence+csv", null, Some(Format.CSV -> Version.v1_0))
 
     satisfySpec("application/text", "1.0", None)
     satisfySpec("application/text", null, None)
 
-    satisfySpec("application/vnd.geolatte-featureserver+json", "1.1", None)
-    satisfySpec("application/vnd.geolatte-featureserver+csv", "1.1", None)
-    satisfySpec("application/vnd.geolatte-featureserver+txt", "1.0", None)
-    satisfySpec("application/vnd.geolatte-featureserver+txt", null, None)
+    satisfySpec("application/vnd.geolatte-persistence+json", "1.1", None)
+    satisfySpec("application/vnd.geolatte-persistence+csv", "1.1", None)
+    satisfySpec("application/vnd.geolatte-persistence+txt", "1.0", None)
+    satisfySpec("application/vnd.geolatte-persistence+txt", null, None)
 
     satisfySpec("*/*", null, Some(Format.JSON -> Version.v1_0))
     satisfySpec("application/*", null, Some(Format.JSON -> Version.v1_0))
 
-    satisfySpec("application/vnd.geolatte-featureserver+json", Version.stringify(Version.default), Some(Format.JSON -> Version.default))
+    satisfySpec("application/vnd.geolatte-persistence+json", Version.stringify(Version.default), Some(Format.JSON -> Version.default))
 
   }
 

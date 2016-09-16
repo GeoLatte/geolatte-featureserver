@@ -1,4 +1,4 @@
-package querylang
+package persistence.querylang
 
 /**
  * Renders a Boolean expression to a repository specific query object

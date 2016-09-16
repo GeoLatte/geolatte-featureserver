@@ -1,19 +1,18 @@
-package featureserver.postgresql
+package persistence.postgresql
 
 import javax.inject._
 
 import Exceptions._
 import config.AppExecutionContexts
 import controllers.{ Formats, IndexDef }
-import featureserver._
-import featureserver.json.GeometryReaders
+import persistence._
 import org.geolatte.geom.codec.{ Wkb, Wkt }
 import org.geolatte.geom.{ ByteBuffer, Envelope, Geometry, Polygon }
 import org.postgresql.util.PSQLException
 import play.api.libs.iteratee.Iteratee
 import play.api.libs.json._
 import querylang.{ BooleanExpr, QueryParser }
-import utilities.{ JsonHelper, JsonUtils, Utils }
+import utilities.{ GeometryReaders, JsonHelper, JsonUtils, Utils }
 import slick.jdbc.PostgresProfile.api._
 import play.api.libs.streams.Streams
 import play.api.inject.ApplicationLifecycle

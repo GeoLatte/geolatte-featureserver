@@ -1,7 +1,7 @@
 package integration
 
-import featureserver.json.Gen
-import featureserver.json.Gen._
+import persistence.json.Gen
+import persistence.json.Gen._
 import play.api.libs.json._
 import org.geolatte.geom.Envelope
 import java.net.URLEncoder._

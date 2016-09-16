@@ -1,7 +1,7 @@
 package utilities
 
 import akka.util.ByteString
-import featureserver.FeatureWriter
+import persistence.FeatureWriter
 import play.Logger
 import play.api.libs.iteratee.Iteratee
 import play.api.libs.json.{ JsSuccess, _ }

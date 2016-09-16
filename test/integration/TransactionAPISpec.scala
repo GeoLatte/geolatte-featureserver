@@ -2,7 +2,7 @@ package integration
 
 import akka.util.ByteString
 import config.Constants
-import featureserver.json.Gen
+import persistence.json.Gen
 import org.specs2.matcher.MatchResult
 import play.api.libs.json._
 import play.api.http.Status._

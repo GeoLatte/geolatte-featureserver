@@ -1,7 +1,7 @@
-package featureserver.postgresql
+package persistence.postgresql
 
 import org.specs2.mutable.Specification
-import querylang.{ QueryParser, BooleanExpr }
+import persistence.querylang.{ QueryParser, BooleanExpr }
 
 import scala.util.Try
 

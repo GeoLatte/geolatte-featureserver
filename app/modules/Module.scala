@@ -1,8 +1,8 @@
 package modules
 
 import com.google.inject.AbstractModule
-import featureserver.Repository
-import featureserver.postgresql.PostgresqlRepository
+import persistence.Repository
+import persistence.postgresql.PostgresqlRepository
 import metrics.{ FeatureServerMetrics, Metrics }
 import play.api.{ Configuration, Environment }
 

@@ -1,11 +1,11 @@
-package featureserver.json
+package persistence.json
 
 import java.util.UUID
 
 import org.geolatte.geom._
 import play.api.libs.json._
 import play.api.libs.json.Json.JsValueWrapper
-import featureserver.json.GeometryReaders._
+import utilities.GeometryReaders._
 import org.geolatte.geom.curve.MortonCode
 import scala.reflect.ClassTag
 import scala.util.Random

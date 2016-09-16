@@ -1,4 +1,4 @@
-package querylang
+package persistence.querylang
 
 import org.specs2.mutable.Specification
 

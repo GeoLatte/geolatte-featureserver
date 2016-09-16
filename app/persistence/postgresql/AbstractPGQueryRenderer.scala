@@ -1,6 +1,6 @@
-package featureserver.postgresql
+package persistence.postgresql
 
-import querylang.{ GTE, LTE, _ }
+import persistence.querylang.{ GTE, LTE, _ }
 
 /**
  * Created by Karel Maesen, Geovise BVBA on 16/04/16.

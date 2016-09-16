@@ -8,7 +8,7 @@ object SupportedMediaTypes {
 
   object mediaSubType {
 
-    private val mediaTypeSubTypePrefix = "vnd.geolatte-featureserver+"
+    private val mediaTypeSubTypePrefix = "vnd.geolatte-persistence+"
 
     val supported: Set[String] = (
       for { f <- Format.values } yield mediaTypeSubTypePrefix + Format.stringify(f)

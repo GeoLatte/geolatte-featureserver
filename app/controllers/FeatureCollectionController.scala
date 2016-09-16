@@ -4,8 +4,8 @@ import javax.inject.Inject
 
 import Exceptions._
 import config.AppExecutionContexts
-import featureserver._
-import featureserver.json.GeometryReaders._
+import persistence._
+import utilities.GeometryReaders._
 import org.geolatte.geom.crs.CrsId
 import org.geolatte.geom.{ Envelope, Geometry, Point }
 import org.supercsv.encoder.DefaultCsvEncoder
@@ -23,7 +23,7 @@ import scala.concurrent.Future
 import scala.language.{ implicitConversions, reflectiveCalls }
 import scala.util.{ Failure, Success, Try }
 
-class FeatureCollectionController @Inject() (val repository: Repository) extends AbstractFeatureServerController with FutureInstrumented {
+class FeatureCollectionController @Inject() (val repository: Repository) extends FeatureServerController with FutureInstrumented {
 
   import AppExecutionContexts.streamContext
   import config.Constants._
