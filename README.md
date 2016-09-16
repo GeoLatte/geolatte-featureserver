@@ -1,6 +1,6 @@
 FeatureServer provides a REST API for reading and writing spatial features from a Postgresql database.
 
-The REST API is documented in the service catalog, published [here](http://geolatte.github.io/geolatte-nosql/service-catalog.html).
+The REST API is documented in the service catalog, published [here](http://geolatte.github.io/geolatte-featureserver/service-catalog.html).
 
 Currently only Postgresql 9.3 and higher are supported.
 
