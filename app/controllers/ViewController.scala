@@ -41,8 +41,7 @@ class ViewController @Inject() (val repository: Repository) extends FeatureServe
   def list(db: String, collection: String) = RepositoryAction {
     implicit req =>
       {
-        implicit val qstr = req.queryString
-        QueryParams.NAME.extract.map(name =>
+        QueryParams.NAME.value.map(name =>
           repository.getView(db, collection, name)
             .map(viewDef2Result(db, collection))).orElse {
           Some(

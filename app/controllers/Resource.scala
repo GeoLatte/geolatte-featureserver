@@ -13,7 +13,7 @@ import org.supercsv.encoder.DefaultCsvEncoder
 import org.supercsv.prefs.CsvPreference
 import org.supercsv.util.CsvContext
 import play.api.data.validation.ValidationError
-import play.api.http.Writeable
+import play.api.http.{ MediaType, Writeable }
 import play.api.libs.functional.syntax._
 import play.api.libs.iteratee.{ Enumerator, Input }
 import play.api.libs.json.Reads._
@@ -33,13 +33,21 @@ trait AsSource[A] {
 
 object ResourceWriteables {
 
+  def getFormat(req: RequestHeader): (Constants.Format.Value, MediaType) = {
+    val (fmt, version) = req match {
+      case SupportedMediaTypes(f, ve) => (f, ve)
+      case _ => (Constants.Format.JSON, Constants.Version.default)
+    }
+    val ctype = SupportedMediaTypes(fmt, version)
+    (fmt, ctype)
+  }
+
   def mkJsonWriteable[R <: Resource](toJson: R => JsValue)(implicit req: RequestHeader): Writeable[R] = {
-    val ct = RequestContext(req)
-    val (ctype, fmt) = ct.mediaType
+    val (fmt, ctype) = getFormat(req)
     fmt match {
       case Constants.Format.JSON =>
         Writeable(r => ByteString.fromString(Json.stringify(toJson(r))), Some(ctype.toString))
-      case _ => throw UnsupportedMediaException("No supported media type: " + ct.request.acceptedTypes.mkString(";"))
+      case _ => throw UnsupportedMediaException("No supported media type: " + req.acceptedTypes.mkString(";"))
     }
   }
 
@@ -63,10 +71,9 @@ object ResourceWriteables {
    * @param req the request header
    * @return
    */
-  def mkCsVWriteable(implicit req: RequestHeader): Writeable[JsObject] = {
-    implicit val ct = RequestContext(req)
+  def mkCsVWriteable(implicit req: RequestHeader, sepOpt: Option[String] = None): Writeable[JsObject] = {
     val encoder = new DefaultCsvEncoder()
-
+    val sep = sepOpt.getOrElse(config.Constants.separator)
     val cc = new CsvContext(0, 0, 0)
 
     def encode(v: JsString) = "\"" + encoder.encode(v.value, cc, CsvPreference.STANDARD_PREFERENCE).replaceAll("\n", "")
@@ -90,9 +97,6 @@ object ResourceWriteables {
       selector(idOpt) +: geom +: attributes
     }
 
-    implicit val queryStr = req.queryString
-    val sep = ct.sep
-
     val toCsvRecord = (js: JsValue) => project(js)({
       case (k, v) => v
       case _ => "None"
@@ -114,10 +118,10 @@ object ResourceWriteables {
     Writeable((js: JsValue) => toCsv(js))
   }
 
-  def selectWriteable(ct: RequestContext): (Writeable[JsObject], String) = {
-    val (mediaType, fmt) = ct.mediaType
+  def selectWriteable(req: RequestHeader, sep: Option[String] = None): (Writeable[JsObject], String) = {
+    val (fmt, mediaType) = getFormat(req)
     fmt match {
-      case Constants.Format.CSV => (mkCsVWriteable(ct.request), mediaType.toString)
+      case Constants.Format.CSV => (mkCsVWriteable(req, sep), mediaType.toString)
       case Constants.Format.JSON =>
         val jsw = implicitly[Writeable[JsValue]]
         (jsw, mediaType.toString)

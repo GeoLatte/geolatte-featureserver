@@ -81,7 +81,7 @@ class QueryController @Inject() (val repository: Repository) extends FeatureServ
     intersectionGeometryWkt: Option[String]
   )
 
-  private def extractFeatureCollectionRequest(request: Request[AnyContent]) = {
+  private def extractFeatureCollectionRequest(implicit request: Request[AnyContent]) = {
 
     implicit val queryString: Map[String, Seq[String]] = request.queryString
     //TODO -- why is this not a query parameter
@@ -90,16 +90,16 @@ class QueryController @Inject() (val repository: Repository) extends FeatureServ
       case _ => None
     }
 
-    val bbox = QueryParams.BBOX.extract
-    val query = QueryParams.QUERY.extract
-    val projection = QueryParams.PROJECTION.extract.map(_.as[List[String]]).getOrElse(List())
-    val withView = QueryParams.WITH_VIEW.extract
+    val bbox = QueryParams.BBOX.value
+    val query = QueryParams.QUERY.value
+    val projection = QueryParams.PROJECTION.value.map(_.as[List[String]]).getOrElse(List())
+    val withView = QueryParams.WITH_VIEW.value
 
-    val sort = QueryParams.SORT.extract.map(_.as[List[String]]).getOrElse(List())
-    val sortDir = QueryParams.SORTDIR.extract.map(_.as[List[String]]).getOrElse(List())
+    val sort = QueryParams.SORT.value.map(_.as[List[String]]).getOrElse(List())
+    val sortDir = QueryParams.SORTDIR.value.map(_.as[List[String]]).getOrElse(List())
 
-    val start = QueryParams.START.extract.getOrElse(0)
-    val limit = QueryParams.LIMIT.extract
+    val start = QueryParams.START.value.getOrElse(0)
+    val limit = QueryParams.LIMIT.value
 
     FeatureCollectionRequest(bbox, query, projection, withView, sort, sortDir, start, limit, intersectionGeometryWkt)
   }
@@ -110,14 +110,12 @@ class QueryController @Inject() (val repository: Repository) extends FeatureServ
 
         implicit val queryStr = request.queryString
 
-        implicit val format = QueryParams.FMT.extract
-        implicit val filename = QueryParams.FILENAME.extract
-
-        val ct = RequestContext(request, format, filename)
+        implicit val format = QueryParams.FMT.value
+        implicit val filename = QueryParams.FILENAME.value
 
         featuresToResult(db, collection, request) {
           case (optTotal, features) => {
-            val (writeable, contentType) = ResourceWriteables.selectWriteable(ct)
+            val (writeable, contentType) = ResourceWriteables.selectWriteable(request, QueryParams.SEP.value)
             val result = Ok.chunked(FeatureStream(optTotal, features).asSource(writeable)).as(contentType)
             filename match {
               case Some(fn) => result.withHeaders(headers = ("content-disposition", s"attachment; filename=$fn"))
@@ -149,14 +147,13 @@ class QueryController @Inject() (val repository: Repository) extends FeatureServ
         Logger.info(s"Downloading $db/$collection.")
         implicit val queryStr = request.queryString
 
-        implicit val format = QueryParams.FMT.extract
-        implicit val filename = QueryParams.FILENAME.extract
-        val ct = RequestContext(request, format, filename)
+        implicit val format = QueryParams.FMT.value
+        implicit val filename = QueryParams.FILENAME.value
         (for {
           md <- repository.metadata(db, collection)
           (optTotal, features) <- repository.query(db, collection, SpatialQuery(metadata = md))
         } yield {
-          val (writeable, contentType) = ResourceWriteables.selectWriteable(ct)
+          val (writeable, contentType) = ResourceWriteables.selectWriteable(request, QueryParams.SEP.value)
           val result = Ok.chunked(FeatureStream(optTotal, features).asSource(writeable)).as(contentType)
           filename match {
             case Some(fn) => result.withHeaders(headers = ("content-disposition", s"attachment; filename=$fn"))

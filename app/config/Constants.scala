@@ -32,4 +32,9 @@ object Constants {
    */
   val chunkSeparator = "\n"
 
+  /**
+   * Value separator (for CSV output)
+   */
+  val separator = ","
+
 }

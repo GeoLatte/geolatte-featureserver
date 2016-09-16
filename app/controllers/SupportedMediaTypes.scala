@@ -50,7 +50,7 @@ object SupportedMediaTypes {
 
   /**
    * Extractor that extracts format and version
-   * @param header the RequestHeader from which to extract the Accepted format and versions
+   * @param header the RequestHeader from which to value the Accepted format and versions
    * @return
    */
   def unapply(header: RequestHeader): Option[(Format.Value, Version.Value)] = header.acceptedTypes.flatMap {
