@@ -1,5 +1,6 @@
 package persistence
 
+import akka.stream.scaladsl.Source
 import controllers.IndexDef
 import utilities.GeometryReaders._
 import org.geolatte.geom.Envelope
@@ -84,7 +85,7 @@ case class SpatialQuery(
 
 trait FeatureWriter {
 
-  def add(features: Seq[JsObject]): Future[Long]
+  def add(features: Seq[JsObject]): Future[Int]
 
 }
 
@@ -99,7 +100,7 @@ trait Repository {
    * QueryResults are pair of and Optional total number of objects that are returned by the query (disregarding limit
    * and start query-params), and an enumerator for the results (respecting limit and start params.
    */
-  type CountedQueryResult = (Option[Long], Enumerator[JsObject])
+  type CountedQueryResult = (Option[Long], Source[JsObject, _])
 
   def listDatabases: Future[List[String]]
 
@@ -124,9 +125,9 @@ trait Repository {
   def query(database: String, collection: String, spatialQuery: SpatialQuery, start: Option[Int] = None,
     limit: Option[Int] = None): Future[CountedQueryResult]
 
-  def insert(database: String, collection: String, json: JsObject): Future[Boolean]
+  def insert(database: String, collection: String, json: JsObject): Future[Int]
 
-  def upsert(database: String, collection: String, json: JsObject): Future[Boolean]
+  def upsert(database: String, collection: String, json: JsObject): Future[Int]
 
   def delete(database: String, collection: String, query: BooleanExpr): Future[Boolean]
 

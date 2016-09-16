@@ -15,15 +15,9 @@ import org.supercsv.util.CsvContext
 import play.api.data.validation.ValidationError
 import play.api.http.{ MediaType, Writeable }
 import play.api.libs.functional.syntax._
-import play.api.libs.iteratee.{ Enumerator, Input }
 import play.api.libs.json.Reads._
 import play.api.libs.json._
-import play.api.libs.streams.Streams
 import play.api.mvc._
-import utilities.EnumeratorUtility.CommaSeparate
-
-import scala.concurrent.ExecutionContext.Implicits.global
-import scala.language.implicitConversions
 
 trait Resource
 
@@ -147,26 +141,24 @@ case class CollectionResource(md: Metadata) extends Resource {
   lazy val json = Json.toJson(md)(Formats.CollectionWrites)
 }
 
-case class FeaturesResource(totalOpt: Option[Long], features: Enumerator[JsObject]) extends Resource with AsSource[JsObject] {
+case class FeaturesResource(totalOpt: Option[Long], features: Source[JsObject, _]) extends Resource with AsSource[JsObject] {
+  private val end = ByteString.fromString(s"]}")
+  private val sep = ByteString.fromString(",")
 
   override def asSource(implicit writeable: Writeable[JsObject]): Source[ByteString, _] = {
     val total: Long = totalOpt.getOrElse(-1L)
-    val commaSeparate = new CommaSeparate(",")
-    val enumerator = Enumerator(ByteString(s"""{ "total": $total, "features": [""")) >>>
-      (features.map(writeable.transform) &> commaSeparate) >>>
-      Enumerator(ByteString("]}"))
-    Source.fromPublisher(Streams.enumeratorToPublisher(enumerator))
+    val start = ByteString.fromString(s"""{"total": $total, "features": [""")
+    features.map(writeable.transform).intersperse(start, sep, end)
   }
 }
 
-case class FeatureStream(totalOpt: Option[Long], features: Enumerator[JsObject]) extends Resource with AsSource[JsObject] {
+case class FeatureStream(totalOpt: Option[Long], features: Source[JsObject, _]) extends Resource with AsSource[JsObject] {
 
   override def asSource(implicit writeable: Writeable[JsObject]): Source[ByteString, _] = {
-    val finalSeparatorEnumerator = Enumerator.enumerate(List(ByteString(config.Constants.chunkSeparator)))
-    val commaSeparate = new CommaSeparate(config.Constants.chunkSeparator)
-    val jsons = features.map(writeable.transform) &> commaSeparate
-    val enumerator = jsons andThen finalSeparatorEnumerator andThen Enumerator.enumInput(Input.EOF)
-    Source.fromPublisher(Streams.enumeratorToPublisher(enumerator))
+    val chunkSep = ByteString.fromString(config.Constants.chunkSeparator)
+    val finalSeparator = Source.single(chunkSep)
+    val jsons = features.map(writeable.transform).intersperse(chunkSep)
+    jsons.concat(finalSeparator)
   }
 
 }

@@ -24,7 +24,7 @@ case class PGWriter(repo: PostgresqlRepository, db: String, collection: String) 
     )
   }
 
-  override def add(features: Seq[JsObject]): Future[Long] =
+  override def add(features: Seq[JsObject]): Future[Int] =
     if (features.isEmpty) Future.successful(0)
     else {
       reads.flatMap {
@@ -34,16 +34,16 @@ case class PGWriter(repo: PostgresqlRepository, db: String, collection: String) 
           } collect {
             case (Some(f), Some(env)) => (f, env)
           }
-          val fLng = repo.batchInsert(db, collection, docs)
-          fLng.onSuccess {
+          val fInt = repo.batchInsert(db, collection, docs)
+          fInt.onSuccess {
             case num => Logger.debug(s"Successfully inserted $num features")
           }
-          fLng.recover {
+          fInt.recover {
             case t: Throwable =>
               Logger.warn(s"Insert failed with error: ${t.getMessage}")
               0l
           }
-          fLng
+          fInt
       }
     }
 

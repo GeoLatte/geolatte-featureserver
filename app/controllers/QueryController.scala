@@ -3,6 +3,7 @@ package controllers
 import javax.inject.Inject
 
 import Exceptions._
+import akka.stream.scaladsl.Source
 import config.AppExecutionContexts
 import org.geolatte.geom.Envelope
 import org.geolatte.geom.crs.CrsId
@@ -128,7 +129,7 @@ class QueryController @Inject() (val repository: Repository) extends FeatureServ
     }
   )
 
-  def featuresToResult(db: String, collection: String, request: Request[AnyContent])(toResult: ((Option[Long], Enumerator[JsObject])) => Result): Future[Result] = {
+  def featuresToResult(db: String, collection: String, request: Request[AnyContent])(toResult: ((Option[Long], Source[JsObject, _])) => Result): Future[Result] = {
 
     val fResult = for {
       md <- repository.metadata(db, collection)
@@ -140,7 +141,7 @@ class QueryController @Inject() (val repository: Repository) extends FeatureServ
     fResult.recover(commonExceptionHandler(db, collection))
   }
 
-  private def doQuery(db: String, collection: String, smd: Metadata, request: FeatureCollectionRequest): Future[(Option[Long], Enumerator[JsObject])] = {
+  private def doQuery(db: String, collection: String, smd: Metadata, request: FeatureCollectionRequest): Future[(Option[Long], Source[JsObject, _])] = {
 
     val window = Bbox(request.bbox.getOrElse(""), smd.envelope.getCrsId)
 
