@@ -16,7 +16,7 @@ class DatabaseAPISpec extends FeatureServerSpecification {
 
     The /api/databases should return
       an array of databases                             ${e1}
-      with content-type                                 ${e2("application/vnd.geolatte-persistence+json")}
+      with content-type                                 ${e2("application/vnd.geolatte-featureserver+json")}
       CREATED on PUT of a database                      ${e3}
       CONFLICT on attempt to create twice               ${e4}
       array containing the name of db after create      ${e5}
