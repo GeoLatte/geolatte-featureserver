@@ -4,24 +4,18 @@ import javax.inject.Inject
 
 import Exceptions._
 import config.AppExecutionContexts
-import persistence._
-import utilities.GeometryReaders._
+import org.geolatte.geom.Envelope
 import org.geolatte.geom.crs.CrsId
-import org.geolatte.geom.{ Envelope, Geometry, Point }
-import org.supercsv.encoder.DefaultCsvEncoder
-import org.supercsv.prefs.CsvPreference
-import org.supercsv.util.CsvContext
+import persistence._
+import persistence.querylang.{ BooleanAnd, BooleanExpr, QueryParser }
 import play.api.Logger
 import play.api.libs.iteratee._
-import play.api.libs.json.{ JsBoolean, JsNumber, JsString, _ }
+import play.api.libs.json.{ JsString, _ }
 import play.api.mvc._
-import querylang.{ BooleanAnd, BooleanExpr, QueryParser }
-import utilities.{ EnumeratorUtility, Utils }
 
-import scala.collection.mutable.ListBuffer
 import scala.concurrent.Future
 import scala.language.{ implicitConversions, reflectiveCalls }
-import scala.util.{ Failure, Success, Try }
+import scala.util.{ Failure, Success }
 
 class QueryController @Inject() (val repository: Repository) extends FeatureServerController with FutureInstrumented {
 
@@ -173,78 +167,6 @@ class QueryController @Inject() (val repository: Repository) extends FeatureServ
         }
       }
   }
-
-  def collectFeatures: Iteratee[JsObject, ListBuffer[JsObject]] =
-    Iteratee.fold[JsObject, ListBuffer[JsObject]](ListBuffer[JsObject]())((state, feature) => {
-      state.append(feature)
-      state
-    })
-
-  /**
-   * converts a JsObject Enumerator to an StreamingResource supporting both Json and Csv output
-   *
-   * Limitations: when the passed Json is not a valid GeoJson object, this will pass a stream of empty points
-   *
-   * @param enum enumerator
-   * @param req  requestHeader
-   * @return
-   */
-  implicit def enumJsonToResult(enum: Enumerator[JsObject])(implicit req: RequestHeader) =
-    {
-
-      val encoder = new DefaultCsvEncoder()
-
-      val cc = new CsvContext(0, 0, 0)
-
-      def encode(v: JsString) = "\"" + encoder.encode(v.value, cc, CsvPreference.STANDARD_PREFERENCE).replaceAll("\n", "")
-        .replaceAll("\r", "") + "\""
-
-      def expand(v: JsObject): Seq[(String, String)] =
-        utilities.JsonHelper.flatten(v) sortBy {
-          case (k, _) => k
-        } map {
-          case (k, v: JsString) => (k, encode(v))
-          case (k, v: JsNumber) => (k, Json.stringify(v))
-          case (k, v: JsBoolean) => (k, Json.stringify(v))
-          case (k, _) => (k, "")
-        }
-
-      def project(js: JsObject)(selector: PartialFunction[(String, String), String], geomToString: Geometry => String): Seq[String] = {
-        val jsObj = (js \ "properties").asOpt[JsObject].getOrElse(JsObject(List()))
-        val attributes = expand(jsObj).collect(selector)
-        val geom = geomToString((js \ "geometry").asOpt(GeometryReads(CrsId.UNDEFINED)).getOrElse(Point.createEmpty()))
-        val idOpt = (js \ "id").asOpt[String].map(v => ("id", v)).getOrElse(("_id", "null"))
-        selector(idOpt) +: geom +: attributes
-      }
-
-      implicit val queryStr = req.queryString
-      val sep = QueryParams.SEP.extract.filterNot(_.isEmpty).getOrElse(",")
-
-      val toCsvRecord = (js: JsObject) => project(js)({
-        case (k, v) => v
-        case _ => "None"
-      }, g => s""""${g.asText}"""").mkString(sep)
-
-      val toCsvHeader = (js: JsObject) => project(js)({
-        case (k, v) => k
-        case _ => "None"
-      }, _ => "geometry-wkt").mkString(sep)
-
-      val toCsv: (Int, JsObject) => String = (i, js) => Try {
-        if (i != 0) toCsvRecord(js)
-        else toCsvHeader(js) + "\n" + toCsvRecord(js)
-      } match {
-        case Success(v) => v
-        case Failure(t) =>
-          Utils.withError(s"Failure to encode $js in CSV. Message is: ")("")
-      }
-
-      def toJsonStream = enum
-
-      def toCsvStream: Enumerator[String] = EnumeratorUtility.withIndex(enum).map[String](toCsv.tupled)
-        .through(Enumeratee.filterNot(_.isEmpty))
-
-    }
 
   private def doQuery(db: String, collection: String, smd: Metadata, request: FeatureCollectionRequest): Future[(Option[Long], Enumerator[JsObject])] = {
 
