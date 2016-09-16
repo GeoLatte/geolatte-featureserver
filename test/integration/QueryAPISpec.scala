@@ -16,7 +16,7 @@ class QueryAPISpec extends InCollectionSpecification {
 
   def is = s2"""
 
-      The FeatureCollection /download should:
+      The FeatureCollection /query should:
         return 404 when the collection does not exist                              $e1
         return all elements when the collection does exist                         $e2
 
@@ -65,12 +65,12 @@ class QueryAPISpec extends InCollectionSpecification {
   def geoJsonFeatureGenerator(mc: String = "") = Gen.geoJsonFeature(idGen, lineStringGenerator(mc), nestedPropertyGenerator)
   def gjFeatureArrayGenerator(mc: String = "", size: Int = 10) = Gen.geoJsonFeatureArray(geoJsonFeatureGenerator(mc), size)
 
-  def e1 = getDownload(testDbName, "nonExistingCollection").applyMatcher(_.status must equalTo(NOT_FOUND))
+  def e1 = getQuery(testDbName, "nonExistingCollection", "")(contentAsJsonStream).applyMatcher(_.status must equalTo(NOT_FOUND))
 
   def e2 = {
     val features = gjFeatureArrayGenerator(size = 1).sample.get
     withFeatures(testDbName, testColName, features) {
-      getDownload(testDbName, testColName).applyMatcher(
+      getQuery(testDbName, testColName, "")(contentAsJsonStream).applyMatcher(
         res => (res.status must equalTo(OK)) and (res.responseBody must beSomeFeatures(features))
       )
     }

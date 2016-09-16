@@ -26,8 +26,6 @@ POST /api/databases/:db/:collection/tx/upsert           controllers.TxController
 
 GET /api/databases/:db/:collection/query                controllers.QueryController.query(db: String, collection: String)
 GET /api/databases/:db/:collection/featurecollection    controllers.QueryController.list(db: String, collection: String)
-GET /api/databases/:db/:collection/download             controllers.QueryController.download(db: String, collection: String)
-
 POST /api/databases/:db/:collection/query               controllers.QueryController.query(db: String, collection: String)
 POST /api/databases/:db/:collection/featurecollection   controllers.QueryController.list(db: String, collection: String)
 

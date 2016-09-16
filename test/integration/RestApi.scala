@@ -157,12 +157,6 @@ trait RestApiDriver {
     FakeRequestResult.DELETE(url)
   }
 
-  def getDownload(dbName: String, colName: String) = {
-    Logger.info("Start download Collection")
-    val url = DATABASES / dbName / colName / DOWNLOAD
-    FakeRequestResult.GET(url, contentAsJsonStream)
-  }
-
   def getQuery[T: TypeTag](dbName: String, colName: String, queryStr: String)(format: Future[Result] => T) = {
     Logger.info("Start Collection Query with QUERY parameter: " + queryStr)
     val url = DATABASES / dbName / colName / QUERY ? queryStr

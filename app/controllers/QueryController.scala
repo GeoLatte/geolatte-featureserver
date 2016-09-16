@@ -104,26 +104,21 @@ class QueryController @Inject() (val repository: Repository) extends FeatureServ
     FeatureCollectionRequest(bbox, query, projection, withView, sort, sortDir, start, limit, intersectionGeometryWkt)
   }
 
-  def query(db: String, collection: String) =
-    RepositoryAction(implicit request =>
-      futureTimed("featurecollection-query") {
+  def query(db: String, collection: String) = RepositoryAction { implicit request =>
+    implicit val format = QueryParams.FMT.value
+    implicit val filename = QueryParams.FILENAME.value
 
-        implicit val queryStr = request.queryString
-
-        implicit val format = QueryParams.FMT.value
-        implicit val filename = QueryParams.FILENAME.value
-
-        featuresToResult(db, collection, request) {
-          case (optTotal, features) => {
-            val (writeable, contentType) = ResourceWriteables.selectWriteable(request, QueryParams.SEP.value)
-            val result = Ok.chunked(FeatureStream(optTotal, features).asSource(writeable)).as(contentType)
-            filename match {
-              case Some(fn) => result.withHeaders(headers = ("content-disposition", s"attachment; filename=$fn"))
-              case _ => result
-            }
-          }
+    featuresToResult(db, collection, request) {
+      case (optTotal, features) => {
+        val (writeable, contentType) = ResourceWriteables.selectWriteable(request, QueryParams.SEP.value)
+        val result = Ok.chunked(FeatureStream(optTotal, features).asSource(writeable)).as(contentType)
+        filename match {
+          case Some(fn) => result.withHeaders(headers = ("content-disposition", s"attachment; filename=$fn"))
+          case _ => result
         }
-      })
+      }
+    }
+  }
 
   def list(db: String, collection: String) = RepositoryAction(
     implicit request => futureTimed("featurecollection-list") {
@@ -134,35 +129,15 @@ class QueryController @Inject() (val repository: Repository) extends FeatureServ
   )
 
   def featuresToResult(db: String, collection: String, request: Request[AnyContent])(toResult: ((Option[Long], Enumerator[JsObject])) => Result): Future[Result] = {
-    repository.metadata(db, collection).flatMap(md => {
-      val featureCollectionRequest = extractFeatureCollectionRequest(request)
-      Logger.debug(s"Query $featureCollectionRequest on $db, collection $collection")
-      doQuery(db, collection, md, featureCollectionRequest).map[Result] { toResult }
-    }).recover(commonExceptionHandler(db, collection))
-  }
 
-  def download(db: String, collection: String) = RepositoryAction {
-    implicit request =>
-      {
-        Logger.info(s"Downloading $db/$collection.")
-        implicit val queryStr = request.queryString
+    val fResult = for {
+      md <- repository.metadata(db, collection)
+      featureCollectionRequest = extractFeatureCollectionRequest(request)
+      _ = Logger.debug(s"Query $featureCollectionRequest on $db, collection $collection")
+      result <- doQuery(db, collection, md, featureCollectionRequest).map[Result] { toResult }
+    } yield result
 
-        implicit val format = QueryParams.FMT.value
-        implicit val filename = QueryParams.FILENAME.value
-        (for {
-          md <- repository.metadata(db, collection)
-          (optTotal, features) <- repository.query(db, collection, SpatialQuery(metadata = md))
-        } yield {
-          val (writeable, contentType) = ResourceWriteables.selectWriteable(request, QueryParams.SEP.value)
-          val result = Ok.chunked(FeatureStream(optTotal, features).asSource(writeable)).as(contentType)
-          filename match {
-            case Some(fn) => result.withHeaders(headers = ("content-disposition", s"attachment; filename=$fn"))
-            case _ => result
-          }
-        }).recover {
-          commonExceptionHandler(db, collection)
-        }
-      }
+    fResult.recover(commonExceptionHandler(db, collection))
   }
 
   private def doQuery(db: String, collection: String, smd: Metadata, request: FeatureCollectionRequest): Future[(Option[Long], Enumerator[JsObject])] = {
