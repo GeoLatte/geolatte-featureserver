@@ -3,15 +3,16 @@ package controllers
 import javax.inject.Inject
 
 import Exceptions._
+import akka.stream.scaladsl.{ JsonFraming, Keep, Sink }
 import config.AppExecutionContexts
-import persistence.Repository
+import persistence.{ FeatureWriter, Repository }
 import play.api.libs.json._
 import play.api.mvc._
 import persistence.querylang.{ BooleanExpr, QueryParser }
-import utilities.ReactiveGeoJson
-import utilities.ReactiveGeoJson.State
+import play.api.libs.streams.Accumulator
+import utilities.Utils
 
-import scala.concurrent.Future
+import scala.concurrent.{ ExecutionContext, Future }
 import scala.reflect.ClassTag
 import scala.util.{ Failure, Success, Try }
 
@@ -27,13 +28,8 @@ class TxController @Inject() (val repository: Repository) extends FeatureServerC
 
   def insert(db: String, col: String) = {
     val parser = mkJsonWritingBodyParser(db, col)
-    Action.async(parser) {
-      request =>
-        {
-          request.body.map(
-            state => Ok(state.warnings.mkString("\n"))
-          ).recover(commonExceptionHandler(db))
-        }
+    Action(parser) {
+      request => Ok(s"Written ${request.body} features")
     }
   }
 
@@ -98,9 +94,25 @@ class TxController @Inject() (val repository: Repository) extends FeatureServerC
    * @param col the collection to write features to
    * @return a new BodyParser
    */
-  private def mkJsonWritingBodyParser(db: String, col: String): BodyParser[Future[State]] = {
+  private def mkJsonWritingBodyParser(db: String, col: String): BodyParser[Int] = {
     val writer = repository.writer(db, col)
-    ReactiveGeoJson.bodyParser(writer, config.Constants.chunkSeparator)
+    bodyParser(writer, config.Constants.chunkSeparator)
+  }
+
+  private def bodyParser(writer: FeatureWriter, sep: String) = BodyParser("GeoJSON feature BodyParser") { request =>
+    {
+      //TODO -- the "magic" numbers should be documented and configurable.
+      val flow = JsonFraming.objectScanner(1024 * 1024)
+        .map(_.utf8String)
+        .map(s => Utils.withInfo(s"seen: $s") { s })
+        .map { str => Json.parse(str) }
+        .collect { case js: JsObject => js } //TODO -- log where there is a parse failure
+        .grouped(128)
+        .mapAsync(2)(group => writer.add(group)) //TODO -- better error-handling, using
+        .toMat(Sink.fold(0)(_ + _))(Keep.right)
+
+      Accumulator(flow).map(Right.apply)
+    }
   }
 
 }

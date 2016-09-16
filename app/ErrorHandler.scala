@@ -35,6 +35,6 @@ class ErrorHandler extends HttpErrorHandler {
       case _ => UnexpectedException(unexpected = Some(exception))
     }
     Logger.error(s"Error on request $request", useful)
-    Future.successful { InternalServerError("A server error occured: $useful") }
+    Future.successful { InternalServerError(s"A server error occured: $useful") }
   }
 }
