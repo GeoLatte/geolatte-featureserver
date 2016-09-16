@@ -16,14 +16,14 @@ import play.api.libs.iteratee._
 import play.api.libs.json.{ JsBoolean, JsNumber, JsString, _ }
 import play.api.mvc._
 import querylang.{ BooleanAnd, BooleanExpr, QueryParser }
-import utilities.{ EnumeratorUtility, QueryParam, Utils }
+import utilities.{ EnumeratorUtility, Utils }
 
 import scala.collection.mutable.ListBuffer
 import scala.concurrent.Future
 import scala.language.{ implicitConversions, reflectiveCalls }
 import scala.util.{ Failure, Success, Try }
 
-class FeatureCollectionController @Inject() (val repository: Repository) extends FeatureServerController with FutureInstrumented {
+class QueryController @Inject() (val repository: Repository) extends FeatureServerController with FutureInstrumented {
 
   import AppExecutionContexts.streamContext
   import config.Constants._

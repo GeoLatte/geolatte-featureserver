@@ -1,9 +1,10 @@
 package utilities
 
 import config.Constants._
+import controllers.SupportedMediaTypes
 import org.specs2.mutable._
-import play.api.http.{ MediaRange, MediaType }
-import play.api.test.{ FakeHeaders, FakeRequest }
+import play.api.http.{MediaRange, MediaType}
+import play.api.test.{FakeHeaders, FakeRequest}
 
 /**
  * @author Karel Maesen, Geovise BVBA

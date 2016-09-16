@@ -54,7 +54,6 @@ class DatabasesController @Inject() (val repository: Repository) extends Feature
   def createCollection(db: String, col: String) = Action.async(BodyParsers.parse.tolerantJson) {
     implicit request =>
       {
-
         def parse(body: JsValue) = body match {
 
           case JsNull => Left(Json.obj("error" -> "Received empty request body (null json)."))

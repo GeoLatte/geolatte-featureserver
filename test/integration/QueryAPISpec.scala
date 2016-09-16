@@ -12,7 +12,7 @@ import utilities.Utils
  * @author Karel Maesen, Geovise BVBA
  *         creation-date: 11/22/13
  */
-class FeatureCollectionAPISpec extends InCollectionSpecification {
+class QueryAPISpec extends InCollectionSpecification {
 
   def is = s2"""
 

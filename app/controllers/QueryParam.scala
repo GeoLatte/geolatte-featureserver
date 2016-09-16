@@ -1,4 +1,4 @@
-package utilities
+package controllers
 
 /**
  * @author Karel Maesen, Geovise BVBA

@@ -3,7 +3,6 @@ package controllers
 import config.Constants.{ Format, Version }
 import play.api.http.MediaType
 import play.api.mvc.RequestHeader
-import utilities.{ QueryParam, SupportedMediaTypes }
 
 case class RequestContext(
     request: RequestHeader,

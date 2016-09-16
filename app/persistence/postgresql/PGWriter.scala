@@ -36,7 +36,7 @@ case class PGWriter(repo: PostgresqlRepository, db: String, collection: String) 
           }
           val fLng = repo.batchInsert(db, collection, docs)
           fLng.onSuccess {
-            case num => Logger.info(s"Successfully inserted $num features")
+            case num => Logger.debug(s"Successfully inserted $num features")
           }
           fLng.recover {
             case t: Throwable =>

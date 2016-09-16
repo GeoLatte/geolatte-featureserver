@@ -8,7 +8,7 @@ import persistence.Repository
 import play.api.Logger
 import play.api.libs.json._
 import play.api.mvc.{ BodyParsers, Result }
-import utilities.{ JsonHelper, QueryParam, SupportedMediaTypes }
+import utilities.JsonHelper
 
 import scala.concurrent.Future
 

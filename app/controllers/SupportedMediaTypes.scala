@@ -1,4 +1,4 @@
-package utilities
+package controllers
 
 import config.Constants.{ Format, Version }
 import play.api.http.MediaType
@@ -8,7 +8,7 @@ object SupportedMediaTypes {
 
   object mediaSubType {
 
-    private val mediaTypeSubTypePrefix = "vnd.geolatte-persistence+"
+    private val mediaTypeSubTypePrefix = "vnd.geolatte-featureserver+"
 
     val supported: Set[String] = (
       for { f <- Format.values } yield mediaTypeSubTypePrefix + Format.stringify(f)

@@ -6,7 +6,7 @@ if [[ -z "$1" || -z "$2"  ]]; then
 fi
 
 if [[ -z "$3" ]]; then
-    $3 = "limit=1"
+    3="limit=1"
 fi
 
 source $(dirname $0)/env.sh

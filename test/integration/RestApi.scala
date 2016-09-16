@@ -2,25 +2,25 @@ package integration
 
 import akka.actor.ActorSystem
 import akka.stream.scaladsl.Sink
-import akka.stream.{ ActorMaterializer, Materializer }
-import akka.util.{ ByteString, Timeout }
+import akka.stream.{ActorMaterializer, Materializer}
+import akka.util.{ByteString, Timeout}
 import config.Constants
+import controllers.SupportedMediaTypes
 import org.geolatte.geom._
 import org.geolatte.geom.crs.CrsId
-import org.geolatte.geom.curve.{ MortonCode, MortonContext }
+import org.geolatte.geom.curve.{MortonCode, MortonContext}
 import org.specs2.matcher._
-import play.api.{ Application, Logger }
+import play.api.{Application, Logger}
 import play.api.http._
-import play.api.inject.guice.{ GuiceApplicationBuilder, GuiceApplicationLoader }
+import play.api.inject.guice.{GuiceApplicationBuilder, GuiceApplicationLoader}
 import play.api.libs.json._
 import play.api.mvc._
 import play.api.test._
-import utilities.SupportedMediaTypes
 import utilities.Utils.withInfo
 
 import scala.collection.mutable.ListBuffer
 import scala.concurrent.duration._
-import scala.concurrent.{ Await, Future }
+import scala.concurrent.{Await, Future}
 import scala.language.implicitConversions
 
 /**
