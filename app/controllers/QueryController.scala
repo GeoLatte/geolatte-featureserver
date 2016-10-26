@@ -111,7 +111,7 @@ class QueryController @Inject() (val repository: Repository) extends FeatureServ
 
     featuresToResult(db, collection, request) {
       case (optTotal, features) => {
-        val (writeable, contentType) = ResourceWriteables.selectWriteable(request, QueryParams.SEP.value)
+        val (writeable, contentType) = ResourceWriteables.selectWriteable(request, QueryParams.FMT.value, QueryParams.SEP.value)
         val result = Ok.chunked(FeatureStream(optTotal, features).asSource(writeable)).as(contentType)
         filename match {
           case Some(fn) => result.withHeaders(headers = ("content-disposition", s"attachment; filename=$fn"))

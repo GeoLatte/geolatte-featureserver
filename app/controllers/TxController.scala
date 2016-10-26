@@ -3,10 +3,10 @@ package controllers
 import javax.inject.Inject
 
 import Exceptions._
-import akka.stream.scaladsl.{JsonFraming, Keep, Sink}
+import akka.stream.scaladsl.{ JsonFraming, Keep, Sink }
 import config.AppExecutionContexts
-import persistence.querylang.{BooleanExpr, QueryParser}
-import persistence.{FeatureWriter, Repository}
+import persistence.querylang.{ BooleanExpr, QueryParser }
+import persistence.{ FeatureWriter, Repository }
 import play.api.libs.json._
 import play.api.libs.streams.Accumulator
 import play.api.mvc._
@@ -14,7 +14,7 @@ import utilities.Utils
 
 import scala.concurrent.Future
 import scala.reflect.ClassTag
-import scala.util.{Failure, Success, Try}
+import scala.util.{ Failure, Success, Try }
 
 /**
  * @author Karel Maesen, Geovise BVBA
@@ -115,5 +115,4 @@ class TxController @Inject() (val repository: Repository) extends FeatureServerC
   }
 
 }
-
 

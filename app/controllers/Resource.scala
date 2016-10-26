@@ -18,6 +18,7 @@ import play.api.libs.functional.syntax._
 import play.api.libs.json.Reads._
 import play.api.libs.json._
 import play.api.mvc._
+import utilities.Utils
 
 trait Resource
 
@@ -27,17 +28,20 @@ trait AsSource[A] {
 
 object ResourceWriteables {
 
-  def getFormat(req: RequestHeader): (Constants.Format.Value, MediaType) = {
-    val (fmt, version) = req match {
-      case SupportedMediaTypes(f, ve) => (f, ve)
+  def getFormat(req: RequestHeader, qFmt: Option[Constants.Format.Value]): (Constants.Format.Value, MediaType) = {
+
+    val (fmt, version) = (qFmt, req) match {
+      case (Some(f), _) => (f, Constants.Version.default)
+      case (_, SupportedMediaTypes(f, ve)) => (f, ve)
       case _ => (Constants.Format.JSON, Constants.Version.default)
     }
+
     val ctype = SupportedMediaTypes(fmt, version)
     (fmt, ctype)
   }
 
   def mkJsonWriteable[R <: Resource](toJson: R => JsValue)(implicit req: RequestHeader): Writeable[R] = {
-    val (fmt, ctype) = getFormat(req)
+    val (fmt, ctype) = getFormat(req, None)
     fmt match {
       case Constants.Format.JSON =>
         Writeable(r => ByteString.fromString(Json.stringify(toJson(r))), Some(ctype.toString))
@@ -112,8 +116,8 @@ object ResourceWriteables {
     Writeable((js: JsValue) => toCsv(js))
   }
 
-  def selectWriteable(req: RequestHeader, sep: Option[String] = None): (Writeable[JsObject], String) = {
-    val (fmt, mediaType) = getFormat(req)
+  def selectWriteable(req: RequestHeader, qFmt: Option[Constants.Format.Formats], sep: Option[String] = None): (Writeable[JsObject], String) = {
+    val (fmt, mediaType) = getFormat(req, qFmt)
     fmt match {
       case Constants.Format.CSV => (mkCsVWriteable(req, sep), mediaType.toString)
       case Constants.Format.JSON =>
