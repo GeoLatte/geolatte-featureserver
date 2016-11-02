@@ -8,29 +8,28 @@ import config.AppExecutionContexts
 import org.geolatte.geom.Envelope
 import org.geolatte.geom.crs.CrsId
 import persistence._
-import persistence.querylang.{ BooleanAnd, BooleanExpr, QueryParser }
+import persistence.querylang.{BooleanAnd, BooleanExpr, QueryParser}
 import play.api.Logger
-import play.api.libs.iteratee._
-import play.api.libs.json.{ JsString, _ }
+import play.api.libs.json.{JsString, _}
 import play.api.mvc._
 
 import scala.concurrent.Future
-import scala.language.{ implicitConversions, reflectiveCalls }
-import scala.util.{ Failure, Success }
+import scala.language.{implicitConversions, reflectiveCalls}
+import scala.util.{Failure, Success}
 
-class QueryController @Inject() (val repository: Repository) extends FeatureServerController with FutureInstrumented {
+class QueryController @Inject()(val repository: Repository) extends FeatureServerController with FutureInstrumented {
 
   import AppExecutionContexts.streamContext
   import config.Constants._
 
   def parseQueryExpr(s: String): Option[BooleanExpr] = QueryParser.parse(s) match {
     case Success(expr) => Some(expr)
-    case Failure(t) => throw InvalidQueryException(t.getMessage)
+    case Failure(t)    => throw InvalidQueryException(t.getMessage)
   }
 
   def parseFormat(s: String): Option[Format.Value] = s match {
     case Format(fmt) => Some(fmt)
-    case _ => None
+    case _           => None
   }
 
   object QueryParams {
@@ -71,16 +70,54 @@ class QueryController @Inject() (val repository: Repository) extends FeatureServ
   }
 
   case class FeatureCollectionRequest(
-    bbox: Option[String],
-    query: Option[BooleanExpr],
-    projection: List[String],
-    withView: Option[String],
-    sort: List[String],
-    sortDir: List[String],
-    start: Int,
-    limit: Option[Int],
-    intersectionGeometryWkt: Option[String]
+                                       bbox: Option[String],
+                                       query: Option[BooleanExpr],
+                                       projection: List[String],
+                                       withView: Option[String],
+                                       sort: List[String],
+                                       sortDir: List[String],
+                                       start: Int,
+                                       limit: Option[Int],
+                                       intersectionGeometryWkt: Option[String],
+                                       withCount: Boolean = false
+                                     )
+
+  def query(db: String, collection: String) = RepositoryAction { implicit request =>
+    implicit val format = QueryParams.FMT.value
+    implicit val filename = QueryParams.FILENAME.value
+    val fcr = extractFeatureCollectionRequest(request)
+    featuresToResult(db, collection, fcr) {
+      case (optTotal, features) =>
+        val (writeable, contentType) = ResourceWriteables.selectWriteable(request, QueryParams.FMT.value, QueryParams.SEP.value)
+        val result = Ok.chunked(FeatureStream(optTotal, features).asSource(writeable)).as(contentType)
+        filename match {
+          case Some(fn) => result.withHeaders(headers = ("content-disposition", s"attachment; filename=$fn"))
+          case _        => result
+        }
+    }
+  }
+
+  def list(db: String, collection: String) = RepositoryAction(
+    implicit request => futureTimed("featurecollection-list") {
+      val fcr = extractFeatureCollectionRequest(request).copy(withCount = true)
+      featuresToResult(db, collection, fcr) {
+        case (optTotal, features) => Ok.chunked(FeaturesResource(optTotal, features).asSource)
+      }
+    }
   )
+
+  def featuresToResult(db: String, collection: String, featureCollectionRequest: FeatureCollectionRequest)(toResult: ((Option[Long], Source[JsObject, _])) => Result): Future[Result] = {
+
+    val fResult = for {
+      md <- repository.metadata(db, collection, withCount = false)
+      _ = Logger.debug(s"Query $featureCollectionRequest on $db, collection $collection")
+      result <- doQuery(db, collection, md, featureCollectionRequest).map[Result] {
+        toResult
+      }
+    } yield result
+
+    fResult.recover(commonExceptionHandler(db, collection))
+  }
 
   private def extractFeatureCollectionRequest(implicit request: Request[AnyContent]) = {
 
@@ -88,7 +125,7 @@ class QueryController @Inject() (val repository: Repository) extends FeatureServ
     //TODO -- why is this not a query parameter
     val intersectionGeometryWkt: Option[String] = request.body.asText.flatMap {
       case x if !x.isEmpty => Some(x)
-      case _ => None
+      case _               => None
     }
 
     val bbox = QueryParams.BBOX.value
@@ -105,43 +142,7 @@ class QueryController @Inject() (val repository: Repository) extends FeatureServ
     FeatureCollectionRequest(bbox, query, projection, withView, sort, sortDir, start, limit, intersectionGeometryWkt)
   }
 
-  def query(db: String, collection: String) = RepositoryAction { implicit request =>
-    implicit val format = QueryParams.FMT.value
-    implicit val filename = QueryParams.FILENAME.value
-
-    featuresToResult(db, collection, request, doCount = false) {
-      case (optTotal, features) => {
-        val (writeable, contentType) = ResourceWriteables.selectWriteable(request, QueryParams.FMT.value, QueryParams.SEP.value)
-        val result = Ok.chunked(FeatureStream(optTotal, features).asSource(writeable)).as(contentType)
-        filename match {
-          case Some(fn) => result.withHeaders(headers = ("content-disposition", s"attachment; filename=$fn"))
-          case _ => result
-        }
-      }
-    }
-  }
-
-  def list(db: String, collection: String) = RepositoryAction(
-    implicit request => futureTimed("featurecollection-list") {
-      featuresToResult(db, collection, request) {
-        case (optTotal, features) => Ok.chunked(FeaturesResource(optTotal, features).asSource)
-      }
-    }
-  )
-
-  def featuresToResult(db: String, collection: String, request: Request[AnyContent], doCount: Boolean = true)(toResult: ((Option[Long], Source[JsObject, _])) => Result): Future[Result] = {
-
-    val fResult = for {
-      md <- repository.metadata(db, collection, false)
-      featureCollectionRequest = extractFeatureCollectionRequest(request)
-      _ = Logger.debug(s"Query $featureCollectionRequest on $db, collection $collection")
-      result <- doQuery(db, collection, md, featureCollectionRequest, doCount).map[Result] { toResult }
-    } yield result
-
-    fResult.recover(commonExceptionHandler(db, collection))
-  }
-
-  private def doQuery(db: String, collection: String, smd: Metadata, request: FeatureCollectionRequest, doCount: Boolean): Future[(Option[Long], Source[JsObject, _])] = {
+  private def doQuery(db: String, collection: String, smd: Metadata, request: FeatureCollectionRequest): Future[(Option[Long], Source[JsObject, _])] = {
 
     val window = Bbox(request.bbox.getOrElse(""), smd.envelope.getCrsId)
 
@@ -155,7 +156,7 @@ class QueryController @Inject() (val repository: Repository) extends FeatureServ
         toProjectList(viewProj, request.projection),
         toFldSortSpecList(request.sort, request.sortDir),
         smd,
-        doCount
+        request.withCount
       )
       result <- repository.query(db, collection, spatialQuery, Some(request.start), request.limit)
     } yield result
@@ -165,9 +166,9 @@ class QueryController @Inject() (val repository: Repository) extends FeatureServ
   private def selectorMerge(viewQuery: Option[String], exprOpt: Option[BooleanExpr]): Option[BooleanExpr] = {
     val res = (viewQuery, exprOpt) match {
       case (Some(str), Some(e)) => parseQueryExpr(str).map(expr => BooleanAnd(expr, e))
-      case (None, s @ Some(_)) => s
-      case (Some(str), _) => parseQueryExpr(str)
-      case _ => None
+      case (None, s@Some(_))    => s
+      case (Some(str), _)       => parseQueryExpr(str)
+      case _                    => None
     }
     Logger.debug(s"Merging optional selectors of view and query to: $res")
     res
@@ -185,7 +186,7 @@ class QueryController @Inject() (val repository: Repository) extends FeatureServ
     //we are guaranteed that fldDirs is in length shorter or equal to sortFldList
     val fldDirs = fldDirStrings.map {
       case Direction(dir) => dir
-      case _ => ASC
+      case _              => ASC
     }
     sortFldList
       .zipAll(fldDirs, "", ASC)
@@ -203,10 +204,11 @@ class QueryController @Inject() (val repository: Repository) extends FeatureServ
             val env = new Envelope(minx.toDouble, miny.toDouble, maxx.toDouble, maxy.toDouble, crs)
             if (!env.isEmpty) Some(env)
             else None
-          } catch {
+          }
+          catch {
             case _: Throwable => None
           }
-        case _ => None
+        case _                                    => None
       }
     }
   }
