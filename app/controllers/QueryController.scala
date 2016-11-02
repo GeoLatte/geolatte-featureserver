@@ -109,7 +109,7 @@ class QueryController @Inject() (val repository: Repository) extends FeatureServ
     implicit val format = QueryParams.FMT.value
     implicit val filename = QueryParams.FILENAME.value
 
-    featuresToResult(db, collection, request) {
+    featuresToResult(db, collection, request, doCount = false) {
       case (optTotal, features) => {
         val (writeable, contentType) = ResourceWriteables.selectWriteable(request, QueryParams.FMT.value, QueryParams.SEP.value)
         val result = Ok.chunked(FeatureStream(optTotal, features).asSource(writeable)).as(contentType)
@@ -129,19 +129,19 @@ class QueryController @Inject() (val repository: Repository) extends FeatureServ
     }
   )
 
-  def featuresToResult(db: String, collection: String, request: Request[AnyContent])(toResult: ((Option[Long], Source[JsObject, _])) => Result): Future[Result] = {
+  def featuresToResult(db: String, collection: String, request: Request[AnyContent], doCount: Boolean = true)(toResult: ((Option[Long], Source[JsObject, _])) => Result): Future[Result] = {
 
     val fResult = for {
       md <- repository.metadata(db, collection, false)
       featureCollectionRequest = extractFeatureCollectionRequest(request)
       _ = Logger.debug(s"Query $featureCollectionRequest on $db, collection $collection")
-      result <- doQuery(db, collection, md, featureCollectionRequest).map[Result] { toResult }
+      result <- doQuery(db, collection, md, featureCollectionRequest, doCount).map[Result] { toResult }
     } yield result
 
     fResult.recover(commonExceptionHandler(db, collection))
   }
 
-  private def doQuery(db: String, collection: String, smd: Metadata, request: FeatureCollectionRequest): Future[(Option[Long], Source[JsObject, _])] = {
+  private def doQuery(db: String, collection: String, smd: Metadata, request: FeatureCollectionRequest, doCount: Boolean): Future[(Option[Long], Source[JsObject, _])] = {
 
     val window = Bbox(request.bbox.getOrElse(""), smd.envelope.getCrsId)
 
@@ -154,7 +154,8 @@ class QueryController @Inject() (val repository: Repository) extends FeatureServ
         selectorMerge(viewQuery, request.query),
         toProjectList(viewProj, request.projection),
         toFldSortSpecList(request.sort, request.sortDir),
-        smd
+        smd,
+        doCount
       )
       result <- repository.query(db, collection, spatialQuery, Some(request.start), request.limit)
     } yield result

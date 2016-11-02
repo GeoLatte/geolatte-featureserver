@@ -204,8 +204,10 @@ class PostgresqlRepository @Inject() (applicationLifecycle: ApplicationLifecycle
       (toJsPathList _ andThen JsonHelper.mkProjection)(spatialQuery.projection)
 
     //get the count
-    val stmtTotal = Sql.SELECT_TOTAL_IN_QUERY(db, collection, spatialQuery)
-    val fCnt: Future[Option[Long]] = database.run(stmtTotal).map(Some(_))
+    val fCnt: Future[Option[Long]] = if (spatialQuery.withCount) {
+      val stmtTotal = Sql.SELECT_TOTAL_IN_QUERY(db, collection, spatialQuery)
+      database.run(stmtTotal).map(Some(_))
+    } else { Future.successful(None) }
 
     //get the data
     def project(js: JsObject): Option[JsObject] = projectingReads match {
