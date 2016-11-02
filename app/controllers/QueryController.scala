@@ -132,7 +132,7 @@ class QueryController @Inject() (val repository: Repository) extends FeatureServ
   def featuresToResult(db: String, collection: String, request: Request[AnyContent])(toResult: ((Option[Long], Source[JsObject, _])) => Result): Future[Result] = {
 
     val fResult = for {
-      md <- repository.metadata(db, collection)
+      md <- repository.metadata(db, collection, false)
       featureCollectionRequest = extractFeatureCollectionRequest(request)
       _ = Logger.debug(s"Query $featureCollectionRequest on $db, collection $collection")
       result <- doQuery(db, collection, md, featureCollectionRequest).map[Result] { toResult }

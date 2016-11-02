@@ -164,10 +164,11 @@ class PostgresqlRepository @Inject() (applicationLifecycle: ApplicationLifecycle
       case MappableException(dbe) => throw dbe
     }
 
-  override def metadata(database: String, collection: String): Future[Metadata] =
-    count(database, collection)
-      .flatMap { cnt => metadataFromDb(database, collection).map(md => md.copy(count = cnt))
-      }
+  override def metadata(database: String, collection: String, withCount: Boolean = false): Future[Metadata] = {
+    val fCnt = if (withCount) count(database, collection) else Future.successful(-1L)
+    fCnt.flatMap { cnt => metadataFromDb(database, collection).map(md => md.copy(count = cnt))
+    }
+  }
 
   override def deleteCollection(dbName: String, colName: String): Future[Boolean] = {
     val dbio = Sql.DELETE_METADATA(dbName, colName) andThen
@@ -196,19 +197,11 @@ class PostgresqlRepository @Inject() (applicationLifecycle: ApplicationLifecycle
 
   override def writer(db: String, collection: String): FeatureWriter = PGWriter(this, db, collection)
 
-  //  private def selectEnumerator(md: Metadata): QueryResultEnumerator =
-  //    if (md.jsonTable) JsonQueryResultEnumerator
-  //    else new TableQueryResultEnumerator(md)
-
   override def query(db: String, collection: String, spatialQuery: SpatialQuery, start: Option[Int] = None,
     limit: Option[Int] = None): Future[CountedQueryResult] = {
 
     val projectingReads: Option[Reads[JsObject]] =
       (toJsPathList _ andThen JsonHelper.mkProjection)(spatialQuery.projection)
-
-    //get the enumerator
-    //TODO -- the role of the QueryResultEnumerator is now taken up by the GetRow implicits!!
-    //val enumerator = selectEnumerator(spatialQuery.metadata)
 
     //get the count
     val stmtTotal = Sql.SELECT_TOTAL_IN_QUERY(db, collection, spatialQuery)
