@@ -471,7 +471,7 @@ class PostgresqlRepository @Inject() (applicationLifecycle: ApplicationLifecycle
 
     import MetadataIdentifiers._
 
-    val LIST_SCHEMA = sql"select schema_name from information_schema.schemata".as[String]
+    val LIST_SCHEMA = sql"select schema_name from information_schema.schemata where schema_owner = current_user".as[String]
 
     private def fldSortSpecToSortExpr(spec: FldSortSpec): String = {
       //we use the #>> operator for 9.3 support, which extracts to text
