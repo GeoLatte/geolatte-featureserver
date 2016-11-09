@@ -51,7 +51,7 @@ class PostgresqlRepository @Inject() (applicationLifecycle: ApplicationLifecycle
         key = md.getColumnName(idx) if key != meta.geometryColumn && key != geoJsonCol && key != meta.pkey
         value = rs.getObject(idx)
       } yield (key, JsonUtils.toJsValue(value))
-      val jsObj = Json.obj(meta.pkey -> id, meta.geometryColumn -> Json.parse(geom), "properties" -> JsObject(props))
+      val jsObj = Json.obj("id" -> id, "geometry" -> Json.parse(geom), "properties" -> JsObject(props))
       Row(id, geom, jsObj)
     }
 

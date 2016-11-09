@@ -8,28 +8,28 @@ import config.AppExecutionContexts
 import org.geolatte.geom.Envelope
 import org.geolatte.geom.crs.CrsId
 import persistence._
-import persistence.querylang.{BooleanAnd, BooleanExpr, QueryParser}
+import persistence.querylang.{ BooleanAnd, BooleanExpr, QueryParser }
 import play.api.Logger
-import play.api.libs.json.{JsString, _}
+import play.api.libs.json.{ JsString, _ }
 import play.api.mvc._
 
 import scala.concurrent.Future
-import scala.language.{implicitConversions, reflectiveCalls}
-import scala.util.{Failure, Success}
+import scala.language.{ implicitConversions, reflectiveCalls }
+import scala.util.{ Failure, Success }
 
-class QueryController @Inject()(val repository: Repository) extends FeatureServerController with FutureInstrumented {
+class QueryController @Inject() (val repository: Repository) extends FeatureServerController with FutureInstrumented {
 
   import AppExecutionContexts.streamContext
   import config.Constants._
 
   def parseQueryExpr(s: String): Option[BooleanExpr] = QueryParser.parse(s) match {
     case Success(expr) => Some(expr)
-    case Failure(t)    => throw InvalidQueryException(t.getMessage)
+    case Failure(t) => throw InvalidQueryException(t.getMessage)
   }
 
   def parseFormat(s: String): Option[Format.Value] = s match {
     case Format(fmt) => Some(fmt)
-    case _           => None
+    case _ => None
   }
 
   object QueryParams {
@@ -70,17 +70,17 @@ class QueryController @Inject()(val repository: Repository) extends FeatureServe
   }
 
   case class FeatureCollectionRequest(
-                                       bbox: Option[String],
-                                       query: Option[BooleanExpr],
-                                       projection: List[String],
-                                       withView: Option[String],
-                                       sort: List[String],
-                                       sortDir: List[String],
-                                       start: Int,
-                                       limit: Option[Int],
-                                       intersectionGeometryWkt: Option[String],
-                                       withCount: Boolean = false
-                                     )
+    bbox: Option[String],
+    query: Option[BooleanExpr],
+    projection: List[String],
+    withView: Option[String],
+    sort: List[String],
+    sortDir: List[String],
+    start: Int,
+    limit: Option[Int],
+    intersectionGeometryWkt: Option[String],
+    withCount: Boolean = false
+  )
 
   def query(db: String, collection: String) = RepositoryAction { implicit request =>
     implicit val format = QueryParams.FMT.value
@@ -92,7 +92,7 @@ class QueryController @Inject()(val repository: Repository) extends FeatureServe
         val result = Ok.chunked(FeatureStream(optTotal, features).asSource(writeable)).as(contentType)
         filename match {
           case Some(fn) => result.withHeaders(headers = ("content-disposition", s"attachment; filename=$fn"))
-          case _        => result
+          case _ => result
         }
     }
   }
@@ -125,7 +125,7 @@ class QueryController @Inject()(val repository: Repository) extends FeatureServe
     //TODO -- why is this not a query parameter
     val intersectionGeometryWkt: Option[String] = request.body.asText.flatMap {
       case x if !x.isEmpty => Some(x)
-      case _               => None
+      case _ => None
     }
 
     val bbox = QueryParams.BBOX.value
@@ -166,9 +166,9 @@ class QueryController @Inject()(val repository: Repository) extends FeatureServe
   private def selectorMerge(viewQuery: Option[String], exprOpt: Option[BooleanExpr]): Option[BooleanExpr] = {
     val res = (viewQuery, exprOpt) match {
       case (Some(str), Some(e)) => parseQueryExpr(str).map(expr => BooleanAnd(expr, e))
-      case (None, s@Some(_))    => s
-      case (Some(str), _)       => parseQueryExpr(str)
-      case _                    => None
+      case (None, s @ Some(_)) => s
+      case (Some(str), _) => parseQueryExpr(str)
+      case _ => None
     }
     Logger.debug(s"Merging optional selectors of view and query to: $res")
     res
@@ -186,7 +186,7 @@ class QueryController @Inject()(val repository: Repository) extends FeatureServe
     //we are guaranteed that fldDirs is in length shorter or equal to sortFldList
     val fldDirs = fldDirStrings.map {
       case Direction(dir) => dir
-      case _              => ASC
+      case _ => ASC
     }
     sortFldList
       .zipAll(fldDirs, "", ASC)
@@ -204,11 +204,10 @@ class QueryController @Inject()(val repository: Repository) extends FeatureServe
             val env = new Envelope(minx.toDouble, miny.toDouble, maxx.toDouble, maxy.toDouble, crs)
             if (!env.isEmpty) Some(env)
             else None
-          }
-          catch {
+          } catch {
             case _: Throwable => None
           }
-        case _                                    => None
+        case _ => None
       }
     }
   }
