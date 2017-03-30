@@ -11,13 +11,13 @@ import org.geolatte.geom.codec.{ Wkb, Wkt }
 import org.geolatte.geom.{ Envelope, Polygon }
 import org.postgresql.util.PSQLException
 import persistence._
-import persistence.querylang.{ BooleanExpr, ProjectionParser, QueryParser }
+import persistence.querylang.{ BooleanExpr, QueryParser }
 import play.api.inject.ApplicationLifecycle
 import play.api.libs.json._
 import slick.basic.DatabasePublisher
 import slick.jdbc.PostgresProfile.api._
 import slick.jdbc.{ GetResult, PositionedResult }
-import utilities.{ GeometryReaders, JsonHelper, JsonUtils, Utils }
+import utilities.{ GeometryReaders, JsonUtils, Utils }
 
 import scala.concurrent.Future
 
@@ -32,7 +32,9 @@ class PostgresqlRepository @Inject() (applicationLifecycle: ApplicationLifecycle
   lazy val database = Database.forConfig("fs.postgresql")
 
   applicationLifecycle.addStopHook(
-    () => Utils.withInfo("Closing database") { Future.successful(database.close) }
+    () => Utils.withInfo("Closing database") {
+      Future.successful(database.close)
+    }
   )
 
   case class Row(id: String, geometry: String, json: JsObject)
@@ -95,7 +97,9 @@ class PostgresqlRepository @Inject() (applicationLifecycle: ApplicationLifecycle
   override def listDatabases: Future[List[String]] =
     database
       .run(Sql.LIST_SCHEMA)
-      .map { _.toList }
+      .map {
+        _.toList
+      }
       .recover {
         case MappableException(dbe) => throw dbe
       }
@@ -201,13 +205,18 @@ class PostgresqlRepository @Inject() (applicationLifecycle: ApplicationLifecycle
     limit: Option[Int] = None): Future[CountedQueryResult] = {
 
     val projectingReads: Option[Reads[JsObject]] =
-      (toJsPathList _ andThen ProjectionParser.mkProjection)(spatialQuery.projection)
+      for {
+        ppl <- spatialQuery.projection
+        withPrefix = ppl.withPrefix(List("type", "geometry", "id")) //TODO -- make sure that we use correct field names (can change for registered tables_
+      } yield withPrefix.reads
 
     //get the count
     val fCnt: Future[Option[Long]] = if (spatialQuery.withCount) {
       val stmtTotal = Sql.SELECT_TOTAL_IN_QUERY(db, collection, spatialQuery)
       database.run(stmtTotal).map(Some(_))
-    } else { Future.successful(None) }
+    } else {
+      Future.successful(None)
+    }
 
     //get the data
     def project(js: JsObject): Option[JsObject] = projectingReads match {
@@ -240,6 +249,7 @@ class PostgresqlRepository @Inject() (applicationLifecycle: ApplicationLifecycle
       case JsNumber(i) => i
       case _ => throw new IllegalArgumentException("No ID property of type String or Number")
     }
+
     val paramValues = jsons.map {
       case (json, env) => (id((json \ "id").getOrElse(JsNull)), unescapeJson(json), org.geolatte.geom.codec.Wkb.toWkb(env).toString)
     }
@@ -303,7 +313,7 @@ class PostgresqlRepository @Inject() (applicationLifecycle: ApplicationLifecycle
   /**
    * Saves a view for the specified database and collection.
    *
-   * @param db   the database for the view
+   * @param db         the database for the view
    * @param collection the collection for the view
    * @param viewDef    the view definition
    * @return eventually true if this save resulted in the update of an existing view, false otherwise
@@ -345,7 +355,9 @@ class PostgresqlRepository @Inject() (applicationLifecycle: ApplicationLifecycle
 
   override def getViews(db: String, collection: String): Future[List[JsObject]] =
     existsCollection(db, collection).flatMap { exists =>
-      if (exists) database.run(Sql.GET_VIEWS(db, collection)) map { _.toList }
+      if (exists) database.run(Sql.GET_VIEWS(db, collection)) map {
+        _.toList
+      }
       else throw CollectionNotFoundException()
     }
 
@@ -440,17 +452,6 @@ class PostgresqlRepository @Inject() (applicationLifecycle: ApplicationLifecycle
     }
   }
 
-  private def toJsPathList(flds: List[String]): List[JsPath] = {
-
-    val paths = flds.map {
-      spath => spath.split("\\.").foldLeft[JsPath](__)((jsp, pe) => jsp \ pe)
-    }
-
-    //TODO -- fix this! geometry and id are not always called that (in case of regular tables)!!
-    if (paths.isEmpty) paths
-    else paths ++ List(__ \ "type", __ \ "geometry", __ \ "id")
-  }
-
   //
   //    SQL Statements and utility functions.
   //
@@ -485,6 +486,7 @@ class PostgresqlRepository @Inject() (applicationLifecycle: ApplicationLifecycle
         else query.sort.map { arr => fldSortSpecToSortExpr(arr) } mkString ","
       case _ =>
         def colName(s: String): String = if (s.trim.startsWith("properties.")) s.trim.substring(11) else s.trim
+
         if (query.sort.isEmpty) query.metadata.pkey else query.sort.map(f => s"${colName(f.fld)} ${f.direction} ") mkString ","
     }
 
@@ -494,6 +496,7 @@ class PostgresqlRepository @Inject() (applicationLifecycle: ApplicationLifecycle
       val geomCol = if (query.metadata.jsonTable) "geometry" else query.metadata.geometryColumn
 
       def bboxIntersectionRenderer(wkt: String) = s"$geomCol && ${single_quote(wkt)}::geometry"
+
       def geomIntersectionRenderer(wkt: String) = s"ST_Intersects($geomCol, ${single_quote(wkt)}::geometry)"
 
       val windowOpt = query.windowOpt.map(env => Wkt.toWkt(FeatureTransformers.toPolygon(env))).map(bboxIntersectionRenderer)
@@ -691,7 +694,9 @@ class PostgresqlRepository @Inject() (applicationLifecycle: ApplicationLifecycle
          SELECT VIEW_DEF
          FROM #${quote(dbname)}.#${quote(ViewCollection)}
          WHERE COLLECTION = $coll AND VIEW_NAME = $viewName
-     """.as[JsObject].map { _.headOption }
+     """.as[JsObject].map {
+        _.headOption
+      }
 
     def GET_VIEWS(dbname: String, coll: String) = {
       sql"""
@@ -740,8 +745,11 @@ class PostgresqlRepository @Inject() (applicationLifecycle: ApplicationLifecycle
   }
 
   object MappableException {
+
     def getStatus(dbe: PSQLException) = dbe.getServerErrorMessage.getSQLState
+
     def getMessage(dbe: PSQLException) = dbe.getServerErrorMessage.getMessage
+
     def unapply(t: Throwable): Option[RuntimeException] = t match {
       case t: PSQLException if getStatus(t).contains("42P06") =>
         Some(DatabaseAlreadyExistsException(getMessage(t)))

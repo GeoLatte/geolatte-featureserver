@@ -8,7 +8,7 @@ import config.AppExecutionContexts
 import org.geolatte.geom.Envelope
 import org.geolatte.geom.crs.CrsId
 import persistence._
-import persistence.querylang.{ BooleanAnd, BooleanExpr, QueryParser }
+import persistence.querylang._
 import play.api.Logger
 import play.api.libs.json.{ JsString, _ }
 import play.api.mvc._
@@ -24,7 +24,14 @@ class QueryController @Inject() (val repository: Repository) extends FeatureServ
 
   def parseQueryExpr(s: String): Option[BooleanExpr] = QueryParser.parse(s) match {
     case Success(expr) => Some(expr)
-    case Failure(t) => throw InvalidQueryException(t.getMessage)
+    case Failure(t) => throw InvalidQueryException(s"Failure in parsing QUERY parameter: ${t.getMessage}")
+  }
+
+  def parseProjectionExpr(s: String): Option[PropertyPathList] = if (s.isEmpty) None
+  else ProjectionParser.parse(s) match {
+    case Success(ppl) if ppl.isEmpty => None
+    case Success(ppl) => Some(ppl)
+    case Failure(t) => throw InvalidQueryException(s"Failure in parsing PROJECTION parameter: ${t.getMessage}")
   }
 
   def parseFormat(s: String): Option[Format.Value] = s match {
@@ -43,10 +50,6 @@ class QueryController @Inject() (val repository: Repository) extends FeatureServ
 
     val START = QueryParam("start", (s: String) => Some(s.toInt))
 
-    val PROJECTION: QueryParam[JsArray] = QueryParam("projection", (s: String) =>
-      if (s.isEmpty) throw InvalidQueryException("Empty PROJECTION parameter")
-      else Some(JsArray(s.split(',').toSeq.map(e => JsString(e)))))
-
     val SORT: QueryParam[JsArray] = QueryParam("sort", (s: String) =>
       if (s.isEmpty) throw InvalidQueryException("Empty SORT parameter")
       else Some(JsArray(s.split(',').toSeq.map(e => JsString(e)))))
@@ -62,6 +65,8 @@ class QueryController @Inject() (val repository: Repository) extends FeatureServ
 
     val QUERY: QueryParam[BooleanExpr] = QueryParam("query", parseQueryExpr)
 
+    val PROJECTION: QueryParam[PropertyPathList] = QueryParam("projection", parseProjectionExpr)
+
     val SEP = QueryParam("sep", (s: String) => Some(s))
 
     val FMT: QueryParam[Format.Value] = QueryParam("fmt", parseFormat)
@@ -72,7 +77,7 @@ class QueryController @Inject() (val repository: Repository) extends FeatureServ
   case class FeatureCollectionRequest(
     bbox: Option[String],
     query: Option[BooleanExpr],
-    projection: List[String],
+    projection: Option[PropertyPathList],
     withView: Option[String],
     sort: List[String],
     sortDir: List[String],
@@ -130,7 +135,7 @@ class QueryController @Inject() (val repository: Repository) extends FeatureServ
 
     val bbox = QueryParams.BBOX.value
     val query = QueryParams.QUERY.value
-    val projection = QueryParams.PROJECTION.value.map(_.as[List[String]]).getOrElse(List())
+    val projection = QueryParams.PROJECTION.value
     val withView = QueryParams.WITH_VIEW.value
 
     val sort = QueryParams.SORT.value.map(_.as[List[String]]).getOrElse(List())
@@ -174,11 +179,19 @@ class QueryController @Inject() (val repository: Repository) extends FeatureServ
     res
   }
 
-  private def toProjectList(viewProj: Option[JsArray], qProj: List[String]): List[String] = {
-    val vp1 = viewProj.flatMap(jsa => jsa.asOpt[List[String]]).getOrElse(List())
-    val result = vp1 ++ qProj
-    Logger.debug(s"Merging optional projectors of view and query to: $result")
-    result
+  private def toProjectList(viewProj: Option[JsArray], qProj: Option[PropertyPathList]): Option[PropertyPathList] = {
+    val viewPPL = for {
+      vp1 <- viewProj
+      jsa <- vp1.asOpt[List[String]]
+      pExp = jsa mkString ","
+      ppl <- ProjectionParser.parse(pExp).toOption // we just assume that this is a valid expression, if not we ignore
+    } yield ppl
+    (viewPPL, qProj) match {
+      case (Some(p1), Some(p2)) => Some(p1 ++ p2)
+      case (_, Some(p)) => Some(p)
+      case (Some(p), _) => Some(p)
+      case _ => None
+    }
   }
 
   private def toFldSortSpecList(sortFldList: List[String], sortDirList: List[String]): List[FldSortSpec] = {

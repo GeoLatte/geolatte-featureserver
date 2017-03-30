@@ -43,6 +43,8 @@ case class PropertyPathList(paths: Seq[ProjExpr]) extends ProjExpr {
     paths.foldLeft(nullReads)((r1, p) => (r1 and p.reads) reduce)
 
   def isEmpty = paths.isEmpty
+
+  def ++(o: PropertyPathList) = new PropertyPathList(this.paths ++ o.paths)
 }
 
 object PropertyPathList {
@@ -79,7 +81,7 @@ class ProjectionParser(val input: ParserInput) extends Parser
 
 object ProjectionParser {
 
-  def parse(str: String): Try[ProjExpr] = {
+  def parse(str: String): Try[PropertyPathList] = {
     val parser = new ProjectionParser(str)
     parser.InputLine.run() match {
       case s @ Success(_) => s
