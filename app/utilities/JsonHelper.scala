@@ -44,15 +44,6 @@ object JsonHelper {
     flattenAcc(jsObject, ListBuffer()).toSeq
   }
 
-  def mkProjection(paths: List[JsPath]): Option[Reads[JsObject]] =
-    if (paths.isEmpty) None
-    else {
-      val r = paths.foldLeft[Reads[JsObject]](NoObjReads) {
-        (r1, path) => (r1 and path.json.pickBranch.orElse(path.json.put(JsNull))) reduce
-      }
-      Some(r)
-    }
-
   /**
    * Converts a Json validation error sequence for a Feature into a single error message String.
    * @param errors JsonValidation errors
@@ -62,10 +53,6 @@ object JsonHelper {
     errors map {
       case (jspath, valerrors) => jspath + " :" + valerrors.map(ve => ve.message).mkString("; ")
     } mkString "\n"
-  }
-
-  object NoObjReads extends Reads[JsObject] {
-    override def reads(json: JsValue): JsResult[JsObject] = JsSuccess(Json.obj())
   }
 
 }

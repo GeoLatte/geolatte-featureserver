@@ -9,7 +9,6 @@ object FeatureServerBuild extends Build {
 
   val appName = "geolatte-featureserver"
   val appVersion = "2.0-SNAPSHOT"
-//  val playVersion = "2.5.6" //TODO -- get rid of redundant def of playversion
 
   //Resolvers
   lazy val commonResolvers = Seq(

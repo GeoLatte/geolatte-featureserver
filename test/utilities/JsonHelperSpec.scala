@@ -1,7 +1,7 @@
 package utilities
 
 import org.specs2.mutable.Specification
-import play.api.libs.functional.Reducer
+import persistence.querylang.{InArrayProjection, ObjectProjection, ProjectionParser}
 import play.api.libs.json._
 
 /**
@@ -27,6 +27,7 @@ class JsonHelperSpec extends Specification {
 
   }
 
+  //TODO verplaatsen naar eigen Spec
   "The JsonHelper.mkProjection( List[JsPath]) " should {
 
     val jsonText =
@@ -45,7 +46,7 @@ class JsonHelperSpec extends Specification {
 
     "create a Reads[Object] that strips all non-mentioned properties from the json" in {
 
-      val projection = JsonHelper.mkProjection(pathList).get
+      val projection = ProjectionParser.mkProjection(pathList).get
 
       val obj = jsObj.as(projection)
 
@@ -56,7 +57,7 @@ class JsonHelperSpec extends Specification {
     "be robust w.r.t. to redundant path elements " in {
       val redundantPaths = __ \ "properties" \ "entity" \ "ident8" :: pathList
 
-      val projection = JsonHelper.mkProjection(redundantPaths).get
+      val projection = ProjectionParser.mkProjection(redundantPaths).get
 
       val obj = jsObj.as(projection)
 
@@ -68,7 +69,7 @@ class JsonHelperSpec extends Specification {
 
       val withNonExistentPath = pathList :+ (__ \ "properties" \ "entity" \ "doesntexist")
 
-      val projection = JsonHelper.mkProjection(withNonExistentPath).get
+      val projection = ProjectionParser.mkProjection(withNonExistentPath).get
 
       val obj = jsObj.asOpt(projection)
 
@@ -78,6 +79,27 @@ class JsonHelperSpec extends Specification {
 
       expected must_== obj
 
+    }
+
+  }
+
+  "Projection  " should {
+
+    val jsonText =
+      """
+        | { "a1" : 1, "a2" : { "b1" : [ { "ca" : 2, "cb" : 3}, { "ca" : 4, "cb" : 5 }  ], "b2" : 7 }, "a3" : 8 }
+      """.stripMargin
+
+    val json = Json.parse(jsonText).as[JsObject]
+
+    " support projecting elements withing arrays " in {
+      val projection = ObjectProjection(__ \ 'a1) compose InArrayProjection((__ \ "a2" \ "b1"), ObjectProjection(__ \ 'ca))
+
+      val obj = json.as(projection.reads)
+
+      val expected = Json.obj("a1" -> 1, "a2" -> Json.obj("b1" -> Json.arr(Json.obj("ca" -> 2), Json.obj("ca" -> 4))))
+
+      expected must_== obj
     }
 
   }

@@ -11,7 +11,7 @@ import org.geolatte.geom.codec.{ Wkb, Wkt }
 import org.geolatte.geom.{ Envelope, Polygon }
 import org.postgresql.util.PSQLException
 import persistence._
-import persistence.querylang.{ BooleanExpr, QueryParser }
+import persistence.querylang.{ BooleanExpr, ProjectionParser, QueryParser }
 import play.api.inject.ApplicationLifecycle
 import play.api.libs.json._
 import slick.basic.DatabasePublisher
@@ -201,7 +201,7 @@ class PostgresqlRepository @Inject() (applicationLifecycle: ApplicationLifecycle
     limit: Option[Int] = None): Future[CountedQueryResult] = {
 
     val projectingReads: Option[Reads[JsObject]] =
-      (toJsPathList _ andThen JsonHelper.mkProjection)(spatialQuery.projection)
+      (toJsPathList _ andThen ProjectionParser.mkProjection)(spatialQuery.projection)
 
     //get the count
     val fCnt: Future[Option[Long]] = if (spatialQuery.withCount) {
