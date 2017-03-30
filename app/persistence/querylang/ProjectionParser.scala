@@ -11,56 +11,45 @@ import scala.util.{ Failure, Success, Try }
 /**
  * Created by Karel Maesen, Geovise BVBA on 30/03/17.
  */
-sealed trait Projection {
-  self =>
 
+sealed trait ProjExpr {
   def reads: Reads[JsObject]
-
-  def compose(other: Projection): Projection = new Projection {
-    lazy val reads = (self.reads and other.reads) reduce
-  }
 }
 
-object NoObjProjection extends Projection {
-
-  lazy val reads = new Reads[JsObject] {
-    override def reads(json: JsValue): JsResult[JsObject] = JsSuccess(Json.obj())
-  }
-}
-
-case class ObjectProjection(path: JsPath) extends Projection {
-
+case class SimplePropertyPath(path: JsPath) extends ProjExpr {
   lazy val reads: Reads[JsObject] = path.json.pickBranch.orElse(path.json.put(JsNull))
 }
-
-case class InArrayProjection(arrayPath: JsPath, elementProjection: Projection) extends Projection {
-
-  lazy val reads = arrayPath.json.copyFrom(
-    arrayPath.json.pick[JsArray].map(js => JsArray(js.as(Reads.seq(elementProjection.reads))))
-  )
-}
-
-
-sealed trait ProjExpr
-
-case class SimplePropertyPath(path: JsPath) extends ProjExpr
 
 object SimplePropertyPath {
   def fromString(str: String): SimplePropertyPath = new SimplePropertyPath(__ \ str)
   def combine(p1: SimplePropertyPath, p2: SimplePropertyPath): SimplePropertyPath = SimplePropertyPath(p1.path.compose(p2.path))
 }
 
-case class TraversablePropertyPath(path: SimplePropertyPath, inner: PropertyPathList) extends ProjExpr
+case class TraversablePropertyPath(simplePath: SimplePropertyPath, inner: PropertyPathList) extends ProjExpr {
+  lazy val reads = simplePath.path.json.copyFrom(
+    simplePath.path.json.pick[JsArray].map(js => JsArray(js.as(Reads.seq(inner.reads))))
+  )
+}
 
-case class PropertyPathList(paths: Seq[ProjExpr]) extends ProjExpr
+case class PropertyPathList(paths: Seq[ProjExpr]) extends ProjExpr {
+
+  def withPrefix(pre: Seq[String]) = PropertyPathList(pre.map(s => SimplePropertyPath(__ \ s)) ++ this.paths)
+
+  lazy val nullReads = new Reads[JsObject] {
+    override def reads(json: JsValue): JsResult[JsObject] = JsSuccess(Json.obj())
+  }
+
+  lazy val reads: Reads[JsObject] =
+    paths.foldLeft(nullReads)((r1, p) => (r1 and p.reads) reduce)
+
+  def isEmpty = paths.isEmpty
+}
 
 object PropertyPathList {
 
   def fromPropertyExpr(p: ProjExpr): PropertyPathList = PropertyPathList(Seq(p))
   def addPropertyExpr(ps: PropertyPathList, p: ProjExpr): PropertyPathList = PropertyPathList(ps.paths ++ Seq(p))
 }
-
-
 
 class ProjectionParser(val input: ParserInput) extends Parser
     with StringBuilding {
@@ -90,17 +79,6 @@ class ProjectionParser(val input: ParserInput) extends Parser
 
 object ProjectionParser {
 
-  val REQUIRED: Projection = ObjectProjection(__ \ 'type) compose
-    ObjectProjection(__ \ 'geometry) compose
-    ObjectProjection(__ \ 'id)
-
-  //  def parse(s: String): Option[Projection] = collapse (
-  //      for {
-  //        projStr <- s.split(",").toList
-  //        proj = parseEl(projStr)
-  //      } yield proj
-  //  ).map( proj => proj compose REQUIRED )
-
   def parse(str: String): Try[ProjExpr] = {
     val parser = new ProjectionParser(str)
     parser.InputLine.run() match {
@@ -110,18 +88,13 @@ object ProjectionParser {
     }
   }
 
-  def mkProjection(paths: List[JsPath]): Option[Reads[JsObject]] = collapse(
-    paths.map(ObjectProjection.apply)
-  ).map(_.reads)
-
-  def collapse(projs: List[Projection]): Option[Projection] =
-    if (projs.isEmpty) None
-    else {
-      val r = projs.foldLeft[Projection](NoObjProjection) {
-        (r1, proj) => r1 compose proj
-      }
-      Some(r)
-    }
+  def mkProjection(paths: List[JsPath]): Option[Reads[JsObject]] = {
+    val ppl = PropertyPathList(
+      paths.map(SimplePropertyPath.apply)
+    )
+    if (ppl.isEmpty) None
+    else Some(ppl.reads)
+  }
 
 }
 
