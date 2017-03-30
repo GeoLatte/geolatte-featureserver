@@ -88,27 +88,36 @@ class QueryController @Inject() (val repository: Repository) extends FeatureServ
   )
 
   def query(db: String, collection: String) = RepositoryAction { implicit request =>
-    implicit val format = QueryParams.FMT.value
-    implicit val filename = QueryParams.FILENAME.value
-    val fcr = extractFeatureCollectionRequest(request)
-    featuresToResult(db, collection, fcr) {
-      case (optTotal, features) =>
-        val (writeable, contentType) = ResourceWriteables.selectWriteable(request, QueryParams.FMT.value, QueryParams.SEP.value)
-        val result = Ok.chunked(FeatureStream(optTotal, features).asSource(writeable)).as(contentType)
-        filename match {
-          case Some(fn) => result.withHeaders(headers = ("content-disposition", s"attachment; filename=$fn"))
-          case _ => result
+    {
+      implicit val format = QueryParams.FMT.value
+      implicit val filename = QueryParams.FILENAME.value
+      for {
+        fcr <- extractFeatureCollectionRequest(request)
+        res <- featuresToResult(db, collection, fcr) {
+          case (optTotal, features) =>
+            val (writeable, contentType) = ResourceWriteables.selectWriteable(request, QueryParams.FMT.value, QueryParams.SEP.value)
+            val result = Ok.chunked(FeatureStream(optTotal, features).asSource(writeable)).as(contentType)
+            filename match {
+              case Some(fn) => result.withHeaders(headers = ("content-disposition", s"attachment; filename=$fn"))
+              case _ => result
+            }
         }
-    }
+      } yield res
+    } recover commonExceptionHandler(db, collection)
   }
 
   def list(db: String, collection: String) = RepositoryAction(
     implicit request => futureTimed("featurecollection-list") {
-      val fcr = extractFeatureCollectionRequest(request).copy(withCount = true)
-      featuresToResult(db, collection, fcr) {
-        case (optTotal, features) => Ok.chunked(FeaturesResource(optTotal, features).asSource)
-      }
-    }
+
+      for {
+        fcr <- extractFeatureCollectionRequest(request).map(_.copy(withCount = true))
+        res <- featuresToResult(db, collection, fcr) {
+          case (optTotal, features) => Ok.chunked(FeaturesResource(optTotal, features).asSource)
+        }
+      } yield res
+
+    } recover commonExceptionHandler(db, collection)
+
   )
 
   def featuresToResult(db: String, collection: String, featureCollectionRequest: FeatureCollectionRequest)(toResult: ((Option[Long], Source[JsObject, _])) => Result): Future[Result] = {
@@ -124,7 +133,7 @@ class QueryController @Inject() (val repository: Repository) extends FeatureServ
     fResult.recover(commonExceptionHandler(db, collection))
   }
 
-  private def extractFeatureCollectionRequest(implicit request: Request[AnyContent]) = {
+  private def extractFeatureCollectionRequest(implicit request: Request[AnyContent]) = Future {
 
     implicit val queryString: Map[String, Seq[String]] = request.queryString
     //TODO -- why is this not a query parameter

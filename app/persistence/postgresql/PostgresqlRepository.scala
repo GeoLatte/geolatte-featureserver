@@ -168,7 +168,7 @@ class PostgresqlRepository @Inject() (applicationLifecycle: ApplicationLifecycle
       case MappableException(dbe) => throw dbe
     }
 
-  override def metadata(database: String, collection: String, withCount: Boolean = false): Future[Metadata] = {
+  override def metadata(database: String, collection: String, withCount: Boolean = true): Future[Metadata] = {
     val fCnt = if (withCount) count(database, collection) else Future.successful(-1L)
     fCnt.flatMap { cnt => metadataFromDb(database, collection).map(md => md.copy(count = cnt))
     }

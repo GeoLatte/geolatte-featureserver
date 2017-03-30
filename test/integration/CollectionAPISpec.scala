@@ -61,12 +61,18 @@ class CollectionAPISpec extends InDatabaseSpecification {
   )
 
   // the expected outbound collection metadata
-  val outMetadata = inMetadata +
-    ("collection" -> JsString(testColName)) +
-    ("count" -> JsNumber(0)) +
-    ("geometry-column" -> JsString("GEOMETRY")) +
-    ("primary-key" -> JsString("id")) +
-    ("is-json" -> JsBoolean(true))
+  val outMetadata =
+    Json.obj("collection" -> JsString(testColName)) +
+      ("extent" -> Json.obj(
+        "crs" -> 4326,
+        "envelope" -> Json.arr(0.0, 0.0, 90.0, 90.0)
+      )) +
+        ("index-level" -> JsNumber(4)) +
+        ("id-type" -> JsString("text")) +
+        ("count" -> JsNumber(0)) +
+        ("geometry-column" -> JsString("GEOMETRY")) +
+        ("primary-key" -> JsString("id")) +
+        ("is-json" -> JsBoolean(true))
 
   val outArray = Json.arr(
     Json.obj("name" -> "xfstestcoll", "url" -> "/api/databases/xfstestdb/xfstestcoll")

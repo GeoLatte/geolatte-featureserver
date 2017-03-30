@@ -36,7 +36,7 @@ class QueryAPISpec extends InCollectionSpecification {
         support the QUERY parameter                                                 $e9
         support the WITH-VIEW query-param                                             $e14
         support the WITH-VIEW query-param and a view with no projection clause        $e15
-        BAD_REQUEST response code if the PROJECTION parameter is empty or invalid   $e10
+        BAD_REQUEST response code if the PROJECTION parameter is invalid              $e10
         BAD_REQUEST response code if the Query parameter is an invalid expression   $e11
 
       General:
@@ -213,7 +213,7 @@ class QueryAPISpec extends InCollectionSpecification {
     }
   }
 
-  def e10 = getQuery(testDbName, testColName, Map("projection" -> ""))(contentAsJsonStream).applyMatcher {
+  def e10 = getQuery(testDbName, testColName, Map("projection" -> "fld["))(contentAsJsonStream).applyMatcher {
     _.status must equalTo(BAD_REQUEST)
   }
 
