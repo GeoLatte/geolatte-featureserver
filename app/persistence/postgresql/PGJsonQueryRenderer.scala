@@ -16,11 +16,17 @@ object PGJsonQueryRenderer extends AbstractPGQueryRenderer {
     case InPredicate(lhs, rhs) => s" ${renderPropertyExpr(lhs, rhs)} in ${renderValueList(rhs)}"
     case RegexPredicate(lhs, rhs) => s" ${renderPropertyExpr(lhs, rhs)} ~ '${rhs.pattern}'"
     case LikePredicate(lhs, rhs) => s" ${renderPropertyExpr(lhs, rhs)} ilike '${rhs.pattern}'"
+    case NullTestPredicate(lhs, is) => s" ${renderPropertyExprwithoutCast(lhs)} ${if (is) "is" else "is not"} null"
   }
 
   protected def renderPropertyExpr(lhs: PropertyExpr, rhs: Expr): String = {
     val variadicPath: String = path2VariadicList(lhs)
     s"json_extract_path_text(json, $variadicPath)::${cast(rhs)}"
+  }
+
+  protected def renderPropertyExprwithoutCast(lhs: PropertyExpr): String = {
+    val variadicPath: String = path2VariadicList(lhs)
+    s"json_extract_path_text(json, $variadicPath)"
   }
 
   def cast(exp: Expr): String = exp match {

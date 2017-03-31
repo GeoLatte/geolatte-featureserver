@@ -16,6 +16,7 @@ object PGRegularQueryRenderer extends AbstractPGQueryRenderer {
     case InPredicate(lhs, rhs) => s" ${renderPropertyExpr(lhs)} in ${renderValueList(rhs)}"
     case RegexPredicate(lhs, rhs) => s" ${renderPropertyExpr(lhs)} ~ '${rhs.pattern}'"
     case LikePredicate(lhs, rhs) => s" ${renderPropertyExpr(lhs)} ilike '${rhs.pattern}'"
+    case NullTestPredicate(lhs, is) => s" ${renderPropertyExpr(lhs)} ${if (is) "is" else "is not"} null"
   }
 
   protected def renderPropertyExpr(lhs: PropertyExpr): String =

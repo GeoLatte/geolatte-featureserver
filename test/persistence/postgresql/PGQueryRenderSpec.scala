@@ -82,6 +82,16 @@ class PGQueryRenderSpec extends Specification {
       compressWS(renderer.render(expr)) === "json_extract_path_text(json, 'properties','foo')::text ilike 'a%bcd'"
     }
 
+    "properly render IS NULL expression " in {
+      val expr = QueryParser.parse("properties.foo is null").get
+      compressWS(renderer.render(expr)) === "json_extract_path_text(json, 'properties','foo') is null"
+    }
+
+    "properly render IS NOT NULL expression " in {
+      val expr = QueryParser.parse("properties.foo is not null").get
+      compressWS(renderer.render(expr)) === "json_extract_path_text(json, 'properties','foo') is not null"
+    }
+
   }
 
   private def compressWS(str: String) = str.replaceAll(" +", " ").trim

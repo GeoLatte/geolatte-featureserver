@@ -21,6 +21,7 @@ case class ComparisonPredicate(lhs: PropertyExpr, op: ComparisonOperator, rhs: V
 case class InPredicate(lhs: PropertyExpr, rhs: ValueListExpr) extends Predicate
 case class RegexPredicate(lhs: PropertyExpr, rhs: RegexExpr) extends Predicate
 case class LikePredicate(lhs: PropertyExpr, rhs: LikeExpr) extends Predicate
+case class NullTestPredicate(lhs: PropertyExpr, isNull: Boolean) extends Predicate
 
 sealed trait ValueExpr extends Expr
 case class LiteralString(value: String) extends ValueExpr
@@ -57,7 +58,11 @@ class QueryParser(val input: ParserInput) extends Parser
 
   def BooleanPrim = rule { WS ~ ch('(') ~ WS ~ BooleanExpression ~ WS ~ ch(')') ~ WS | Predicate }
 
-  def Predicate = rule { ComparisonPred | InPred | LikePred | RegexPred | LiteralBool }
+  def Predicate = rule { ComparisonPred | InPred | LikePred | RegexPred | LiteralBool | isNullPred }
+
+  def isNullPred = rule { WS ~ Property ~ WS ~ MayBe ~ WS ~ ignoreCase("null") ~> NullTestPredicate }
+
+  def MayBe: Rule1[Boolean] = rule { ignoreCase("is") ~ push(true) ~ WS ~ optional(ignoreCase("not") ~> ((_: Boolean) => false)) }
 
   def LikePred = rule { (WS ~ Property ~ WS ~ ignoreCase("like") ~ WS ~ Like) ~> LikePredicate }
 

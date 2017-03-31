@@ -205,6 +205,18 @@ class QueryParserSpec extends Specification {
       )
     }
 
+    "support the is null predicate" in {
+      QueryParser.parse(""" var is null """) must beSuccessfulTry.withValue(
+        NullTestPredicate(PropertyExpr("var"), true)
+      )
+    }
+
+    "support the is not null predicate" in {
+      QueryParser.parse(""" var is NOT NULL """) must beSuccessfulTry.withValue(
+        NullTestPredicate(PropertyExpr("var"), false)
+      )
+    }
+
   }
 
 }
