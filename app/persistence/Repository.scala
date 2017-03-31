@@ -9,7 +9,7 @@ import play.api.data.validation.ValidationError
 import play.api.libs.iteratee.Enumerator
 import play.api.libs.json._
 import play.api.libs.functional.syntax._
-import querylang.{ BooleanExpr, PropertyPathList }
+import querylang.{ BooleanExpr, ProjectionList }
 
 import scala.concurrent.Future
 import scala.util.{ Failure, Success }
@@ -78,7 +78,7 @@ case class SpatialQuery(
   windowOpt: Option[Envelope] = None,
   intersectionGeometryWktOpt: Option[String] = None,
   queryOpt: Option[BooleanExpr] = None,
-  projection: Option[PropertyPathList] = None,
+  projection: Option[ProjectionList] = None,
   sort: List[FldSortSpec] = List(),
   metadata: Metadata,
   withCount: Boolean = false

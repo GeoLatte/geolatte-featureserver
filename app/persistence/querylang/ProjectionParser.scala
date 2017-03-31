@@ -9,31 +9,31 @@ import play.api.libs.json._
 import scala.util.{ Failure, Success, Try }
 
 /**
+ *
  * Created by Karel Maesen, Geovise BVBA on 30/03/17.
  */
-
-sealed trait ProjExpr {
+sealed trait Projection {
   def reads: Reads[JsObject]
 }
 
-case class SimplePropertyPath(path: JsPath) extends ProjExpr {
+case class SimpleProjection(path: JsPath) extends Projection {
   lazy val reads: Reads[JsObject] = path.json.pickBranch.orElse(path.json.put(JsNull))
 }
 
-object SimplePropertyPath {
-  def fromString(str: String): SimplePropertyPath = new SimplePropertyPath(__ \ str)
-  def combine(p1: SimplePropertyPath, p2: SimplePropertyPath): SimplePropertyPath = SimplePropertyPath(p1.path.compose(p2.path))
+object SimpleProjection {
+  def fromString(str: String): SimpleProjection = new SimpleProjection(__ \ str)
+  def combine(p1: SimpleProjection, p2: SimpleProjection): SimpleProjection = SimpleProjection(p1.path.compose(p2.path))
 }
 
-case class TraversablePropertyPath(simplePath: SimplePropertyPath, inner: PropertyPathList) extends ProjExpr {
+case class TraversableProjection(simplePath: SimpleProjection, inner: ProjectionList) extends Projection {
   lazy val reads = simplePath.path.json.copyFrom(
     simplePath.path.json.pick[JsArray].map(js => JsArray(js.as(Reads.seq(inner.reads))))
   )
 }
 
-case class PropertyPathList(paths: Seq[ProjExpr]) extends ProjExpr {
+case class ProjectionList(paths: Seq[Projection]) extends Projection {
 
-  def withPrefix(pre: Seq[String]) = PropertyPathList(pre.map(s => SimplePropertyPath(__ \ s)) ++ this.paths)
+  def withPrefix(pre: Seq[String]) = ProjectionList(pre.map(s => SimpleProjection(__ \ s)) ++ this.paths)
 
   lazy val nullReads = new Reads[JsObject] {
     override def reads(json: JsValue): JsResult[JsObject] = JsSuccess(Json.obj())
@@ -44,29 +44,47 @@ case class PropertyPathList(paths: Seq[ProjExpr]) extends ProjExpr {
 
   def isEmpty = paths.isEmpty
 
-  def ++(o: PropertyPathList) = new PropertyPathList(this.paths ++ o.paths)
+  def ++(o: ProjectionList) = new ProjectionList(this.paths ++ o.paths)
 }
 
-object PropertyPathList {
+object ProjectionList {
 
-  def fromPropertyExpr(p: ProjExpr): PropertyPathList = PropertyPathList(Seq(p))
-  def addPropertyExpr(ps: PropertyPathList, p: ProjExpr): PropertyPathList = PropertyPathList(ps.paths ++ Seq(p))
+  def fromPropertyExpr(p: Projection): ProjectionList = ProjectionList(Seq(p))
+  def addPropertyExpr(ps: ProjectionList, p: Projection): ProjectionList = ProjectionList(ps.paths ++ Seq(p))
 }
 
+/**
+ * A Parser for the Projection expresions.
+ *
+ * <p> The Projection syntax is : </p>
+ *
+ *   <ul>
+ *     <li> &lt;ProjectionExpressionList&gt; ::=  &lt;ProjectionExpression&gt;{, &lt;ProjectionExpression} </li>
+ *     <li> &lt;ProjectionExpression&gt;     ::= &lt;TraversableExpr&gt; | &lt;SimpleExpr&gt; </li>
+ *     <li> &lt;TraversableExpr&gt           ::= &lt;SimpleExpr&gt;"[&lt;ProjectionExpressionList&gt;"]" </li>
+ *     <li> &lt;SimpleExpr&gt;               ::= &lt;pathEl&gt;{"."&lt;pathEl&gt;] </li>
+ *       <li> &lt;pathEl&gt;                 ::= <i>sequence of characters, valid for a json property key</i>
+ *   </ul>
+ *
+ * <p>In a <code>TraversableExpr</code>, the first part should point to an array-valued property. The expressions within the square brackets
+ * will be applied to every element within the array.
+ * </p>
+ * @param input the ParserInput
+ */
 class ProjectionParser(val input: ParserInput) extends Parser
     with StringBuilding {
 
   def InputLine = rule { ProjectionExpressionList ~ EOI }
 
-  def ProjectionExpressionList: Rule1[PropertyPathList] = rule { (ProjectionExpression ~> PropertyPathList.fromPropertyExpr _) ~ zeroOrMore(ch(',') ~ WS ~ ProjectionExpression ~> PropertyPathList.addPropertyExpr _) }
+  def ProjectionExpressionList: Rule1[ProjectionList] = rule { (ProjectionExpression ~> ProjectionList.fromPropertyExpr _) ~ zeroOrMore(ch(',') ~ WS ~ ProjectionExpression ~> ProjectionList.addPropertyExpr _) }
 
-  def ProjectionExpression = rule { TraversablePropertyExpr | SimpleProjectionExpression }
+  def ProjectionExpression = rule { TraversableExpr | SimpleExpr }
 
-  def TraversablePropertyExpr = rule { SimpleProjectionExpression ~ ch('[') ~ ProjectionExpressionList ~ ch(']') ~> TraversablePropertyPath.apply _ }
+  def TraversableExpr = rule { SimpleExpr ~ ch('[') ~ ProjectionExpressionList ~ ch(']') ~> TraversableProjection.apply _ }
 
-  def SimpleProjectionExpression: Rule1[SimplePropertyPath] = rule { WS ~ PropertyEl ~ zeroOrMore(ch('.') ~ WS ~ PropertyEl ~> SimplePropertyPath.combine _) }
+  def SimpleExpr: Rule1[SimpleProjection] = rule { WS ~ PropertyEl ~ zeroOrMore(ch('.') ~ WS ~ PropertyEl ~> SimpleProjection.combine _) }
 
-  def PropertyEl = rule { capture(NameString) ~> SimplePropertyPath.fromString _ ~ WS }
+  def PropertyEl = rule { capture(NameString) ~> SimpleProjection.fromString _ ~ WS }
 
   //basic tokens
   def NameString = rule { !(ch(''') | ch('"')) ~ FirstNameChar ~ zeroOrMore(nonFirstNameChar) }
@@ -81,7 +99,7 @@ class ProjectionParser(val input: ParserInput) extends Parser
 
 object ProjectionParser {
 
-  def parse(str: String): Try[PropertyPathList] = {
+  def parse(str: String): Try[ProjectionList] = {
     val parser = new ProjectionParser(str)
     parser.InputLine.run() match {
       case s @ Success(_) => s
@@ -91,8 +109,8 @@ object ProjectionParser {
   }
 
   def mkProjection(paths: List[JsPath]): Option[Reads[JsObject]] = {
-    val ppl = PropertyPathList(
-      paths.map(SimplePropertyPath.apply)
+    val ppl = ProjectionList(
+      paths.map(SimpleProjection.apply)
     )
     if (ppl.isEmpty) None
     else Some(ppl.reads)

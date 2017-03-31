@@ -27,7 +27,7 @@ class QueryController @Inject() (val repository: Repository) extends FeatureServ
     case Failure(t) => throw InvalidQueryException(s"Failure in parsing QUERY parameter: ${t.getMessage}")
   }
 
-  def parseProjectionExpr(s: String): Option[PropertyPathList] = if (s.isEmpty) None
+  def parseProjectionExpr(s: String): Option[ProjectionList] = if (s.isEmpty) None
   else ProjectionParser.parse(s) match {
     case Success(ppl) if ppl.isEmpty => None
     case Success(ppl) => Some(ppl)
@@ -65,7 +65,7 @@ class QueryController @Inject() (val repository: Repository) extends FeatureServ
 
     val QUERY: QueryParam[BooleanExpr] = QueryParam("query", parseQueryExpr)
 
-    val PROJECTION: QueryParam[PropertyPathList] = QueryParam("projection", parseProjectionExpr)
+    val PROJECTION: QueryParam[ProjectionList] = QueryParam("projection", parseProjectionExpr)
 
     val SEP = QueryParam("sep", (s: String) => Some(s))
 
@@ -77,7 +77,7 @@ class QueryController @Inject() (val repository: Repository) extends FeatureServ
   case class FeatureCollectionRequest(
     bbox: Option[String],
     query: Option[BooleanExpr],
-    projection: Option[PropertyPathList],
+    projection: Option[ProjectionList],
     withView: Option[String],
     sort: List[String],
     sortDir: List[String],
@@ -188,7 +188,7 @@ class QueryController @Inject() (val repository: Repository) extends FeatureServ
     res
   }
 
-  private def toProjectList(viewProj: Option[JsArray], qProj: Option[PropertyPathList]): Option[PropertyPathList] = {
+  private def toProjectList(viewProj: Option[JsArray], qProj: Option[ProjectionList]): Option[ProjectionList] = {
     val viewPPL = for {
       vp1 <- viewProj
       jsa <- vp1.asOpt[List[String]]
