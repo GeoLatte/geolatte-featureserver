@@ -111,7 +111,7 @@ trait Repository {
 
   def count(database: String, collection: String): Future[Long]
 
-  def metadata(database: String, collection: String, withCount: Boolean = true): Future[Metadata]
+  def metadata(database: String, collection: String, withCount: Boolean = false): Future[Metadata]
 
   def listCollections(dbname: String): Future[List[String]]
 

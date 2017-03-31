@@ -45,7 +45,7 @@ class DatabasesController @Inject() (val repository: Repository) extends Feature
 
   def getCollection(db: String, collection: String) = RepositoryAction {
     implicit request =>
-      repository.metadata(db, collection)
+      repository.metadata(db, collection, withCount = true)
         .map(CollectionResource)
         .map(Ok(_))
         .recover(commonExceptionHandler(db, collection))
