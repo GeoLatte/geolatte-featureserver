@@ -27,7 +27,7 @@ object SimpleProjection {
 
 case class TraversableProjection(simplePath: SimpleProjection, inner: ProjectionList) extends Projection {
   lazy val reads = simplePath.path.json.copyFrom(
-    simplePath.path.json.pick[JsArray].map(js => JsArray(js.as(Reads.seq(inner.reads))))
+    simplePath.path.json.pick[JsArray].map(js => JsArray(js.as(Reads.seq(inner.reads)))).orElse(Reads[JsArray] { _ => JsSuccess(JsArray()) })
   )
 }
 
