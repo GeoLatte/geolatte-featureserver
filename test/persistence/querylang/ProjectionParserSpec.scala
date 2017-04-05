@@ -83,6 +83,31 @@ class ProjectionParserSpec extends Specification {
       obj must_== expected
     }
 
+    " return empty array for arrays that don't exist: a2.doesnotexist[prop1, prop2] " in {
+      val projection = ProjectionParser.parse("a2.doesnotexist[prop1, prop2]").get
+
+      val obj = json.as(projection.reads)
+
+      val expected = Json.obj("a2" ->
+        Json.obj(
+          "doesnotexist" -> JsArray()
+        ))
+
+      obj must_== expected
+    }
+
+    " return empty array for arrays that don't exist: doesnotexist[prop1, nested[prop2]] " in {
+      val projection = ProjectionParser.parse("doesnotexist[prop1, nested[prop2]]").get
+
+      val obj = json.as(projection.reads)
+
+      val expected = Json.obj(
+        "doesnotexist" -> JsArray()
+      )
+
+      obj must_== expected
+    }
+
     " succesfully parse projection expression: a1, a2.b1[ca, cb] and combine the elements in b1  " in {
       val projection = ProjectionParser.parse("a1, a2.b1[ca, cb]").get
 
@@ -118,6 +143,87 @@ class ProjectionParserSpec extends Specification {
 
     " throw an expression when given invalid parse expression " in {
       ProjectionParser.parse("a/b/c").get must throwA[QueryParserException]
+    }
+
+  }
+
+  "ProjectionParser (nested missing arrays) " should {
+
+    val jsonText =
+      """
+          | {
+          |   "items": [{
+          |     "key": "value1",
+          |     "data" : []
+          |   },{
+          |     "key": "value2",
+          |     "data" : [{
+          |       "key2" : "value3"
+          |     }]
+          |   }]
+          | }
+        """.stripMargin
+
+    val json = Json.parse(jsonText).as[JsObject]
+
+    " ignore further inner expression when a top level array does not exist: data[prop1, prop2, nested[prop3, nested2[prop4]]] " in {
+      val projection = ProjectionParser.parse("data[prop1, prop2, nested[prop3, nested2[prop4]]]").get
+
+      val obj = json.as(projection.reads)
+
+      val expected = Json.obj(
+        "data" -> JsArray()
+      )
+
+      obj must_== expected
+    }
+
+    " return empty arrays when inner array does not exist within top level array: items[key, nested[prop3, nested2[prop4]]] " in {
+      val projection = ProjectionParser.parse("items[key, nested[prop3, nested2[prop4]]]").get
+
+      val obj = json.as(projection.reads)
+
+      val expected = Json.obj(
+        "items" -> Seq(
+          Json.obj(
+            "key" -> "value1",
+            "nested" -> JsArray()
+          ),
+          Json.obj(
+            "key" -> "value2",
+            "nested" -> JsArray()
+          )
+        )
+      )
+
+      obj must_== expected
+
+    }
+
+    " handle empty arrays correctly: items[data[key2, key3, nested[key4]]] " in {
+      val projection = ProjectionParser.parse("items[data[key2, key3, nested[key4]]]").get
+
+      val obj = json.as(projection.reads)
+
+      val expected = Json.obj(
+        "items" -> Seq(
+          Json.obj(
+            "data" -> JsArray()
+          ),
+          Json.obj(
+            "data" -> Seq(
+              Json.obj(
+                "key2" -> "value3",
+                "key3" -> JsNull,
+                "nested" -> JsArray()
+              )
+            )
+          )
+        )
+      )
+
+      obj must_== expected
+
     }
 
   }
@@ -455,6 +561,21 @@ class ProjectionParserSpec extends Specification {
               )
             )
           )
+        )
+      )
+
+      obj must_== expected
+    }
+
+    " return empty array if arrays don't exist " in {
+      val projection = ProjectionParser.parse("properties.id, properties.zijdes[kleur]").get
+
+      val obj = json.as(projection.reads)
+
+      val expected = Json.obj(
+        "properties" -> Json.obj(
+          "id" -> 166613,
+          "zijdes" -> JsArray()
         )
       )
 
