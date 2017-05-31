@@ -21,7 +21,7 @@ object RepositoryAction {
 
 }
 
-trait FeatureServerController extends Controller with FutureInstrumented {
+trait FeatureServerController extends Controller {
 
   def repository: Repository
 

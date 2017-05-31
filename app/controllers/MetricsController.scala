@@ -3,22 +3,21 @@ package controllers
 import java.io._
 import javax.inject.Inject
 
+import akka.pattern.ask
 import com.monsanto.arch.kamon.prometheus.Prometheus
 import com.monsanto.arch.kamon.prometheus.PrometheusExtension._
-import akka.pattern.ask
-import com.monsanto.arch.kamon.prometheus.metric.{ MetricFamily, TextFormat => KamonPrometheusTextFormat }
+import com.monsanto.arch.kamon.prometheus.metric.{ TextFormat => KamonPrometheusTextFormat }
 import io.prometheus.client.CollectorRegistry
 import io.prometheus.client.exporter.common.{ TextFormat => PrometheusTextFormat }
-import persistence.{ FutureInstrumented, Repository }
-import utilities.Utils._
-import play.api.mvc._
-
-import scala.concurrent.duration._
+import persistence.Repository
 import play.api.libs.concurrent.Execution.Implicits.defaultContext
+import play.api.mvc._
+import utilities.Utils._
 
 import scala.concurrent.Future
+import scala.concurrent.duration._
 
-class MetricsController @Inject() (val repository: Repository) extends Controller with FutureInstrumented {
+class MetricsController @Inject() (val repository: Repository) extends Controller {
 
   val AcceptsTextPlain = Accepting("text/plain")
   val AcceptsProtoBuf = Accepting("application/vnd.google.protobuf")
@@ -47,12 +46,10 @@ class MetricsController @Inject() (val repository: Repository) extends Controlle
   }
 
   def get() = Action.async { implicit req =>
-    futureTimed("metrics-response-time") {
-      for {
-        kamonMetrics <- getKamonSamples
-        prometheusMetrics = getPrometheusSamples
-      } yield Ok(prometheusMetrics + "\n" + kamonMetrics).withHeaders("Content-type" -> PrometheusTextFormat.CONTENT_TYPE_004)
-    }
+    for {
+      kamonMetrics <- getKamonSamples
+      prometheusMetrics = getPrometheusSamples
+    } yield Ok(prometheusMetrics + "\n" + kamonMetrics).withHeaders("Content-type" -> PrometheusTextFormat.CONTENT_TYPE_004)
   }
 
   private def getPrometheusSamples(): String = {

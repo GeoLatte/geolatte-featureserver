@@ -17,7 +17,7 @@ import scala.concurrent.Future
 import scala.language.{ implicitConversions, reflectiveCalls }
 import scala.util.{ Failure, Success }
 
-class QueryController @Inject() (val repository: Repository) extends FeatureServerController with FutureInstrumented {
+class QueryController @Inject() (val repository: Repository) extends FeatureServerController {
 
   import AppExecutionContexts.streamContext
   import config.Constants._
@@ -107,8 +107,7 @@ class QueryController @Inject() (val repository: Repository) extends FeatureServ
   }
 
   def list(db: String, collection: String) = RepositoryAction(
-    implicit request => futureTimed("featurecollection-list") {
-
+    implicit request => {
       for {
         fcr <- extractFeatureCollectionRequest(request).map(_.copy(withCount = true))
         res <- featuresToResult(db, collection, fcr) {

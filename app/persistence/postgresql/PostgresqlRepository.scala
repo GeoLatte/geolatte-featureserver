@@ -61,7 +61,7 @@ class PostgresqlRepository @Inject() (applicationLifecycle: ApplicationLifecycle
     val jsEnv = json(r.nextString())
     val env = Json.fromJson[Envelope](jsEnv) match {
       case JsSuccess(value, _) => value
-      case _ => throw new RuntimeException("Invalid envelope JSON format.")
+      case _ => throw new RuntimeException(s"Invalid envelope JSON format. $jsEnv")
     }
     val indexLevel = r.nextInt
     val id_type = r.nextString
