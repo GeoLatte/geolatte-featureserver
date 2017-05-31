@@ -7,6 +7,7 @@ import akka.stream.Materializer
 import akka.stream.scaladsl._
 import config.AppExecutionContexts
 import controllers.{ Formats, IndexDef }
+import metrics.Instrumentation
 import org.geolatte.geom.codec.{ Wkb, Wkt }
 import org.geolatte.geom.{ Envelope, Polygon }
 import org.postgresql.util.PSQLException

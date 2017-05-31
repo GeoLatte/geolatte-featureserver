@@ -5,6 +5,7 @@ import javax.inject.Inject
 import Exceptions._
 import akka.stream.scaladsl.{ JsonFraming, Keep, Sink }
 import config.AppExecutionContexts
+import metrics.Instrumentation
 import persistence.querylang.{ BooleanExpr, QueryParser }
 import persistence.{ FeatureWriter, Repository }
 import play.api.libs.json._
@@ -20,7 +21,7 @@ import scala.util.{ Failure, Success, Try }
  * @author Karel Maesen, Geovise BVBA
  *         creation-date: 7/25/13
  */
-class TxController @Inject() (val repository: Repository) extends FeatureServerController {
+class TxController @Inject() (val repository: Repository, val instrumentation: Instrumentation) extends FeatureServerController {
 
   import AppExecutionContexts.streamContext
 

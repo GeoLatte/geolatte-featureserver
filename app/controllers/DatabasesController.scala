@@ -9,13 +9,14 @@ import play.api.libs.json._
 import scala.concurrent.Future
 import play.Logger
 import Exceptions._
+import metrics.Instrumentation
 import utilities.Utils
 
 /**
  * @author Karel Maesen, Geovise BVBA
  *         creation-date: 7/22/13
  */
-class DatabasesController @Inject() (val repository: Repository) extends FeatureServerController {
+class DatabasesController @Inject() (val repository: Repository, val instrumentation: Instrumentation) extends FeatureServerController {
 
   import config.AppExecutionContexts.streamContext
 
@@ -54,6 +55,7 @@ class DatabasesController @Inject() (val repository: Repository) extends Feature
   def createCollection(db: String, col: String) = Action.async(BodyParsers.parse.tolerantJson) {
     implicit request =>
       {
+        import metrics.Operation
         def parse(body: JsValue) = body match {
 
           case JsNull => Left(Json.obj("error" -> "Received empty request body (null json)."))
@@ -65,11 +67,13 @@ class DatabasesController @Inject() (val repository: Repository) extends Feature
         }
 
         def doCreate(metadata: Metadata) = {
-          repository.createCollection(db, col, metadata).map(_ => Created(s"$db/$col ")).recover {
-            case ex: DatabaseNotFoundException => NotFound(s"No database $db")
-            case ex: CollectionAlreadyExistsException => Conflict(s"Collection $db/$col already exists.")
-            case ex: Throwable => InternalServerError(s"${Utils.withError(s"$ex") { ex.getMessage }}")
-          }
+          repository.createCollection(db, col, metadata).map(_ => Created(s"$db/$col "))
+            .andThen { case _ => instrumentation.incrementOperation(Operation.CREATE_TABLE, db, col) }
+            .recover {
+              case ex: DatabaseNotFoundException => NotFound(s"No database $db")
+              case ex: CollectionAlreadyExistsException => Conflict(s"Collection $db/$col already exists.")
+              case ex: Throwable => InternalServerError(s"${Utils.withError(s"$ex") { ex.getMessage }}")
+            }
         }
 
         parse(request.body) match {

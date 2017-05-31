@@ -4,6 +4,7 @@ import javax.inject.Inject
 
 import config.AppExecutionContexts
 import config.Constants.Format
+import metrics.Instrumentation
 import persistence.Repository
 import play.api.Logger
 import play.api.libs.json._
@@ -12,7 +13,7 @@ import utilities.JsonHelper
 
 import scala.concurrent.Future
 
-class ViewController @Inject() (val repository: Repository) extends FeatureServerController {
+class ViewController @Inject() (val repository: Repository, val instrumentation: Instrumentation) extends FeatureServerController {
 
   import AppExecutionContexts.streamContext
   import Formats._

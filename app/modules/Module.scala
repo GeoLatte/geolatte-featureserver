@@ -3,7 +3,7 @@ package modules
 import com.google.inject.AbstractModule
 import persistence.Repository
 import persistence.postgresql.PostgresqlRepository
-import metrics.{ FeatureServerMetrics, Metrics }
+import metrics.{ FeatureServerMetrics, Instrumentation, Metrics, StdInstrumentation }
 import play.api.{ Configuration, Environment }
 
 /**
@@ -17,5 +17,9 @@ class RepoModule(environment: Environment, configuration: Configuration) extends
 
 class MetricsModule(environment: Environment, configuration: Configuration) extends AbstractModule {
 
-  def configure() = bind(classOf[Metrics]).to(classOf[FeatureServerMetrics]).asEagerSingleton
+  def configure() = {
+    bind(classOf[Metrics]).to(classOf[FeatureServerMetrics]).asEagerSingleton
+    bind(classOf[Instrumentation]).to(classOf[StdInstrumentation]).asEagerSingleton
+  }
+
 }

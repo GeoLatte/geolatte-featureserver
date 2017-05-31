@@ -17,20 +17,18 @@ class PrometheusMetrics {
     .labelNames("operation", "database", "collection")
     .register()
 
-  val queryOperations = Counter.build()
-    .name("spatial_queries").help("Number of spatial queries")
-    .labelNames("database", "collection")
-    .register()
-
   val bboxHistogram = Histogram.build()
+    .buckets(100, 200, 500, 1000, 5000, 10000, 25000, 50000, 75000, 100000)
     .name("spatial_queries_bbox").help("Diagonal in meters of bbox in spatial query")
     .labelNames("database", "collection")
     .register()
 
-  val returnedItemsHistogram = Histogram.build()
-    .name("spatial_queries_returned_items").help("Number of returned items by spatial query")
-    .labelNames("database", "collection")
-    .register()
+  // Currently not possible to efficiently retrieve this information for both Streams, featurecollections
+  //  val returnedItemsHistogram = Histogram.build()
+  //    .buckets(100, 200, 500, 1000, 5000, 10000, 25000, 50000, 75000, 100000)
+  //    .name("spatial_queries_returned_items").help("Number of returned items by spatial query")
+  //    .labelNames("database", "collection")
+  //    .register()
 
   val failedRequests = Counter.build()
     .name("requests_failed_total").help("Number of failed requests.").register()
@@ -45,9 +43,8 @@ class PrometheusMetrics {
     CollectorRegistry.defaultRegistry.register(failedRequests)
     CollectorRegistry.defaultRegistry.register(requestLatency)
     CollectorRegistry.defaultRegistry.register(repoOperations)
-    CollectorRegistry.defaultRegistry.register(queryOperations)
     CollectorRegistry.defaultRegistry.register(bboxHistogram)
-    CollectorRegistry.defaultRegistry.register(returnedItemsHistogram)
+    //    CollectorRegistry.defaultRegistry.register(returnedItemsHistogram)
 
     // Register the default Hotspot collectors
     DefaultExports.initialize()

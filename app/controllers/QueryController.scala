@@ -5,6 +5,7 @@ import javax.inject.Inject
 import Exceptions._
 import akka.stream.scaladsl.Source
 import config.AppExecutionContexts
+import metrics.{ Instrumentation, Operation }
 import org.geolatte.geom.Envelope
 import org.geolatte.geom.crs.CrsId
 import persistence._
@@ -17,7 +18,7 @@ import scala.concurrent.Future
 import scala.language.{ implicitConversions, reflectiveCalls }
 import scala.util.{ Failure, Success }
 
-class QueryController @Inject() (val repository: Repository) extends FeatureServerController {
+class QueryController @Inject() (val repository: Repository, val instrumentation: Instrumentation) extends FeatureServerController {
 
   import AppExecutionContexts.streamContext
   import config.Constants._
@@ -102,6 +103,7 @@ class QueryController @Inject() (val repository: Repository) extends FeatureServ
               case _ => result
             }
         }
+        _ = instrumentation.incrementOperation(Operation.QUERY_STREAM, db, collection)
       } yield res
     } recover commonExceptionHandler(db, collection)
   }
@@ -113,6 +115,7 @@ class QueryController @Inject() (val repository: Repository) extends FeatureServ
         res <- featuresToResult(db, collection, fcr) {
           case (optTotal, features) => Ok.chunked(FeaturesResource(optTotal, features).asSource)
         }
+        _ = instrumentation.incrementOperation(Operation.QUERY_COLLECTION, db, collection)
       } yield res
 
     } recover commonExceptionHandler(db, collection)
@@ -172,6 +175,7 @@ class QueryController @Inject() (val repository: Repository) extends FeatureServ
         request.withCount
       )
       result <- repository.query(db, collection, spatialQuery, Some(request.start), request.limit)
+      _ = instrumentation.updateSpatialQueryMetrics(db, collection, spatialQuery)
     } yield result
 
   }

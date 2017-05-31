@@ -1,6 +1,9 @@
 package controllers
 
+import javax.inject.Inject
+
 import Exceptions._
+import metrics.Instrumentation
 import persistence._
 import play.Logger
 import play.api.mvc._
@@ -21,9 +24,11 @@ object RepositoryAction {
 
 }
 
-trait FeatureServerController extends Controller {
+abstract class FeatureServerController extends Controller {
 
   def repository: Repository
+
+  def instrumentation: Instrumentation
 
   def commonExceptionHandler(db: String, col: String = ""): PartialFunction[Throwable, Result] = {
 

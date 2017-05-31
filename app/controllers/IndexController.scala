@@ -4,6 +4,7 @@ import javax.inject.Inject
 
 import config.AppExecutionContexts
 import controllers.Formats._
+import metrics.Instrumentation
 import persistence.Repository
 import play.api.Logger
 import play.api.libs.json.{ JsError, JsSuccess }
@@ -11,7 +12,7 @@ import play.api.mvc.{ BodyParsers, Result }
 
 import scala.concurrent.Future
 
-class IndexController @Inject() (val repository: Repository) extends FeatureServerController {
+class IndexController @Inject() (val repository: Repository, val instrumentation: Instrumentation) extends FeatureServerController {
 
   import AppExecutionContexts._
   import ResourceWriteables._
