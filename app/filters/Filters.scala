@@ -5,21 +5,19 @@ import javax.inject.Inject
 import akka.stream.Materializer
 import metrics.Metrics
 import org.slf4j.LoggerFactory
-import play.api.http.DefaultHttpFilters
+import play.api.http.{ DefaultHttpFilters, HttpFilters }
 import play.api.mvc._
 import play.filters.gzip.GzipFilter
 
-import scala.concurrent.{ ExecutionContext, Future }
 import scala.concurrent.ExecutionContext.Implicits.global
+import scala.concurrent.{ ExecutionContext, Future }
 
-class LoggingFilter @Inject() (implicit val metrics: Metrics, val mat: Materializer, ec: ExecutionContext) extends Filter {
+class MetricsFilter @Inject() (implicit val metrics: Metrics, val mat: Materializer, ec: ExecutionContext) extends Filter {
 
   def apply(nextFilter: RequestHeader => Future[Result])(requestHeader: RequestHeader): Future[Result] = {
 
     val startTime = System.currentTimeMillis
     val timer = metrics.prometheusMetrics.requestLatency.startTimer()
-
-    val requestLogger = LoggerFactory.getLogger("requests")
 
     nextFilter(requestHeader).map { result =>
       if (requestHeader.path.contains("metrics"))
@@ -33,13 +31,16 @@ class LoggingFilter @Inject() (implicit val metrics: Metrics, val mat: Materiali
         if (result.header.status != 200) {
           metrics.prometheusMetrics.failedRequests.inc()
         }
-
-        requestLogger.info(s"${requestHeader.method} ${requestHeader.uri} ; $requestTime ; ${result.header.status}")
-        result.withHeaders("Request-Time" -> requestTime.toString)
+        result.withHeaders("Query-Time" -> requestTime.toString)
       }
     }
   }
 
 }
 
-class Filters @Inject() (gzip: GzipFilter, logger: LoggingFilter) extends DefaultHttpFilters(gzip, logger)
+//class Filters @Inject() (gzip: GzipFilter, logger: MetricsFilter, accessLogger: AccessLogFilter)
+//  extends DefaultHttpFilters(gzip, accessLogger, logger)
+
+class Filters @Inject() (gzip: GzipFilter, metrics: MetricsFilter, access: AccessLogFilter) extends HttpFilters {
+  override val filters = Seq(gzip, access, metrics)
+}
