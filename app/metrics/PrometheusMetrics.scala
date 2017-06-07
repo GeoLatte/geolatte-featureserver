@@ -1,7 +1,6 @@
 package metrics
 
 import io.prometheus.client._
-import play.api.Logger
 
 /**
  * Created by Karel Maesen, Geovise BVBA on 22/02/16.
@@ -34,6 +33,24 @@ class PrometheusMetrics {
     .labelNames("operation")
     .create()
 
+  val dbioStreamComplete: Histogram = Histogram.build()
+    .exponentialBuckets(1, 2.0, 10)
+    .name("dbio_stream_completed_milliseconds").help("DBIO streaming finished after milliseconds.")
+    .labelNames("database", "collection")
+    .create()
+
+  val dbioStreamStart: Histogram = Histogram.build()
+    .exponentialBuckets(1, 2.0, 15)
+    .name("dbio_stream_start_milliseconds").help("DBIO streaming received first element after milliseconds.")
+    .labelNames("database", "collection")
+    .create()
+
+  val numObjectsRetrieved: Histogram = Histogram.build()
+    .buckets(100, 200, 500, 1000, 1500, 2000, 3000, 4000, 5000, 7500, 10000, 15000)
+    .name("number_fetched").help("Number of objects streamed from database.")
+    .labelNames("database", "collection")
+    .create()
+
   def register(registry: CollectorRegistry): Unit = {
     registry.register(totalRequests)
     registry.register(failedRequests)
@@ -41,6 +58,9 @@ class PrometheusMetrics {
     registry.register(repoOperations)
     registry.register(bboxHistogram)
     registry.register(dbio)
+    registry.register(dbioStreamStart)
+    registry.register(dbioStreamComplete)
+    registry.register(numObjectsRetrieved)
   }
 
 }

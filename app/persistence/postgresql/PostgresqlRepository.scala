@@ -3,10 +3,9 @@ package persistence.postgresql
 import javax.inject._
 
 import Exceptions._
-import akka.stream.{ FlowShape, Materializer }
+import akka.stream._
 import akka.stream.scaladsl._
-import akka.stream.stage.GraphStage
-import akka.util.ByteString
+import akka.stream.stage.{ GraphStage, GraphStageLogic, InHandler, OutHandler }
 import config.AppExecutionContexts
 import controllers.{ Formats, IndexDef }
 import metrics.Metrics
@@ -149,7 +148,7 @@ class PostgresqlRepository @Inject() (applicationLifecycle: ApplicationLifecycle
       ).map(_ => true)
 
       for {
-        exists <- existsCollection(db, collection) flatMap { b =>
+        _ <- existsCollection(db, collection) flatMap { b =>
           if (b) Future.failed(CollectionAlreadyExistsException(s"Collection $db/$collection already exists"))
           else Future.successful(b)
         }
@@ -217,6 +216,7 @@ class PostgresqlRepository @Inject() (applicationLifecycle: ApplicationLifecycle
   override def query(db: String, collection: String, spatialQuery: SpatialQuery, start: Option[Int] = None,
     limit: Option[Int] = None): Future[CountedQueryResult] = {
 
+    val startMillis = System.currentTimeMillis()
     val projectingReads: Option[Reads[JsObject]] =
       for {
         ppl <- spatialQuery.projection
@@ -250,7 +250,7 @@ class PostgresqlRepository @Inject() (applicationLifecycle: ApplicationLifecycle
 
     for {
       cnt <- fCnt
-    } yield (cnt, Source.fromPublisher(publisher))
+    } yield (cnt, Source.fromPublisher(publisher).via(new MetricCalculator(startMillis, db, collection)))
 
   }
 
@@ -279,7 +279,7 @@ class PostgresqlRepository @Inject() (applicationLifecycle: ApplicationLifecycle
         case (evr, validator) =>
           batchInsert(database, collection, Seq((json.as(validator), json.as[Polygon](evr))))
       }.recover {
-        case t: play.api.libs.json.JsResultException =>
+        case _: play.api.libs.json.JsResultException =>
           throw InvalidParamsException("Invalid Json object")
       }
 
@@ -767,9 +767,9 @@ class PostgresqlRepository @Inject() (applicationLifecycle: ApplicationLifecycle
 
   object MappableException {
 
-    def getStatus(dbe: PSQLException) = dbe.getServerErrorMessage.getSQLState
+    def getStatus(dbe: PSQLException): String = dbe.getServerErrorMessage.getSQLState
 
-    def getMessage(dbe: PSQLException) = dbe.getServerErrorMessage.getMessage
+    def getMessage(dbe: PSQLException): String = dbe.getServerErrorMessage.getMessage
 
     def unapply(t: Throwable): Option[RuntimeException] = t match {
       case t: PSQLException if getStatus(t).contains("42P06") =>
@@ -784,34 +784,43 @@ class PostgresqlRepository @Inject() (applicationLifecycle: ApplicationLifecycle
     }
   }
 
-  //  class MetricCalculator extends GraphStage[FlowShape[JsObject, JsObject]] {
-  //    val in = Inlet[ByteString]("DigestCalculator.in")
-  //    val out = Outlet[ByteString]("DigestCalculator.out")
-  //    override val shape = FlowShape.of(in, out)
-  //
-  //    override def createLogic(inheritedAttributes: Attributes): GraphStageLogic = new GraphStageLogic(shape) {
-  //      val digest = MessageDigest.getInstance(algorithm)
-  //
-  //      setHandler(out, new OutHandler {
-  //        override def onPull(): Trigger = {
-  //          pull(in)
-  //        }
-  //      })
-  //
-  //      setHandler(in, new InHandler {
-  //        override def onPush(): Trigger = {
-  //          val chunk = grab(in)
-  //          digest.update(chunk.toArray)
-  //          pull(in)
-  //        }
-  //
-  //        override def onUpstreamFinish(): Unit = {
-  //          emit(out, ByteString(digest.digest()))
-  //          completeStage()
-  //        }
-  //      })
-  //
-  //    }
-  //  }
+  class MetricCalculator(startMillis: Long, db: String, coll: String) extends GraphStage[FlowShape[JsObject, JsObject]] {
+
+    val in = Inlet[JsObject]("object.in")
+    val out = Outlet[JsObject]("object.out")
+    override val shape = FlowShape.of(in, out)
+
+    override def createLogic(inheritedAttributes: Attributes): GraphStageLogic = new GraphStageLogic(shape) {
+      var cnt = 0
+      var started = false
+
+      def time = System.currentTimeMillis() - startMillis
+
+      setHandler(out, new OutHandler {
+        override def onPull() = {
+          if (started) ()
+          else {
+            started = true
+            metrics.prometheusMetrics.dbioStreamStart.labels(db, coll).observe(time)
+          }
+          pull(in)
+        }
+      })
+
+      setHandler(in, new InHandler {
+        override def onPush() = {
+          cnt = cnt + 1
+          push(out, grab(in))
+        }
+
+        override def onUpstreamFinish(): Unit = {
+          metrics.prometheusMetrics.dbioStreamComplete.labels(db, coll).observe(time)
+          metrics.prometheusMetrics.numObjectsRetrieved.labels(db, coll).observe(cnt)
+          completeStage()
+        }
+      })
+
+    }
+  }
 
 }

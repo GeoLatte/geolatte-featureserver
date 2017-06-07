@@ -16,20 +16,20 @@ import scala.concurrent.Future
  */
 trait Metrics {
 
-  def collectorRegistry: CollectorRegistry
-
   def prometheusMetrics: PrometheusMetrics
 
   def dropWizardMetricRegistry: DropWizardRegistry
+
+  def collectorRegistry: CollectorRegistry
 
 }
 
 @Singleton
 class FeatureServerMetrics @Inject() (lifecycle: ApplicationLifecycle) extends Metrics {
 
-  override val collectorRegistry = CollectorRegistry.defaultRegistry
-  override val prometheusMetrics = new PrometheusMetrics
-  override val dropWizardMetricRegistry = new com.codahale.metrics.MetricRegistry()
+  override val prometheusMetrics: PrometheusMetrics = new PrometheusMetrics
+  override val dropWizardMetricRegistry: DropWizardRegistry = new com.codahale.metrics.MetricRegistry()
+  override val collectorRegistry: CollectorRegistry = CollectorRegistry.defaultRegistry
 
   prometheusMetrics.register(collectorRegistry)
   Logger.info("RegisterdPrometheus metrics")
