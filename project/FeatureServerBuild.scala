@@ -48,7 +48,8 @@ object FeatureServerBuild extends Build {
   lazy val prometheusDependencies = Seq(
     "io.prometheus" % "simpleclient" % prometheusClientVersion,
     "io.prometheus" % "simpleclient_common" % prometheusClientVersion,
-    "io.prometheus" % "simpleclient_hotspot" % prometheusClientVersion
+    "io.prometheus" % "simpleclient_hotspot" % prometheusClientVersion,
+    "io.prometheus" % "simpleclient_dropwizard" % prometheusClientVersion
   )
 
   lazy val testDependencies = Seq(

@@ -11,15 +11,15 @@ import play.api.{ Configuration, Environment }
  */
 class RepoModule(environment: Environment, configuration: Configuration) extends AbstractModule {
 
-  def configure() = bind(classOf[Repository]).to(classOf[PostgresqlRepository]).asEagerSingleton
+  def configure() = bind(classOf[Repository]).to(classOf[PostgresqlRepository]).asEagerSingleton()
 
 }
 
 class MetricsModule(environment: Environment, configuration: Configuration) extends AbstractModule {
 
   def configure() = {
-    bind(classOf[Metrics]).to(classOf[FeatureServerMetrics]).asEagerSingleton
-    bind(classOf[Instrumentation]).to(classOf[StdInstrumentation]).asEagerSingleton
+    bind(classOf[Metrics]).to(classOf[FeatureServerMetrics]).asEagerSingleton()
+    bind(classOf[Instrumentation]).to(classOf[StdInstrumentation]).asEagerSingleton()
   }
 
 }

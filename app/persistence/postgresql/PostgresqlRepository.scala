@@ -7,30 +7,41 @@ import akka.stream.Materializer
 import akka.stream.scaladsl._
 import config.AppExecutionContexts
 import controllers.{ Formats, IndexDef }
-import metrics.Instrumentation
+import metrics.{ Instrumentation, Metrics }
 import org.geolatte.geom.codec.{ Wkb, Wkt }
 import org.geolatte.geom.{ Envelope, Polygon }
 import org.postgresql.util.PSQLException
 import persistence._
 import persistence.querylang.{ BooleanExpr, QueryParser }
+import play.api.Logger
 import play.api.inject.ApplicationLifecycle
 import play.api.libs.json._
 import slick.basic.DatabasePublisher
 import slick.jdbc.PostgresProfile.api._
-import slick.jdbc.{ GetResult, PositionedResult }
+import slick.jdbc.hikaricp.HikariCPJdbcDataSource
+import slick.jdbc.{ GetResult, PositionedResult, PostgresProfile }
 import utilities.{ GeometryReaders, JsonUtils, Utils }
 
 import scala.concurrent.Future
 
 @Singleton
-class PostgresqlRepository @Inject() (applicationLifecycle: ApplicationLifecycle, implicit val mat: Materializer) extends Repository {
+class PostgresqlRepository @Inject() (applicationLifecycle: ApplicationLifecycle, metrics: Metrics, implicit val mat: Materializer) extends Repository {
 
   import AppExecutionContexts.streamContext
   import GeometryReaders._
   import utilities.Utils._
 
   private val geoJsonCol = "__geojson"
-  lazy val database = Database.forConfig("fs.postgresql")
+
+  private def mkDatabaseWithMetrics(db: Database): Database =
+    if (db.source.isInstanceOf[HikariCPJdbcDataSource]) {
+      Logger.info(s"Setting DropWizard MetricRegistry on HikariCP data source")
+      val ds = db.source.asInstanceOf[HikariCPJdbcDataSource].ds
+      ds.setMetricRegistry(metrics.dropWizardMetricRegistry)
+      db
+    } else db
+
+  lazy val database = mkDatabaseWithMetrics(Database.forConfig("fs.postgresql"))
 
   applicationLifecycle.addStopHook(
     () => Utils.withInfo("Closing database") {

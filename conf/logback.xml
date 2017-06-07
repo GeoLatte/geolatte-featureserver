@@ -49,4 +49,11 @@
         <appender-ref ref="FILE"/>
     </logger>
 
+
+
+    <logger name="com.zaxxer.hikari" level="WARN" additivity="false">
+        <appender-ref ref="FILE"/>
+    </logger>
+
+
 </configuration>
