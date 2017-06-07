@@ -38,9 +38,9 @@ object FeatureServerBuild extends Build {
   )
 
   lazy val psqlDependencies = Seq(
-    "com.typesafe.slick" %% "slick" % "3.2.0-M1",
-    "com.typesafe.slick" %% "slick-hikaricp" % "3.2.0-M1",
-    "postgresql" % "postgresql" % "9.1-901.jdbc4"
+    "com.typesafe.slick" %% "slick" % "3.2.0",
+    "com.typesafe.slick" %% "slick-hikaricp" % "3.2.0",
+    "org.postgresql" % "postgresql" % "42.1.1"
   )
 
   lazy val prometheusClientVersion = "0.0.23"
