@@ -28,12 +28,19 @@ class PrometheusMetrics {
   val requestLatency: Histogram = Histogram.build()
     .name("requests_latency_seconds").help("Request latency in seconds.").create()
 
+  val dbio: Histogram = Histogram.build()
+    .exponentialBuckets(0.1, 2.0, 10)
+    .name("dbio_op_milliseconds").help("DBIO operations in milliseconds.")
+    .labelNames("operation")
+    .create()
+
   def register(registry: CollectorRegistry): Unit = {
     registry.register(totalRequests)
     registry.register(failedRequests)
     registry.register(requestLatency)
     registry.register(repoOperations)
     registry.register(bboxHistogram)
+    registry.register(dbio)
   }
 
 }

@@ -21,6 +21,7 @@ trait Metrics {
   def prometheusMetrics: PrometheusMetrics
 
   def dropWizardMetricRegistry: DropWizardRegistry
+
 }
 
 @Singleton
