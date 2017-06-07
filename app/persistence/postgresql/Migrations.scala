@@ -58,7 +58,7 @@ object Migrations {
     db.run(stmt.transactionally)
       .map(_ => withInfo(s"Migration ${migration.version} successfully applied")(true))
       .recover {
-        case t => withError(s"Migration ${migration.version} failed on schema ${migration.schema}\n ${stmt}")(false)
+        case t => withError(s"Migration ${migration.version} failed on schema ${migration.schema}", t)(false)
       }
   }
 
@@ -69,7 +69,7 @@ object Migrations {
   private def registerMigrationStmt(migration: Migration) = {
     def toString(action: SqlAction[_, _, _]): String = action.statements.toList.mkString(";")
     sqlu"""
-       insert into #${migration.schema}.geolatte_nosql_migrations values(${migration.version}, '${toString(migration.statement)}');
+       insert into #${migration.schema}.geolatte_nosql_migrations values(${migration.version}, ${toString(migration.statement)});
      """
   }
 }

@@ -34,6 +34,11 @@ object Utils {
     t
   }
 
+  def withError[T](msg: String, cause: Throwable)(t: => T) = {
+    Logger.error(msg, cause)
+    t
+  }
+
   def withDebug[T](msg: String)(t: => T) = {
     Logger.debug(msg)
     t

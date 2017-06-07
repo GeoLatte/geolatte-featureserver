@@ -14,9 +14,9 @@ import org.geolatte.geom.{ Envelope, Polygon }
 import org.postgresql.util.PSQLException
 import persistence._
 import persistence.querylang.{ BooleanExpr, QueryParser }
-import play.api.Logger
 import play.api.inject.ApplicationLifecycle
 import play.api.libs.json._
+import play.api.{ Configuration, Logger }
 import slick.basic.DatabasePublisher
 import slick.jdbc.PostgresProfile.api._
 import slick.jdbc.hikaricp.HikariCPJdbcDataSource
@@ -26,7 +26,12 @@ import utilities.{ GeometryReaders, JsonUtils, Utils }
 import scala.concurrent.Future
 
 @Singleton
-class PostgresqlRepository @Inject() (applicationLifecycle: ApplicationLifecycle, metrics: Metrics, implicit val mat: Materializer)
+class PostgresqlRepository @Inject() (
+  configuration: Configuration,
+  applicationLifecycle: ApplicationLifecycle,
+  metrics: Metrics,
+  implicit val mat: Materializer
+)
     extends Repository {
 
   import AppExecutionContexts.streamContext
@@ -35,13 +40,17 @@ class PostgresqlRepository @Inject() (applicationLifecycle: ApplicationLifecycle
 
   private val geoJsonCol = "__geojson"
 
+  private lazy val excludedSchemas: Option[Seq[String]] = configuration.getStringSeq("fs.exclude")
+
   private def mkDatabaseWithMetrics(db: Database): Database =
-    if (db.source.isInstanceOf[HikariCPJdbcDataSource]) {
-      Logger.info(s"Setting DropWizard MetricRegistry on HikariCP data source")
-      val ds = db.source.asInstanceOf[HikariCPJdbcDataSource].ds
-      ds.setMetricRegistry(metrics.dropWizardMetricRegistry)
-      db
-    } else db
+    db.source match {
+      case source: HikariCPJdbcDataSource =>
+        Logger.info(s"Setting DropWizard MetricRegistry on HikariCP data source")
+        val ds = source.ds
+        ds.setMetricRegistry(metrics.dropWizardMetricRegistry)
+        db
+      case _ => db
+    }
 
   lazy val database = mkDatabaseWithMetrics(Database.forConfig("fs.postgresql"))
 
@@ -488,12 +497,31 @@ class PostgresqlRepository @Inject() (applicationLifecycle: ApplicationLifecycle
 
   private def toColName(str: String): String = str.replaceAll("-", "_")
 
+  private def schemaIsExcluded(collName: String): Boolean = excludedSchemas match {
+    case Some(col) => col.contains(collName)
+    case _ => false
+  }
+
+  private def withExcludeSchemas(clause: String, prop: String) = {
+    def quoted(coll: Seq[String]) = coll.map(single_quote) mkString ","
+    (clause, excludedSchemas) match {
+      case (c, Some(coll)) if c.isEmpty => s" $prop not in ( ${quoted(coll)} )"
+      case (c, Some(coll)) => s" $c AND $prop not in ( ${quoted(coll)} )"
+      case _ => clause
+    }
+  }
+
   //These are the SQL statements for managing and retrieving data
   object Sql {
 
     import MetadataIdentifiers._
 
-    val LIST_SCHEMA = sql"select schema_name from information_schema.schemata where schema_owner = current_user".as[String]
+    val LIST_SCHEMA =
+      sql"""
+           select schema_name
+           from information_schema.schemata
+           where #${withExcludeSchemas("schema_owner = current_user", "schema_name")}
+         """.as[String]
 
     private def fldSortSpecToSortExpr(spec: FldSortSpec): String = {
       //we use the #>> operator for 9.3 support, which extracts to text

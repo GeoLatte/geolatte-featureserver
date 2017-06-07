@@ -45,7 +45,7 @@
         <appender-ref ref="ASYNCACCESSFILE"/>
     </logger>
 
-    <logger name="slick.jdbc.JdbcBackend.statement" level="INFO" additivity="false">
+    <logger name="slick.jdbc.JdbcBackend.statement" level="WARN" additivity="false">
         <appender-ref ref="FILE"/>
     </logger>
 
