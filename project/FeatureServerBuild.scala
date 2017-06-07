@@ -43,14 +43,7 @@ object FeatureServerBuild extends Build {
     "postgresql" % "postgresql" % "9.1-901.jdbc4"
   )
 
-  val kamonVersion = "0.6.2"
-
-  lazy val kamonDependencies = Seq(
-    "io.kamon" %% "kamon-core" % kamonVersion
-    , "com.monsanto.arch" %% "kamon-prometheus" % "0.2.0"
-  )
-
-  lazy val prometheusClientVersion = "0.0.15"
+  lazy val prometheusClientVersion = "0.0.23"
 
   lazy val prometheusDependencies = Seq(
     "io.prometheus" % "simpleclient" % prometheusClientVersion,
@@ -66,7 +59,6 @@ object FeatureServerBuild extends Build {
   //Dependencies
   lazy val dependencies = coreDependencies ++
     psqlDependencies ++
-    kamonDependencies ++
     prometheusDependencies ++
     testDependencies
 

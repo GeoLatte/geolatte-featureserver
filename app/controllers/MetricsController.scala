@@ -3,18 +3,11 @@ package controllers
 import java.io._
 import javax.inject.Inject
 
-import akka.pattern.ask
-import com.monsanto.arch.kamon.prometheus.Prometheus
-import com.monsanto.arch.kamon.prometheus.PrometheusExtension._
-import com.monsanto.arch.kamon.prometheus.metric.{ TextFormat => KamonPrometheusTextFormat }
 import io.prometheus.client.CollectorRegistry
 import io.prometheus.client.exporter.common.{ TextFormat => PrometheusTextFormat }
 import persistence.Repository
-import play.api.libs.concurrent.Execution.Implicits.defaultContext
 import play.api.mvc._
-import utilities.Utils._
 
-import scala.concurrent.Future
 import scala.concurrent.duration._
 
 class MetricsController @Inject() (val repository: Repository) extends Controller {
@@ -27,29 +20,9 @@ class MetricsController @Inject() (val repository: Repository) extends Controlle
 
   implicit val timeout: akka.util.Timeout = 5.seconds
 
-  def getKamonSamples: Future[String] = {
-
-    val fSnapshot = for {
-      extension <- Prometheus.kamonInstance
-      Snapshot(s) <- extension.ref.ask(GetCurrentSnapshot)(1 second)
-    } yield s
-
-    fSnapshot
-      .map {
-        KamonPrometheusTextFormat.format(_)
-      }.recoverWith {
-        case ex =>
-          withWarning(s"No Kamon metrics snapshot, because $ex") {
-            Future.successful("")
-          }
-      }
-  }
-
-  def get() = Action.async { implicit req =>
-    for {
-      kamonMetrics <- getKamonSamples
-      prometheusMetrics = getPrometheusSamples
-    } yield Ok(prometheusMetrics + "\n" + kamonMetrics).withHeaders("Content-type" -> PrometheusTextFormat.CONTENT_TYPE_004)
+  def get() = Action { implicit req =>
+    val prometheusMetrics = getPrometheusSamples
+    Ok(prometheusMetrics).withHeaders("Content-type" -> PrometheusTextFormat.CONTENT_TYPE_004)
   }
 
   private def getPrometheusSamples(): String = {

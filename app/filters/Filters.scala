@@ -38,9 +38,5 @@ class MetricsFilter @Inject() (implicit val metrics: Metrics, val mat: Materiali
 
 }
 
-//class Filters @Inject() (gzip: GzipFilter, logger: MetricsFilter, accessLogger: AccessLogFilter)
-//  extends DefaultHttpFilters(gzip, accessLogger, logger)
-
-class Filters @Inject() (gzip: GzipFilter, metrics: MetricsFilter, access: AccessLogFilter) extends HttpFilters {
-  override val filters = Seq(gzip, access, metrics)
-}
+class Filters @Inject() (gzip: GzipFilter, metrics: MetricsFilter, access: AccessLogFilter)
+  extends DefaultHttpFilters(access, gzip, metrics)
