@@ -1,5 +1,8 @@
 package persistence
 
+import java.sql.Timestamp
+import java.time.OffsetDateTime
+
 import akka.stream.scaladsl.Source
 import controllers.IndexDef
 import utilities.GeometryReaders._
@@ -87,6 +90,44 @@ case class SpatialQuery(
 trait FeatureWriter {
 
   def add(features: Seq[JsObject]): Future[Int]
+
+}
+
+case class TableStats(
+  schemaName: String,
+  relName: String,
+  numberLiveTup: Long,
+  numberDeadTup: Long,
+  numberModSinceAnalyse: Long,
+  lastVacuum: Option[Timestamp],
+  lastAutoVacuum: Option[Timestamp],
+  lastAnalyze: Option[Timestamp],
+  lastAutoAnalyze: Option[Timestamp],
+  vacuumCount: Long,
+  autovacuumCount: Long,
+  analyzeCount: Long,
+  autoanalyzeCount: Long
+)
+
+case class ActivityStats(
+  pid: Long,
+  name: String,
+  xactStart: Option[Timestamp],
+  queryStart: Option[Timestamp],
+  waitEventType: Option[String],
+  waitEvent: Option[String],
+  state: Option[String],
+  query: Option[String]
+)
+
+/**
+ * Exposes "Health" information on the Repository
+ */
+trait RepoHealth {
+
+  def getActivityStats: Future[Vector[ActivityStats]]
+
+  def getTableStats: Future[Vector[TableStats]]
 
 }
 

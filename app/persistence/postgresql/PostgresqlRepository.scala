@@ -32,7 +32,7 @@ class PostgresqlRepository @Inject() (
   metrics: Metrics,
   implicit val mat: Materializer
 )
-    extends Repository {
+    extends Repository with RepoHealth {
 
   import AppExecutionContexts.streamContext
   import GeometryReaders._
@@ -443,6 +443,11 @@ class PostgresqlRepository @Inject() (
   override def dropIndex(db: String, collection: String, index: String): Future[Boolean] =
     runOnDb("drop-index")(Sql.DROP_INDEX(db, collection, index)) map { _ => true }
 
+  // RepoHealth implementation
+
+  override def getActivityStats: Future[Vector[ActivityStats]] = runOnDb("pg_activity_stats") { Sql.SELECT_PG_STATS }
+  override def getTableStats: Future[Vector[TableStats]] = runOnDb("pg_table_stats") { Sql.SELECT_PG_STAT_TABLES }
+
   //************************************************************************
   //Private Utility methods
   //************************************************************************
@@ -791,6 +796,26 @@ class PostgresqlRepository @Inject() (
          DROP INDEX IF EXISTS #${quote(db)}.#${quote(indexName)}
      """
 
+    implicit val getTableStatsResult = GetResult(r => TableStats(r.<<, r.<<, r.<<, r.<<, r.<<, r.<<, r.<<, r.<<, r.<<,
+      r.<<, r.<<, r.<<, r.<<))
+
+    implicit val getResultActivityStats = GetResult(r => ActivityStats(r.<<, r.<<, r.<<, r.<<, r.<<, r.<<, r.<<, r.<<))
+
+    val SELECT_PG_STATS =
+      sql"""
+           SELECT pid, application_name, xact_start, query_start,
+                  wait_event_type, wait_event, state, query
+           FROM pg_stat_activity
+         """.as[ActivityStats]
+
+    val SELECT_PG_STAT_TABLES =
+      sql"""
+            SELECT schemaname, relname, n_live_tup, n_dead_tup, n_mod_since_analyze,
+                   last_vacuum, last_autovacuum, last_analyze, last_autoanalyze, vacuum_count,
+                   autovacuum_count, analyze_count, autoanalyze_count
+            FROM pg_stat_user_tables
+        """.as[TableStats]
+
   }
 
   object MappableException {
@@ -850,5 +875,4 @@ class PostgresqlRepository @Inject() (
 
     }
   }
-
 }

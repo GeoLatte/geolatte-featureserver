@@ -1,7 +1,7 @@
 package modules
 
 import com.google.inject.AbstractModule
-import persistence.Repository
+import persistence.{ RepoHealth, Repository }
 import persistence.postgresql.PostgresqlRepository
 import metrics.{ FeatureServerMetrics, Instrumentation, Metrics, StdInstrumentation }
 import play.api.{ Configuration, Environment }
@@ -11,7 +11,11 @@ import play.api.{ Configuration, Environment }
  */
 class RepoModule(environment: Environment, configuration: Configuration) extends AbstractModule {
 
-  def configure() = bind(classOf[Repository]).to(classOf[PostgresqlRepository]).asEagerSingleton()
+  def configure() = {
+    bind(classOf[Repository]).to(classOf[PostgresqlRepository]).asEagerSingleton()
+    //TODO -- verify that PostgresqlRepository is still a singleton
+    bind(classOf[RepoHealth]).to(classOf[PostgresqlRepository]).asEagerSingleton()
+  }
 
 }
 

@@ -1,14 +1,17 @@
 package controllers
 
+import java.sql.Timestamp
+
 import Exceptions.UnsupportedMediaException
 import akka.stream.scaladsl.Source
 import akka.util.ByteString
 import config.Constants
 import utilities.GeometryReaders._
-import persistence.{ Metadata, MetadataIdentifiers }
+import persistence.{ ActivityStats, Metadata, MetadataIdentifiers, TableStats }
 import org.apache.commons.codec.binary.Base64
 import org.geolatte.geom.crs.CrsId
 import org.geolatte.geom.{ Envelope, Geometry, Point }
+import org.joda.time.DateTime
 import org.supercsv.encoder.DefaultCsvEncoder
 import org.supercsv.prefs.CsvPreference
 import org.supercsv.util.CsvContext
@@ -17,6 +20,7 @@ import play.api.http.{ MediaType, Writeable }
 import play.api.libs.functional.syntax._
 import play.api.libs.json.Reads._
 import play.api.libs.json._
+import play.api.libs.json.Json._
 import play.api.mvc._
 import utilities.Utils
 
@@ -251,6 +255,22 @@ object Formats {
   )(unlift(IndexDef.unapply))
 
   implicit val IndexDefFormat: Format[IndexDef] = Format(IndexDefReads, IndexDefWrites)
+
+  def timestampToDateTime(t: Timestamp): DateTime = new DateTime(t.getTime)
+
+  def dateTimeToTimestamp(dt: DateTime): Timestamp = new Timestamp(dt.getMillis)
+
+  implicit val timestampFormat = new Format[Timestamp] {
+
+    def writes(t: Timestamp): JsValue = toJson(timestampToDateTime(t))
+
+    def reads(json: JsValue): JsResult[Timestamp] = fromJson[DateTime](json).map(dateTimeToTimestamp)
+
+  }
+
+  implicit val TableStatsFormat: Format[TableStats] = Json.format[TableStats]
+
+  implicit val ActivityStatsFormat: Format[ActivityStats] = Json.format[ActivityStats]
 
 }
 

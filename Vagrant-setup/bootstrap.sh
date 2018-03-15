@@ -8,8 +8,8 @@ APP_DB_PASS=nosql
 APP_DB_NAME=$APP_DB_USER
 
 # Edit the following to change the version of PostgreSQL that is installed
-PG_VERSION=9.3
-POSTGIS_VERSION=2.1
+PG_VERSION=9.6
+POSTGIS_VERSION=2.3
 
 ###########################################################
 # Changes below this line are probably not necessary
@@ -88,18 +88,18 @@ service postgresql restart
 cat << EOF | su - postgres -c psql
 -- Create the database user:
 CREATE USER $APP_DB_USER WITH PASSWORD '$APP_DB_PASS';
- 
+
 EOF
 
 # create a postgis template
 
 sudo su  - postgres -c "createdb -E UTF8 template_postgis --template template0"
 
-cat << EOF | sudo -u postgres psql -d postgres 
+cat << EOF | sudo -u postgres psql -d postgres
 UPDATE pg_database SET datistemplate='true' WHERE datname='template_postgis'
 EOF
 sudo -u postgres psql -d template_postgis -f /usr/share/postgresql/$PG_VERSION/contrib/postgis-$POSTGIS_VERSION/postgis.sql
-sudo -u postgres psql -d template_postgis -c "GRANT ALL ON geometry_columns TO PUBLIC;" 
+sudo -u postgres psql -d template_postgis -c "GRANT ALL ON geometry_columns TO PUBLIC;"
 sudo -u postgres psql -d template_postgis -c "GRANT ALL ON geography_columns TO PUBLIC;"
 sudo -u postgres psql -d template_postgis -c "GRANT ALL ON spatial_ref_sys TO PUBLIC;"
 sudo -u postgres createdb -E UTF8 --template=template_postgis -O $APP_DB_USER $APP_DB_NAME
