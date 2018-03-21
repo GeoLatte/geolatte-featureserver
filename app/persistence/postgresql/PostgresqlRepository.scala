@@ -264,7 +264,7 @@ class PostgresqlRepository @Inject() (
   }
 
   override def delete(db: String, collection: String, query: BooleanExpr): Future[Boolean] =
-    runOnDb("delete-database")(Sql.DELETE_DATA(db, collection, PGJsonQueryRenderer.render(query))) map { _ => true }
+    runOnDb("delete-data")(Sql.DELETE_DATA(db, collection, PGJsonQueryRenderer.render(query))) map { _ => true }
 
   def batchInsert(db: String, collection: String, jsons: Seq[(JsObject, Polygon)]): Future[Int] = {
     def id(json: JsValue): Any = json match {
