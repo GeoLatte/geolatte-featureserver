@@ -73,11 +73,10 @@ abstract class InCollectionSpecification extends FeatureServerSpecification {
   def matchFeaturesInCsv(expectedColumnHeader: String): Matcher[Seq[String]] = (
     (received: Seq[String]) => {
       val lines = received.flatMap(l => received(0).split("\n")).map(_.trim)
+      lines.foreach(println)
       val header = lines(0)
-      val numSeps = header.split(",").length - 1
-      def countSeps(l: String) = l.filter(_ == ',').length
-      header == expectedColumnHeader && lines.forall(countSeps(_) == numSeps)
-    }, "Featurecollection CSV doesn't contain expected columns, or has irregular structure"
+      header == expectedColumnHeader
+    }, "Featurecollection CSV doesn't contain expected columns"
   )
 
   def matchTotalInJson(expectedTotal: Int): Matcher[JsValue] = (

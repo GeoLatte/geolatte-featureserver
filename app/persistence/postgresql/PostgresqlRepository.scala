@@ -1,7 +1,6 @@
 package persistence.postgresql
 
 import javax.inject._
-
 import Exceptions._
 import akka.stream._
 import akka.stream.scaladsl._
@@ -10,7 +9,7 @@ import config.AppExecutionContexts
 import controllers.{ Formats, IndexDef }
 import metrics.Metrics
 import org.geolatte.geom.codec.{ Wkb, Wkt }
-import org.geolatte.geom.{ Envelope, Polygon }
+import org.geolatte.geom.{ Envelope, Geometry, Polygon }
 import org.postgresql.util.PSQLException
 import persistence._
 import persistence.querylang.{ BooleanExpr, QueryParser }
@@ -266,7 +265,7 @@ class PostgresqlRepository @Inject() (
   override def delete(db: String, collection: String, query: BooleanExpr): Future[Boolean] =
     runOnDb("delete-data")(Sql.DELETE_DATA(db, collection, PGJsonQueryRenderer.render(query))) map { _ => true }
 
-  def batchInsert(db: String, collection: String, jsons: Seq[(JsObject, Polygon)]): Future[Int] = {
+  def batchInsert(db: String, collection: String, jsons: Seq[(JsObject, Geometry)]): Future[Int] = {
     def id(json: JsValue): Any = json match {
       case JsString(v) => v
       case JsNumber(i) => i
@@ -286,15 +285,15 @@ class PostgresqlRepository @Inject() (
         (FeatureTransformers.envelopeTransformer(md.envelope), FeatureTransformers.validator(md.idType))
       }.flatMap {
         case (evr, validator) =>
-          batchInsert(database, collection, Seq((json.as(validator), json.as[Polygon](evr))))
+          batchInsert(database, collection, Seq((json.as(validator), json.as[Geometry](evr))))
       }.recover {
         case _: play.api.libs.json.JsResultException =>
           throw InvalidParamsException("Invalid Json object")
       }
 
-  def update(db: String, collection: String, query: BooleanExpr, newValue: JsObject, envelope: Polygon): Future[Int] = {
+  def update(db: String, collection: String, query: BooleanExpr, newValue: JsObject, geometry: Geometry): Future[Int] = {
     val whereExpr = PGJsonQueryRenderer.render(query)
-    val stmt = Sql.UPDATE_DATA(db, collection, whereExpr, Json.stringify(newValue), Wkb.toWkb(envelope).toString)
+    val stmt = Sql.UPDATE_DATA(db, collection, whereExpr, Json.stringify(newValue), Wkb.toWkb(geometry).toString)
     runOnDb("update")(stmt)
   }
 
@@ -303,7 +302,7 @@ class PostgresqlRepository @Inject() (
       .map { md => FeatureTransformers.envelopeTransformer(md.envelope)
       }.flatMap { implicit evr =>
         {
-          val ne = updateSpec.as[Polygon] //extract new envelope
+          val ne = updateSpec.as[Geometry] //extract new envelope
           update(database, collection, query, updateSpec, ne)
         }
       }

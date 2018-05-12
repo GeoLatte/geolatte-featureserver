@@ -1,7 +1,7 @@
 package persistence.postgresql
 
 import persistence.{ FeatureTransformers, FeatureWriter, Metadata, Repository }
-import org.geolatte.geom.Polygon
+import org.geolatte.geom.{ Geometry, Polygon }
 import play.api.Logger
 import play.api.libs.json.{ JsObject, Reads }
 
@@ -17,7 +17,7 @@ case class PGWriter(repo: PostgresqlRepository, db: String, collection: String) 
 
   lazy val metadata: Future[Metadata] = repo.metadata(db, collection)
 
-  lazy val reads: Future[(Reads[Polygon], Reads[JsObject])] = metadata.map { md =>
+  lazy val reads: Future[(Reads[Geometry], Reads[JsObject])] = metadata.map { md =>
     (
       FeatureTransformers.envelopeTransformer(md.envelope),
       FeatureTransformers.validator(md.idType)
@@ -29,8 +29,8 @@ case class PGWriter(repo: PostgresqlRepository, db: String, collection: String) 
     else {
       reads.flatMap {
         case (evr, validator) =>
-          val docs: Seq[(JsObject, Polygon)] = features.map { f =>
-            (f.asOpt(validator), f.asOpt[Polygon](evr))
+          val docs: Seq[(JsObject, Geometry)] = features.map { f =>
+            (f.asOpt(validator), f.asOpt[Geometry](evr))
           } collect {
             case (Some(f), Some(env)) => (f, env)
           }

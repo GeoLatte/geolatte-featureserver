@@ -104,7 +104,7 @@ class TxController @Inject() (val repository: Repository, val instrumentation: I
       //TODO -- Better to refactor FeatureWriter to a Sink, and have factory method for that Sink in the Repository
       val flow = JsonFraming.objectScanner(1024 * 1024)
         .map(_.utf8String)
-        .map(s => Utils.withInfo(s"seen: $s") { s })
+        .map(s => Utils.withDebug(s"seen: $s") { s })
         .map { str => Json.parse(str) }
         .collect { case js: JsObject => js } //TODO -- log where there is a parse failure
         .grouped(128)

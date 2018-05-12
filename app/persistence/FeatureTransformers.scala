@@ -101,17 +101,9 @@ object FeatureTransformers {
    *
    * @return
    */
-  def envelopeTransformer(extent: Envelope): Reads[Polygon] = {
+  def envelopeTransformer(extent: Envelope): Reads[Geometry] = {
     implicit val crsId: CrsId = extent.getCrsId
-    (__ \ 'geometry).json.pick[JsObject] andThen
-      geometryReads.map { geometry =>
-        geometry.getEnvelope match {
-          case Envelope.EMPTY =>
-            Polygon.createEmpty()
-          case env: Envelope =>
-            toPolygon(env)
-        }
-      }
+    (__ \ 'geometry).json.pick[JsObject] andThen geometryReads
   }
 
   def toPolygon(envelope: Envelope): Polygon = {
