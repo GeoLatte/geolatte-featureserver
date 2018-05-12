@@ -194,11 +194,11 @@ object GeometryReaders {
       val coordinates = new Array[Double](ps.getCoordinateDimension)
       if (ps.isEmpty) Json.arr()
       else {
-        val buf = ListBuffer[JsArray]()
+        val buf = ListBuffer[JsValue]()
         var i = 0
         while (i < ps.size) {
           ps.getCoordinates(coordinates, i)
-          buf.append(Json.arr(coordinates))
+          buf.append(Json.toJson(coordinates))
           i = i + 1
         }
         JsArray(buf)

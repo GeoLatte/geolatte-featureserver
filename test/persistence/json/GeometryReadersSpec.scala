@@ -136,6 +136,18 @@ class GeometryReadersSpec extends Specification {
     }
   }
 
+  "The GeoJson writer" should {
+
+    "return a valid geoJson point" in {
+      import utilities.GeometryReaders._
+      implicit val geometryReaders = GeometryReads(CrsId.valueOf(31370))
+
+      val geom = geomJsonLineString.as[Geometry]
+      val js = Json.toJson(geom)
+      js must_== geomJsonLineString
+    }
+  }
+
   // TEST DATA
 
   val crsJson = Json.parse("""{"type":"name","properties":{"name":"EPSG:31370"}}""")
