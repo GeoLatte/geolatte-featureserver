@@ -73,9 +73,9 @@ object ResourceWriteables {
 
     def encode(v: JsString) = "\"" + encoder.encode(v.value, cc, CsvPreference.STANDARD_PREFERENCE).replaceAll(
       "\n",
-      ""
+      " "
     )
-      .replaceAll("\r", "") + "\""
+      .replaceAll("\r", " ") + "\""
 
     def expand(v: JsValue): Seq[(String, String)] =
       utilities.JsonHelper.flatten(v.asInstanceOf[JsObject]) sortBy {
@@ -92,8 +92,8 @@ object ResourceWriteables {
       val attributes = expand(jsObj).collect(selector)
       val geom = geomToString((js \ "geometry").asOpt(GeometryReads(CrsId.UNDEFINED)).getOrElse(Point
         .createEmpty()))
-      val idOpt = (js \ "id").asOpt[String].map(v => ("id", v)).getOrElse(("id", "null"))
-      selector(idOpt) +: geom +: attributes
+      val id = "id" -> (js \ "id").getOrElse(JsString("<No Id>")).toString
+      selector(id) +: geom +: attributes
     }
 
     val toCsvRecord = (js: JsValue) => project(js)({
