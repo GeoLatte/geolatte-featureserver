@@ -22,6 +22,9 @@ case class InPredicate(lhs: PropertyExpr, rhs: ValueListExpr) extends Predicate
 case class RegexPredicate(lhs: PropertyExpr, rhs: RegexExpr) extends Predicate
 case class LikePredicate(lhs: PropertyExpr, rhs: LikeExpr) extends Predicate
 case class NullTestPredicate(lhs: PropertyExpr, isNull: Boolean) extends Predicate
+case class IntersectsPredicate(wkt: Option[String]) extends Predicate {
+  def intersectsWithBbox: Boolean = wkt.isDefined
+}
 
 sealed trait ValueExpr extends Expr
 case class LiteralString(value: String) extends ValueExpr
@@ -58,7 +61,13 @@ class QueryParser(val input: ParserInput) extends Parser
 
   def BooleanPrim = rule { WS ~ ch('(') ~ WS ~ BooleanExpression ~ WS ~ ch(')') ~ WS | Predicate }
 
-  def Predicate = rule { ComparisonPred | InPred | LikePred | RegexPred | LiteralBool | isNullPred }
+  def Predicate = rule { spatialRelPred | ComparisonPred | InPred | LikePred | RegexPred | LiteralBool | isNullPred }
+
+  def spatialRelPred = rule { intersectsTest }
+
+  def intersectsTest = rule { (WS ~ ignoreCase("intersects") ~ WS ~ GeomLiteral) ~> IntersectsPredicate }
+
+  def GeomLiteral = rule { (ignoreCase("bbox") ~ push(None)) | LiteralStr ~> (s => Some(s.value)) }
 
   def isNullPred = rule { WS ~ Property ~ WS ~ MayBe ~ WS ~ ignoreCase("null") ~> NullTestPredicate }
 
