@@ -49,6 +49,8 @@ class QueryController @Inject() (val repository: Repository, val instrumentation
 
     val LIMIT = QueryParam("limit", (s: String) => Some(s.toInt))
 
+    val EXPLODE = QueryParam("explode", (s: String) => Some(true))
+
     val START = QueryParam("start", (s: String) => Some(s.toInt))
 
     val SORT: QueryParam[JsArray] = QueryParam("sort", (s: String) =>
@@ -85,7 +87,8 @@ class QueryController @Inject() (val repository: Repository, val instrumentation
     start: Int,
     limit: Option[Int],
     intersectionGeometryWkt: Option[String],
-    withCount: Boolean = false
+    withCount: Boolean = false,
+    explode: Boolean = false
   )
 
   def query(db: String, collection: String) = RepositoryAction { implicit request =>
@@ -154,8 +157,8 @@ class QueryController @Inject() (val repository: Repository, val instrumentation
 
     val start = QueryParams.START.value.getOrElse(0)
     val limit = QueryParams.LIMIT.value
-
-    FeatureCollectionRequest(bbox, query, projection, withView, sort, sortDir, start, limit, intersectionGeometryWkt)
+    val explode = QueryParams.EXPLODE.value.getOrElse(false)
+    FeatureCollectionRequest(bbox, query, projection, withView, sort, sortDir, start, limit, intersectionGeometryWkt, false, explode)
   }
 
   private def doQuery(db: String, collection: String, smd: Metadata, request: FeatureCollectionRequest): Future[(Option[Long], Source[JsObject, _])] = {
@@ -172,7 +175,8 @@ class QueryController @Inject() (val repository: Repository, val instrumentation
         toProjectList(viewProj, request.projection),
         toFldSortSpecList(request.sort, request.sortDir),
         smd,
-        request.withCount
+        request.withCount,
+        request.explode
       )
       result <- repository.query(db, collection, spatialQuery, Some(request.start), request.limit)
       _ = instrumentation.updateSpatialQueryMetrics(db, collection, spatialQuery)

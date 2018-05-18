@@ -84,7 +84,8 @@ case class SpatialQuery(
   projection: Option[ProjectionList] = None,
   sort: List[FldSortSpec] = List(),
   metadata: Metadata,
-  withCount: Boolean = false
+  withCount: Boolean = false,
+  explode: Boolean = false
 )
 
 trait FeatureWriter {

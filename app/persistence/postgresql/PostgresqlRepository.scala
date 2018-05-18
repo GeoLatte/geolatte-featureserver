@@ -245,9 +245,15 @@ class PostgresqlRepository @Inject() (
           .withPrefix(List("type", "geometry", "id")) //TODO -- make sure that we use correct field names (can change for registered tables_
       } yield withPrefix.reads
 
+    val from =
+      if (!spatialQuery.explode)
+        s"${quote(db)}.${quote(collection)}"
+      else
+        s"(select id, (st_dump(geometry)).geom as geometry, json from ${quote(db)}.${quote(collection)}) xx"
+
     //get the count
-    val fCnt: Future[Option[Long]] = if (spatialQuery.withCount) {
-      val stmtTotal = Sql.SELECT_TOTAL_IN_QUERY(db, collection, spatialQuery)
+    lazy val fCnt: Future[Option[Long]] = if (spatialQuery.withCount) {
+      val stmtTotal = Sql.SELECT_TOTAL_IN_QUERY(from, spatialQuery)
       runOnDb("get-query-total")(stmtTotal).map(Some(_))
     } else {
       Future.successful(None)
@@ -259,17 +265,24 @@ class PostgresqlRepository @Inject() (
       case Some(projections) => js.asOpt(projections)
     }
 
-    val dataStmt = Sql.SELECT_DATA(db, collection, spatialQuery, start, limit)
+    val dataStmt = Sql.SELECT_DATA(from, spatialQuery, start, limit)
 
     val disableAutocommit = SimpleDBIO(_.connection.setAutoCommit(false))
 
-    val publisher: DatabasePublisher[JsObject] =
+    lazy val publisher: DatabasePublisher[JsObject] =
       database.stream(disableAutocommit
         andThen dataStmt.withStatementParameters(fetchSize = 256)).mapResult {
         case Row(_, geom, json) => assemble(project(json).get, geom)
       }
 
+    def validate(spatialQuery: SpatialQuery): Future[Boolean] =
+      if (spatialQuery.explode && !spatialQuery.metadata.jsonTable)
+        Future.failed(new UnsupportedOperationException(s"EXPLODE parameter not supported on registered tables"))
+      else
+        Future.successful(true)
+
     for {
+      _ <- validate(spatialQuery)
       cnt <- fCnt
     } yield (cnt, Source.fromPublisher(publisher).via(new MetricCalculator(startMillis, db, collection)))
 
@@ -584,14 +597,14 @@ class PostgresqlRepository @Inject() (
       (windowOpt ++ intersectionOpt ++ attOpt).reduceOption((condition1, condition2) => s"$condition1 and $condition2")
     }
 
-    def SELECT_TOTAL_IN_QUERY(db: String, col: String, query: SpatialQuery): DBIO[Long] =
+    def SELECT_TOTAL_IN_QUERY(from: String, query: SpatialQuery): DBIO[Long] =
       sql"""
          SELECT COUNT(*)
-         FROM #${quote(db)}.#${quote(col)}
+         FROM #$from
          #${condition(query).map(c => s"WHERE $c").getOrElse("")}
      """.as[Long].map(_.head)
 
-    def SELECT_DATA(db: String, col: String, query: SpatialQuery, start: Option[Int] = None, limit: Option[Int] = None) = {
+    def SELECT_DATA(from: String, query: SpatialQuery, start: Option[Int] = None, limit: Option[Int] = None) = {
 
       val cond = condition(query)
 
@@ -611,7 +624,7 @@ class PostgresqlRepository @Inject() (
 
       sql"""
          SELECT #$projection
-         FROM #${quote(db)}.#${quote(col)}
+         FROM #$from
          #${cond.map(c => s"WHERE $c").getOrElse("")}
          ORDER BY #${sort(query)}
          #$offsetClause
