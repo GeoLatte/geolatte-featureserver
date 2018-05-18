@@ -19,7 +19,7 @@ case class PGWriter(repo: PostgresqlRepository, db: String, collection: String) 
 
   lazy val reads: Future[(Reads[Geometry], Reads[JsObject])] = metadata.map { md =>
     (
-      FeatureTransformers.envelopeTransformer(md.envelope),
+      FeatureTransformers.geometryReads(md.envelope),
       FeatureTransformers.validator(md.idType)
     )
   }
@@ -28,11 +28,11 @@ case class PGWriter(repo: PostgresqlRepository, db: String, collection: String) 
     if (features.isEmpty) Future.successful(0)
     else {
       reads.flatMap {
-        case (evr, validator) =>
+        case (geometryReader, validator) =>
           val docs: Seq[(JsObject, Geometry)] = features.map { f =>
-            (f.asOpt(validator), f.asOpt[Geometry](evr))
+            (f.asOpt(validator), f.asOpt[Geometry](geometryReader))
           } collect {
-            case (Some(f), Some(env)) => (f, env)
+            case (Some(f), Some(geom)) => (f, geom)
           }
           val fInt = repo.batchInsert(db, collection, docs)
           fInt.onSuccess {

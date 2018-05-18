@@ -159,9 +159,9 @@ object Gen {
       i <- id
     } yield {
       i match {
-        case i: String => Json.obj("id" -> i, "type" -> "Feature", "geometry" -> Json.toJson(g)(GeometryWithoutCrsWrites), "properties" -> p)
-        case i: Int => Json.obj("id" -> i, "type" -> "Feature", "geometry" -> Json.toJson(g)(GeometryWithoutCrsWrites), "properties" -> p)
-        case _ => Json.obj("id" -> i.toString, "type" -> "Feature", "geometry" -> Json.toJson(g)(GeometryWithoutCrsWrites), "properties" -> p)
+        case i: String => Json.obj("type" -> "Feature", "id" -> i, "geometry" -> Json.toJson(g)(GeometryWithoutCrsWrites), "properties" -> p)
+        case i: Int => Json.obj("type" -> "Feature", "id" -> i, "geometry" -> Json.toJson(g)(GeometryWithoutCrsWrites), "properties" -> p)
+        case _ => Json.obj("type" -> "Feature", "id" -> i.toString, "geometry" -> Json.toJson(g)(GeometryWithoutCrsWrites), "properties" -> p)
       }
     }
 

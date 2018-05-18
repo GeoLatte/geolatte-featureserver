@@ -101,7 +101,7 @@ object FeatureTransformers {
    *
    * @return
    */
-  def envelopeTransformer(extent: Envelope): Reads[Geometry] = {
+  def geometryReads(extent: Envelope): Reads[Geometry] = {
     implicit val crsId: CrsId = extent.getCrsId
     (__ \ 'geometry).json.pick[JsObject] andThen geometryReads
   }

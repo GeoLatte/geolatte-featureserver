@@ -23,6 +23,7 @@ import slick.jdbc.{ GetResult, PositionedResult }
 import utilities.{ GeometryReaders, JsonUtils, Utils }
 
 import scala.concurrent.Future
+import scala.util.{ Success, Try }
 
 @Singleton
 class PostgresqlRepository @Inject() (
@@ -221,6 +222,18 @@ class PostgresqlRepository @Inject() (
 
   override def writer(db: String, collection: String): FeatureWriter = PGWriter(this, db, collection)
 
+  //note that this may incur substantial overhead because of the parsing en modifying of Json values
+  //TODO -- Explore if injecting the geojson geometry can be done in SQL
+  def assemble(base: JsObject, geom: String): JsObject =
+    (for {
+      js <- Try {
+        Json.parse(geom).as[JsObject]
+      }.toOption
+      gp = (__ \ "geometry").json.put(js)
+      assembler = __.json.update(gp)
+      transformed <- base.transform(assembler).asOpt
+    } yield transformed).getOrElse(base)
+
   override def query(db: String, collection: String, spatialQuery: SpatialQuery, start: Option[Int] = None,
     limit: Option[Int] = None): Future[CountedQueryResult] = {
 
@@ -253,7 +266,7 @@ class PostgresqlRepository @Inject() (
     val publisher: DatabasePublisher[JsObject] =
       database.stream(disableAutocommit
         andThen dataStmt.withStatementParameters(fetchSize = 256)).mapResult {
-        case Row(_, _, json) => project(json).get
+        case Row(_, geom, json) => assemble(project(json).get, geom)
       }
 
     for {
@@ -273,7 +286,11 @@ class PostgresqlRepository @Inject() (
     }
 
     val paramValues = jsons.map {
-      case (json, env) => (id((json \ "id").getOrElse(JsNull)), unescapeJson(json), org.geolatte.geom.codec.Wkb.toWkb(env).toString)
+      case (json, geom) => (
+        id((json \ "id").getOrElse(JsNull)),
+        unescapeJson(stripGeometry(json)),
+        org.geolatte.geom.codec.Wkb.toWkb(geom).toString
+      )
     }
     val dbio = DBIO.sequence(paramValues.map { case (id, json, geom) => Sql.INSERT_DATA(db, collection, id.toString, json, geom) })
     runOnDb("batch-insert")(dbio).map(_.sum)
@@ -282,10 +299,10 @@ class PostgresqlRepository @Inject() (
   override def insert(database: String, collection: String, json: JsObject): Future[Int] =
     metadataFromDb(database, collection)
       .map { md =>
-        (FeatureTransformers.envelopeTransformer(md.envelope), FeatureTransformers.validator(md.idType))
+        (FeatureTransformers.geometryReads(md.envelope), FeatureTransformers.validator(md.idType))
       }.flatMap {
-        case (evr, validator) =>
-          batchInsert(database, collection, Seq((json.as(validator), json.as[Geometry](evr))))
+        case (geomReads, validator) =>
+          batchInsert(database, collection, Seq((json.as(validator), json.as[Geometry](geomReads))))
       }.recover {
         case _: play.api.libs.json.JsResultException =>
           throw InvalidParamsException("Invalid Json object")
@@ -299,7 +316,7 @@ class PostgresqlRepository @Inject() (
 
   override def update(database: String, collection: String, query: BooleanExpr, updateSpec: JsObject): Future[Int] =
     metadataFromDb(database, collection)
-      .map { md => FeatureTransformers.envelopeTransformer(md.envelope)
+      .map { md => FeatureTransformers.geometryReads(md.envelope)
       }.flatMap { implicit evr =>
         {
           val ne = updateSpec.as[Geometry] //extract new envelope
@@ -499,6 +516,14 @@ class PostgresqlRepository @Inject() (
 
   private def unescapeJson(js: JsObject): String = Json.stringify(js).replaceAll("'", "''")
 
+  private val tr = (__ \ "geometry").json.prune
+  private def stripGeometry(js: JsObject): JsObject = {
+    js.transform(tr) match {
+      case JsSuccess(pruned, _) => pruned
+      case _ => js
+    }
+  }
+
   private def toColName(str: String): String = str.replaceAll("-", "_")
 
   private def schemaIsExcluded(collName: String): Boolean = excludedSchemas match {
@@ -581,7 +606,7 @@ class PostgresqlRepository @Inject() (
       }
 
       val projection =
-        if (query.metadata.jsonTable) "ID, geometry, json"
+        if (query.metadata.jsonTable) "ID, ST_AsGeoJson( geometry, 156, 3) as geom , json"
         else s" ${query.metadata.pkey}, ST_AsGeoJson( ${query.metadata.geometryColumn}, 15, 3 ) as $geoJsonCol, * "
 
       sql"""

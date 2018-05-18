@@ -1,16 +1,10 @@
 package integration
 
 import org.specs2._
-import org.specs2.main.{ ArgProperty, Arguments }
 import org.specs2.matcher.{ Expectable, Matcher }
-import org.specs2.specification.Step
 import org.specs2.specification.core.{ Env, Fragments, SpecStructure }
-import play.api.{ Application, Play, libs }
-import play.api.Play._
-import play.api.libs.json.{ JsArray, JsObject, Json, _ }
 import play.api.inject.guice.GuiceApplicationBuilder
-import play.api.test.WithApplication
-import utilities.Utils
+import play.api.libs.json.{ JsArray, JsObject, Json, _ }
 
 /**
  * @author Karel Maesen, Geovise BVBA
@@ -45,14 +39,18 @@ abstract class InDatabaseSpecification extends FeatureServerSpecification {
 
 abstract class InCollectionSpecification extends FeatureServerSpecification {
 
+  private val coordinateFilter = (__ \ "geometry" \ "coordinates").json.prune
+    .compose((__ \ "geometry" \ "bbox").json.prune)
+    .compose((__ \ "geometry" \ "crs").json.prune)
+
+  //utility and matcher definitions
+
   override def map(fs: => Fragments) = super.map(
     step(makeDatabase(testDbName)) ^
       step(makeCollection(testDbName, testColName)) ^
       fs ^
       step(dropDatabase(testDbName))
   )
-
-  //utility and matcher definitions
 
   def pruneSpecialProperties(js: JsValue): JsValue = {
     val tr: Reads[JsObject] = (__ \ "_id").json.prune andThen (__ \ "_mc").json.prune andThen (__ \ "_bbox").json.prune
@@ -73,7 +71,6 @@ abstract class InCollectionSpecification extends FeatureServerSpecification {
   def matchFeaturesInCsv(expectedColumnHeader: String): Matcher[Seq[String]] = (
     (received: Seq[String]) => {
       val lines = received.flatMap(l => received(0).split("\n")).map(_.trim)
-      lines.foreach(println)
       val header = lines(0)
       header == expectedColumnHeader
     }, "Featurecollection CSV doesn't contain expected columns"
@@ -86,18 +83,41 @@ abstract class InCollectionSpecification extends FeatureServerSpecification {
     }, s"FeatureCollection Json doesn't have expected value for total field ($expectedTotal)."
   )
 
+  def filterCoordinates(in: JsValue): JsValue = {
+    in.transform(coordinateFilter) match {
+      case JsSuccess(tr, _) => tr
+      case _ => in
+    }
+  }
+
+  //TODO the verify() function is now very convoluted and unreadable.
   def verify(rec: JsValue, expected: JsArray, sortMatters: Boolean = false) = rec match {
     case jsv: JsArray =>
-      val received = jsv.value.map(pruneSpecialProperties)
+      val received = jsv.value.map(pruneSpecialProperties _ andThen filterCoordinates _)
+      val expFiltered = expected.value.map(filterCoordinates)
       val ok =
-        if (sortMatters) received.equals(expected.value)
-        else received.toSet.equals(expected.value.toSet) //toSet so test in order independent
+        if (sortMatters) {
+          received.equals(expFiltered)
+        } else {
+          received.toSet.equals(expFiltered.toSet)
+        } //toSet so test in order independent
       val msg = if (!ok) {
-        (for (f <- received if !expected.value.contains(f)) yield f).headOption.
+        // put this in debug logging!!!
+        //        println("___________________________________________________________________________________________________________")
+        //        println(s"REC: ")
+        //        received.foreach(println)
+        //        println(s"EXP:  ")
+        //        expFiltered.foreach(println)
+        //        println("___________________________________________________________________________________________________________")
+        (for (f <- received if !expFiltered.contains(f)) yield {
+          f
+        }).headOption.
           map(f => s" e.g. ${Json.stringify(f)}\nnot found among expected features. Example of expected:\n" +
-            s"${expected.value.headOption.getOrElse("<None expected.>")}")
+            s"${expFiltered.headOption.getOrElse("<None expected.>")}")
           .getOrElse("<Missing object in received>")
-      } else "Received array matches expected"
+      } else {
+        "Received array matches expected"
+      }
       (ok, msg)
     case _ => (false, "Did not receive array")
   }
@@ -116,9 +136,11 @@ abstract class InCollectionSpecification extends FeatureServerSpecification {
 
   case class beSomeFeatures(expected: JsArray, sorted: Boolean = false) extends Matcher[Option[JsValue]] {
     def apply[J <: Option[JsValue]](r: Expectable[J]) = {
-      lazy val (succ, msg) = if (!r.value.isDefined)
+      lazy val (succ, msg) = if (!r.value.isDefined) {
         (false, "Expected Some(<features>), received None")
-      else verify(r.value.get, expected)
+      } else {
+        verify(r.value.get, expected)
+      }
       result(
         succ,
         "received Some(<features>) with features matching expected",
