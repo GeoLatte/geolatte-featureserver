@@ -217,6 +217,18 @@ class QueryParserSpec extends Specification {
       )
     }
 
+    "support the intersects predicate with bbox" in {
+      QueryParser.parse(""" intersects bbox """) must beSuccessfulTry.withValue(
+        IntersectsPredicate(None)
+      )
+    }
+
+    "support the intersects predicate with WKT Expression" in {
+      QueryParser.parse(""" intersects 'SRID=31370;POINT(1 1)' """) must beSuccessfulTry.withValue(
+        IntersectsPredicate(Some("SRID=31370;POINT(1 1)"))
+      )
+    }
+
   }
 
 }

@@ -276,7 +276,7 @@ class PostgresqlRepository @Inject() (
   }
 
   override def delete(db: String, collection: String, query: BooleanExpr): Future[Boolean] =
-    runOnDb("delete-data")(Sql.DELETE_DATA(db, collection, PGJsonQueryRenderer.render(query))) map { _ => true }
+    runOnDb("delete-data")(Sql.DELETE_DATA(db, collection, PGJsonQueryRenderer.render(query)(RenderContext("geometry")))) map { _ => true }
 
   def batchInsert(db: String, collection: String, jsons: Seq[(JsObject, Geometry)]): Future[Int] = {
     def id(json: JsValue): Any = json match {
@@ -309,7 +309,7 @@ class PostgresqlRepository @Inject() (
       }
 
   def update(db: String, collection: String, query: BooleanExpr, newValue: JsObject, geometry: Geometry): Future[Int] = {
-    val whereExpr = PGJsonQueryRenderer.render(query)
+    val whereExpr = PGJsonQueryRenderer.render(query)(RenderContext("geometry"))
     val stmt = Sql.UPDATE_DATA(db, collection, whereExpr, Json.stringify(newValue), Wkb.toWkb(geometry).toString)
     runOnDb("update")(stmt)
   }
@@ -574,11 +574,11 @@ class PostgresqlRepository @Inject() (
       val geomCol = if (query.metadata.jsonTable) "geometry" else query.metadata.geometryColumn
 
       def bboxIntersectionRenderer(wkt: String) = s"$geomCol && ${single_quote(wkt)}::geometry"
-
       def geomIntersectionRenderer(wkt: String) = s"ST_Intersects($geomCol, ${single_quote(wkt)}::geometry)"
-
-      val windowOpt = query.windowOpt.map(env => Wkt.toWkt(FeatureTransformers.toPolygon(env))).map(bboxIntersectionRenderer)
+      val bboxGeom = query.windowOpt.map(env => Wkt.toWkt(FeatureTransformers.toPolygon(env)))
+      val windowOpt = bboxGeom.map(bboxIntersectionRenderer)
       val intersectionOpt = query.intersectionGeometryWktOpt.map(geomIntersectionRenderer)
+      implicit val renderContext = RenderContext(geomCol, bboxGeom) //set RenderContext
       val attOpt = query.queryOpt.map(renderer.render)
 
       (windowOpt ++ intersectionOpt ++ attOpt).reduceOption((condition1, condition2) => s"$condition1 and $condition2")

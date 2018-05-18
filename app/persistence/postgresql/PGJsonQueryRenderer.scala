@@ -32,38 +32,38 @@ object PGJsonQueryRenderer extends BaseQueryRenderer {
   override def renderBooleanAnd(
     lhs: BooleanExpr,
     rhs: BooleanExpr
-  ): String = s" ( ${render(lhs)} ) AND ( ${render(rhs)} )"
+  )(implicit ctxt: RenderContext): String = s" ( ${render(lhs)} ) AND ( ${render(rhs)} )"
 
   override def renderBooleanOr(
     lhs: BooleanExpr,
     rhs: BooleanExpr
-  ): String = s" ( ${render(lhs)} ) OR ( ${render(rhs)} )"
+  )(implicit ctxt: RenderContext): String = s" ( ${render(lhs)} ) OR ( ${render(rhs)} )"
 
-  override def renderBooleanNot(inner: BooleanExpr): String = s" NOT ( ${render(inner)} ) "
+  override def renderBooleanNot(inner: BooleanExpr)(implicit ctxt: RenderContext): String = s" NOT ( ${render(inner)} ) "
 
   override def renderComparisonPredicate(
     lhs: PropertyExpr,
     op: ComparisonOperator,
     rhs: ValueExpr
-  ): String = s" ${renderPropertyExpr(lhs, rhs)} ${sym(op)} ( ${renderValue(rhs)} )"
+  )(implicit ctxt: RenderContext): String = s" ${renderPropertyExpr(lhs, rhs)} ${sym(op)} ( ${renderValue(rhs)} )"
 
   override def renderInPredicate(
     lhs: PropertyExpr,
     rhs: ValueListExpr
-  ): String = s" ${renderPropertyExpr(lhs, rhs)} in ${renderValueList(rhs)}"
+  )(implicit ctxt: RenderContext): String = s" ${renderPropertyExpr(lhs, rhs)} in ${renderValueList(rhs)}"
 
   override def renderRegexPredicate(
     lhs: PropertyExpr,
     rhs: RegexExpr
-  ): String = s" ${renderPropertyExpr(lhs, rhs)} ~ '${rhs.pattern}'"
+  )(implicit ctxt: RenderContext): String = s" ${renderPropertyExpr(lhs, rhs)} ~ '${rhs.pattern}'"
 
   override def renderLikePredicate(
     lhs: PropertyExpr,
     rhs: LikeExpr
-  ): String = s" ${renderPropertyExpr(lhs, rhs)} ilike '${rhs.pattern}'"
+  )(implicit ctxt: RenderContext): String = s" ${renderPropertyExpr(lhs, rhs)} ilike '${rhs.pattern}'"
 
   override def renderNullTestPredicate(
     lhs: PropertyExpr,
     is: Boolean
-  ): String = s" ${renderPropertyExprwithoutCast(lhs)} ${if (is) "is" else "is not"} null"
+  )(implicit ctxt: RenderContext): String = s" ${renderPropertyExprwithoutCast(lhs)} ${if (is) "is" else "is not"} null"
 }

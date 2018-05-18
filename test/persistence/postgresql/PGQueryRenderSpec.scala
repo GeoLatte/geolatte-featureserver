@@ -10,6 +10,8 @@ import scala.util.Try
  */
 class PGQueryRenderSpec extends Specification {
 
+  implicit val renderContext = RenderContext("geometry", Some("SRID=31370;POLYGON((1 1,100 1,100 100,1 100,1 1))"))
+
   "The PGJsonQueryRenderer " should {
 
     val renderer = PGJsonQueryRenderer
@@ -90,6 +92,16 @@ class PGQueryRenderSpec extends Specification {
     "properly render IS NOT NULL expression " in {
       val expr = QueryParser.parse("properties.foo is not null").get
       compressWS(renderer.render(expr)) === "json_extract_path_text(json, 'properties','foo') is not null"
+    }
+
+    "properly render Intersects bbox  expression" in {
+      val expr = QueryParser.parse("intersects bbox").get
+      compressWS(renderer.render(expr)) === "ST_Intersects( geometry, 'SRID=31370;POLYGON((1 1,100 1,100 100,1 100,1 1))' )"
+    }
+
+    "properly render Intersects with Wkt Literal  expression" in {
+      val expr = QueryParser.parse("intersects 'SRID=31370;POINT(10 12)'").get
+      compressWS(renderer.render(expr)) === "ST_Intersects( geometry, 'SRID=31370;POINT(10 12)' )"
     }
 
   }
@@ -174,6 +186,16 @@ class PGQueryRenderSpec extends Specification {
     "properly render IS NOT NULL expression " in {
       val expr = QueryParser.parse("properties.foo is not null").get
       compressWS(renderer.render(expr)) === "foo is not null"
+    }
+
+    "properly render Intersects bbox  expression" in {
+      val expr = QueryParser.parse("intersects bbox").get
+      compressWS(renderer.render(expr)) === "ST_Intersects( geometry, 'SRID=31370;POLYGON((1 1,100 1,100 100,1 100,1 1))' )"
+    }
+
+    "properly render Intersects with Wkt Literal  expression" in {
+      val expr = QueryParser.parse("intersects 'SRID=31370;POINT(10 12)'").get
+      compressWS(renderer.render(expr)) === "ST_Intersects( geometry, 'SRID=31370;POINT(10 12)' )"
     }
 
   }

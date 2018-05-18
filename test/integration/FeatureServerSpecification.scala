@@ -39,6 +39,7 @@ abstract class InDatabaseSpecification extends FeatureServerSpecification {
 
 abstract class InCollectionSpecification extends FeatureServerSpecification {
 
+  //TODO -- can we make it so that we don't have to prune crs?
   private val coordinateFilter = (__ \ "geometry" \ "coordinates").json.prune
     .compose((__ \ "geometry" \ "bbox").json.prune)
     .compose((__ \ "geometry" \ "crs").json.prune)

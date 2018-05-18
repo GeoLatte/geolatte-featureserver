@@ -31,7 +31,7 @@ object FeatureServerBuild extends Build {
     "org.geolatte" % "geolatte-geom" % "0.14",
     "commons-codec" % "commons-codec" % "1.8",
     "net.sf.supercsv" % "super-csv" % "2.1.0",
-    "org.parboiled" %% "parboiled" % "2.0.1",
+    "org.parboiled" %% "parboiled" % "2.1.4",
     "com.typesafe.akka" %% "akka-slf4j" % "2.4.9",
     "net.logstash.logback" % "logstash-logback-encoder" % "4.6",
     filters
