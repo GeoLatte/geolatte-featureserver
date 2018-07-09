@@ -248,8 +248,11 @@ class PostgresqlRepository @Inject() (
     val from =
       if (!spatialQuery.explode)
         s"${quote(db)}.${quote(collection)}"
-      else
-        s"(select id, (st_dump(geometry)).geom as geometry, json from ${quote(db)}.${quote(collection)}) xx"
+      else {
+        val wq = Sql.windowFilterExpr(spatialQuery)
+          .map(q => s" where $q").getOrElse("")
+        s"(select id, (st_dump(geometry)).geom as geometry, json from ${quote(db)}.${quote(collection)} $wq ) xx"
+      }
 
     //get the count
     lazy val fCnt: Future[Option[Long]] = if (spatialQuery.withCount) {
@@ -581,15 +584,25 @@ class PostgresqlRepository @Inject() (
         if (query.sort.isEmpty) query.metadata.pkey else query.sort.map(f => s"${colName(f.fld)} ${f.direction} ") mkString ","
     }
 
+    def wktGeometry(query: SpatialQuery): Option[String] = {
+      query.windowOpt.map(env => Wkt.toWkt(FeatureTransformers.toPolygon(env)))
+    }
+
+    def windowFilterExpr(query: SpatialQuery): Option[String] = {
+      val geomCol = if (query.metadata.jsonTable) "geometry" else query.metadata.geometryColumn
+      def bboxIntersectionRenderer(wkt: String) = s"$geomCol && ${single_quote(wkt)}::geometry"
+      val bboxGeom = wktGeometry(query)
+      bboxGeom.map(bboxIntersectionRenderer)
+    }
+
     def condition(query: SpatialQuery): Option[String] = {
 
       val renderer = if (query.metadata.jsonTable) PGJsonQueryRenderer else PGRegularQueryRenderer
       val geomCol = if (query.metadata.jsonTable) "geometry" else query.metadata.geometryColumn
 
-      def bboxIntersectionRenderer(wkt: String) = s"$geomCol && ${single_quote(wkt)}::geometry"
       def geomIntersectionRenderer(wkt: String) = s"ST_Intersects($geomCol, ${single_quote(wkt)}::geometry)"
-      val bboxGeom = query.windowOpt.map(env => Wkt.toWkt(FeatureTransformers.toPolygon(env)))
-      val windowOpt = bboxGeom.map(bboxIntersectionRenderer)
+      val windowOpt = windowFilterExpr(query)
+      val bboxGeom = wktGeometry(query: SpatialQuery)
       val intersectionOpt = query.intersectionGeometryWktOpt.map(geomIntersectionRenderer)
       implicit val renderContext = RenderContext(geomCol, bboxGeom) //set RenderContext
       val attOpt = query.queryOpt.map(renderer.render)
