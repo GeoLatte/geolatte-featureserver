@@ -7,4 +7,14 @@ fi
 
 source $(dirname $0)/env.sh
 
-http GET "$BASEURL/databases/$1/$2/query?$3"
+#for Query use the https://httpie.org/doc#querystring-parameters
+# example:
+# ./query-featurecollection.sh featureserver adviezen EXPLODE==TRUE BBOX=='150256,209493,151992,210710' query=='intersects bbox'
+
+DB=$1
+CL=$2
+shift
+shift
+
+
+http GET "$BASEURL/databases/$DB/$CL/query" "$@"
