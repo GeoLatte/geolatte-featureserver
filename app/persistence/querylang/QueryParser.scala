@@ -97,7 +97,8 @@ class QueryParser(val input: ParserInput) extends Parser
 
   val printableChar = (CharPredicate.Printable -- "'")
 
-  def LiteralStr = rule { ch(''') ~ clearSB() ~ zeroOrMore((printableChar | "\'\'") ~ appendSB()) ~ ch(''') ~ push(LiteralString(sb.toString)) }
+  //a Literal String is quoted using single quotes. To use singe quotes in the string, simply repeat the quote twice (with no whitespace).
+  def LiteralStr = rule { ch(''') ~ clearSB() ~ zeroOrMore((printableChar | "''") ~ appendSB()) ~ ch(''') ~ push(LiteralString(sb.toString)) }
 
   def Regex = rule { ch('/') ~ clearSB() ~ zeroOrMore((noneOf("/") ~ appendSB())) ~ ch('/') ~ push(RegexExpr(sb.toString)) }
 

@@ -54,12 +54,12 @@ class QueryParserSpec extends Specification {
               ComparisonPredicate(PropertyExpr("var"), EQ, LiteralString("!abc._-$%^&*()@#$%%^_+00==\""))
             )
           ) and (
-                QueryParser.parse(" var =  'abc\\'def' ") must beSuccessfulTry[BooleanExpr].withValue(
-                  ComparisonPredicate(PropertyExpr("var"), EQ, LiteralString("abcdef"))
+                QueryParser.parse(" var =  'abc''def' ") must beSuccessfulTry[BooleanExpr].withValue(
+                  ComparisonPredicate(PropertyExpr("var"), EQ, LiteralString("abc'def"))
                 )
               ) and (
                     QueryParser.parse(""" var =  '{"ab" : "def"}' """) must beSuccessfulTry[BooleanExpr].withValue(
-                      ComparisonPredicate(PropertyExpr("var"), EQ, LiteralString("""{"ab" : "def"} """))
+                      ComparisonPredicate(PropertyExpr("var"), EQ, LiteralString("""{"ab" : "def"}"""))
                     )
                   )
 
