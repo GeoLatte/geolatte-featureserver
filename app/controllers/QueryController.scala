@@ -1,8 +1,9 @@
 package controllers
 
 import javax.inject.Inject
-
 import Exceptions._
+import akka.actor.ActorSystem
+import akka.event.{ Logging, LoggingAdapter }
 import akka.stream.scaladsl.Source
 import config.AppExecutionContexts
 import metrics.{ Instrumentation, Operation }
@@ -18,10 +19,14 @@ import scala.concurrent.Future
 import scala.language.{ implicitConversions, reflectiveCalls }
 import scala.util.{ Failure, Success }
 
-class QueryController @Inject() (val repository: Repository, val instrumentation: Instrumentation) extends FeatureServerController {
+class QueryController @Inject() (val repository: Repository, val instrumentation: Instrumentation, actorSystem: ActorSystem) extends FeatureServerController {
 
   import AppExecutionContexts.streamContext
   import config.Constants._
+
+  import akka.event.LoggingAdapter
+
+  implicit val akkLogging: LoggingAdapter = Logging.getLogger(actorSystem.eventStream, play.api.Logger.logger.getName)
 
   def parseQueryExpr(s: String): Option[BooleanExpr] = QueryParser.parse(s) match {
     case Success(expr) => Some(expr)
@@ -100,7 +105,13 @@ class QueryController @Inject() (val repository: Repository, val instrumentation
         res <- featuresToResult(db, collection, fcr) {
           case (optTotal, features) =>
             val (writeable, contentType) = ResourceWriteables.selectWriteable(request, QueryParams.FMT.value, QueryParams.SEP.value)
-            val result = Ok.chunked(FeatureStream(optTotal, features).asSource(writeable)).as(contentType)
+
+            val result = Ok.chunked(
+              FeatureStream(optTotal, features)
+                .asSource(writeable)
+                .log("Query stream")
+            ).as(contentType)
+
             filename match {
               case Some(fn) => result.withHeaders(headers = ("content-disposition", s"attachment; filename=$fn"))
               case _ => result
@@ -128,7 +139,7 @@ class QueryController @Inject() (val repository: Repository, val instrumentation
   def featuresToResult(db: String, collection: String, featureCollectionRequest: FeatureCollectionRequest)(toResult: ((Option[Long], Source[JsObject, _])) => Result): Future[Result] = {
 
     val fResult = for {
-      md <- repository.metadata(db, collection, withCount = false)
+      md <- repository.metadata(db, collection)
       _ = Logger.debug(s"Query $featureCollectionRequest on $db, collection $collection")
       result <- doQuery(db, collection, md, featureCollectionRequest).map[Result] {
         toResult
