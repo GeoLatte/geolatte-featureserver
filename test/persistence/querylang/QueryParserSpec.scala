@@ -238,15 +238,19 @@ class QueryParserSpec extends Specification {
       )
     }
 
-    //    "support the json contains predicate " in {
-    //      QueryParser.parse(""" var @>  '["a",2]' """ ) must beSuccessfulTry[BooleanExpr].withValue(
-    //        JsonContainsPredicate( PropertyExpr( "var" ), """["a",2]""" )
-    //      ) and (
-    //        QueryParser.parse(""" var @>  '[\'a\',2]' """ ) must beSuccessfulTry[BooleanExpr].withValue(
-    //          JsonContainsPredicate( PropertyExpr( "var" ), """['a',2]""" )
-    //        )
-    //      )
-    //    }
+    "support the json contains predicate " in {
+      QueryParser.parse(""" var @>  '["a",2]' """) must beSuccessfulTry[BooleanExpr].withValue(
+        JsonContainsPredicate(PropertyExpr("var"), LiteralString("""["a",2]"""))
+      ) and (
+          QueryParser.parse(""" var @>  '[''a'',2]' """) must beSuccessfulTry[BooleanExpr].withValue(
+            JsonContainsPredicate(PropertyExpr("var"), LiteralString("""['a',2]"""))
+          )
+        ) and (
+              QueryParser.parse(""" var @> '{"a": "b"}' """) must beSuccessfulTry[BooleanExpr].withValue(
+                JsonContainsPredicate(PropertyExpr("var"), LiteralString("""{"a": "b"}"""))
+              )
+            )
+    }
 
   }
 

@@ -7,16 +7,6 @@ import persistence.querylang._
  */
 object PGJsonQueryRenderer extends BaseQueryRenderer {
 
-  protected def renderPropertyExpr(lhs: PropertyExpr, rhs: Expr): String = {
-    val variadicPath: String = path2VariadicList(lhs)
-    s"json_extract_path_text(json, $variadicPath)::${cast(rhs)}"
-  }
-
-  protected def renderPropertyExprwithoutCast(lhs: PropertyExpr): String = {
-    val variadicPath: String = path2VariadicList(lhs)
-    s"json_extract_path_text(json, $variadicPath)"
-  }
-
   def cast(exp: Expr): String = exp match {
     case LiteralBoolean(_) => "bool"
     case LiteralNumber(_) => "decimal"
@@ -26,8 +16,6 @@ object PGJsonQueryRenderer extends BaseQueryRenderer {
     case LikeExpr(_) => "text"
     case _ => "text"
   }
-
-  def path2VariadicList(propertyExpr: PropertyExpr): String = "'" + propertyExpr.path.replaceAll("\\.", "','") + "'"
 
   override def renderBooleanAnd(
     lhs: BooleanExpr,
@@ -65,5 +53,29 @@ object PGJsonQueryRenderer extends BaseQueryRenderer {
   override def renderNullTestPredicate(
     lhs: PropertyExpr,
     is: Boolean
-  )(implicit ctxt: RenderContext): String = s" ${renderPropertyExprwithoutCast(lhs)} ${if (is) "is" else "is not"} null"
+  )(implicit ctxt: RenderContext): String = s" ${renderPropertyExprwithoutCast(lhs)} ${
+    if (is) {
+      "is"
+    } else {
+      "is not"
+    }
+  } null"
+
+  private def renderPropertyExprwithoutCast(lhs: PropertyExpr): String = {
+    val variadicPath: String = path2VariadicList(lhs)
+    s"json_extract_path_text(json, $variadicPath)"
+  }
+
+  private def path2VariadicList(propertyExpr: PropertyExpr): String =
+    "'" + propertyExpr.path.replaceAll("\\.", "','") + "'"
+
+  override def renderPropertyExprAsJson(expr: PropertyExpr): String = {
+    val variadicPath = path2VariadicList(expr)
+    s"json_extract_path(json, $variadicPath)"
+  }
+
+  private def renderPropertyExpr(lhs: PropertyExpr, rhs: Expr): String = {
+    val variadicPath: String = path2VariadicList(lhs)
+    s"json_extract_path_text(json, $variadicPath)::${cast(rhs)}"
+  }
 }

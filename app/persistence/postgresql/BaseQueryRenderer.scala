@@ -1,5 +1,6 @@
 package persistence.postgresql
 
+import persistence.postgresql.PGJsonQueryRenderer.renderPropertyExprAsJson
 import persistence.querylang.{ GTE, LTE, _ }
 
 case class RenderContext(geometryColumn: String, bbox: Option[String] = None)
@@ -34,6 +35,13 @@ trait BaseQueryRenderer extends QueryRenderer[String, RenderContext] {
     }
   }
 
+  def renderPropertyExprAsJson(expr: PropertyExpr): String
+
+  def renderJsonContains(
+    lhs: PropertyExpr,
+    rhs: LiteralString
+  )(implicit ctxt: RenderContext): String = s"${renderPropertyExprAsJson(lhs)}::jsonb @> '${rhs.value}'::jsonb "
+
   def render(expr: BooleanExpr)(implicit ctxt: RenderContext): String = expr match {
     case BooleanAnd(lhs, rhs) => renderBooleanAnd(lhs, rhs)
     case BooleanOr(lhs, rhs) => renderBooleanOr(lhs, rhs)
@@ -45,6 +53,7 @@ trait BaseQueryRenderer extends QueryRenderer[String, RenderContext] {
     case LikePredicate(lhs, rhs) => renderLikePredicate(lhs, rhs)
     case NullTestPredicate(lhs, is) => renderNullTestPredicate(lhs, is)
     case IntersectsPredicate(wkt) => renderIntersects(wkt, ctxt.geometryColumn, ctxt.bbox)
+    case JsonContainsPredicate(lhs, rhs) => renderJsonContains(lhs, rhs)
   }
 
   def renderValue(expr: ValueExpr): String = expr match {

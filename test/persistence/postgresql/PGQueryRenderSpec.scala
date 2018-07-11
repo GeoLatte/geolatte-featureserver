@@ -104,6 +104,11 @@ class PGQueryRenderSpec extends Specification {
       compressWS(renderer.render(expr)) === "ST_Intersects( geometry, 'SRID=31370;POINT(10 12)' )"
     }
 
+    "properly render JsonContains expression" in {
+      val expr = QueryParser.parse(""" properties.test @> '["a", 2]' """).get
+      compressWS(renderer.render(expr)) === """json_extract_path(json, 'properties','test')::jsonb @> '["a", 2]'::jsonb"""
+    }
+
   }
 
   "The PGRegularQueryRenderer " should {
@@ -196,6 +201,11 @@ class PGQueryRenderSpec extends Specification {
     "properly render Intersects with Wkt Literal  expression" in {
       val expr = QueryParser.parse("intersects 'SRID=31370;POINT(10 12)'").get
       compressWS(renderer.render(expr)) === "ST_Intersects( geometry, 'SRID=31370;POINT(10 12)' )"
+    }
+
+    "properly render JsonContains expression" in {
+      val expr = QueryParser.parse(""" properties.test @> '["a", 2]' """).get
+      compressWS(renderer.render(expr)) === """test::jsonb @> '["a", 2]'::jsonb"""
     }
 
   }

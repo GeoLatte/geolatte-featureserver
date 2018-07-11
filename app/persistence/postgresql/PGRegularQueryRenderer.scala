@@ -11,6 +11,10 @@ object PGRegularQueryRenderer extends BaseQueryRenderer {
     if (lhs.path.trim.startsWith("properties.")) lhs.path.trim.substring(11)
     else lhs.path
 
+  override def renderPropertyExprAsJson(lhs: PropertyExpr): String =
+    if (lhs.path.trim.startsWith("properties.")) lhs.path.trim.substring(11)
+    else lhs.path
+
   override def renderBooleanAnd(
     lhs: BooleanExpr,
     rhs: BooleanExpr

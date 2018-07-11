@@ -25,6 +25,7 @@ case class NullTestPredicate(lhs: PropertyExpr, isNull: Boolean) extends Predica
 case class IntersectsPredicate(wkt: Option[String]) extends Predicate {
   def intersectsWithBbox: Boolean = wkt.isDefined
 }
+case class JsonContainsPredicate(lhs: PropertyExpr, rhs: LiteralString) extends Predicate
 
 sealed trait ValueExpr extends Expr
 case class LiteralString(value: String) extends ValueExpr
@@ -61,7 +62,7 @@ class QueryParser(val input: ParserInput) extends Parser
 
   def BooleanPrim = rule { WS ~ ch('(') ~ WS ~ BooleanExpression ~ WS ~ ch(')') ~ WS | Predicate }
 
-  def Predicate = rule { spatialRelPred | ComparisonPred | InPred | LikePred | RegexPred | LiteralBool | isNullPred }
+  def Predicate = rule { spatialRelPred | ComparisonPred | InPred | LikePred | RegexPred | LiteralBool | isNullPred | JsonContainsPred }
 
   def spatialRelPred = rule { intersectsTest }
 
@@ -82,6 +83,8 @@ class QueryParser(val input: ParserInput) extends Parser
   def ComparisonPred = rule { (WS ~ Property ~ WS ~ ComparisonOp ~ Expression ~ WS) ~> ComparisonPredicate }
 
   def ComparisonOp = rule { ">=" ~ push(GTE) | "<=" ~ push(LTE) | "=" ~ push(EQ) | "!=" ~ push(NEQ) | "<" ~ push(LT) | ">" ~ push(GT) }
+
+  def JsonContainsPred = rule { (WS ~ Property ~ WS ~ ignoreCase("@>") ~ WS ~ LiteralStr ~ WS) ~> JsonContainsPredicate }
 
   val toValList: ValueExpr => ValueListExpr = v => ValueListExpr(List(v))
   val combineVals: (ValueListExpr, ValueExpr) => ValueListExpr = (list, ve) => ValueListExpr(ve :: list.values)
