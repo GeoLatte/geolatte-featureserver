@@ -11,11 +11,11 @@ import config.Constants
 import org.apache.commons.codec.binary.Base64
 import org.geolatte.geom.crs.CrsId
 import org.geolatte.geom.{ Envelope, Geometry, Point }
-import org.joda.time.DateTime
 import org.supercsv.encoder.DefaultCsvEncoder
 import org.supercsv.prefs.CsvPreference
 import org.supercsv.util.CsvContext
-import persistence.{ ActivityStats, Metadata, MetadataIdentifiers, TableStats }
+import persistence.GeoJsonFormats._
+import persistence._
 import play.api.data.validation.ValidationError
 import play.api.http.{ MediaType, Writeable }
 import play.api.libs.functional.syntax._
@@ -23,7 +23,6 @@ import play.api.libs.json.Json._
 import play.api.libs.json.Reads._
 import play.api.libs.json._
 import play.api.mvc._
-import utilities.GeometryReaders._
 
 trait Resource
 
@@ -90,7 +89,7 @@ object ResourceWriteables {
     def project(js: JsValue)(selector: PartialFunction[(String, String), String], geomToString: Geometry => String): Seq[String] = {
       val jsObj = (js \ "properties").asOpt[JsObject].getOrElse(JsObject(List()))
       val attributes = expand(jsObj).collect(selector)
-      val geom = geomToString((js \ "geometry").asOpt(GeometryReads(CrsId.UNDEFINED)).getOrElse(Point
+      val geom = geomToString((js \ "geometry").asOpt(GeoJsonFormats.geometryReads).getOrElse(Point
         .createEmpty()))
       val id = "id" -> (js \ "id").getOrElse(JsString("<No Id>")).toString
       selector(id) +: geom +: attributes
@@ -210,6 +209,7 @@ case class IndexDefResource(dbName: String, colName: String, indexDef: IndexDef)
 }
 
 object Formats {
+
   /**
    * This is the format  for the PUT resource when creating a Json table
    */

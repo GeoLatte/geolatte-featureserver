@@ -5,7 +5,6 @@ import java.time.OffsetDateTime
 
 import akka.stream.scaladsl.Source
 import controllers.IndexDef
-import utilities.GeometryReaders._
 import org.geolatte.geom.Envelope
 import org.geolatte.geom.curve.MortonCode
 import play.api.data.validation.ValidationError
@@ -13,7 +12,7 @@ import play.api.libs.iteratee.Enumerator
 import play.api.libs.json._
 import play.api.libs.functional.syntax._
 import querylang.{ BooleanExpr, ProjectionList }
-
+import GeoJsonFormats._
 import scala.concurrent.Future
 import scala.util.{ Failure, Success }
 

@@ -20,8 +20,8 @@ import slick.basic.DatabasePublisher
 import slick.jdbc.PostgresProfile.api._
 import slick.jdbc.hikaricp.HikariCPJdbcDataSource
 import slick.jdbc.{ GetResult, PositionedResult }
-import utilities.{ GeometryReaders, JsonUtils, Utils }
-
+import utilities.{ JsonUtils, Utils }
+import GeoJsonFormats._
 import scala.concurrent.Future
 import scala.util.{ Success, Try }
 
@@ -35,7 +35,6 @@ class PostgresqlRepository @Inject() (
     extends Repository with RepoHealth {
 
   import AppExecutionContexts.streamContext
-  import GeometryReaders._
   import utilities.Utils._
 
   private val geoJsonCol = "__geojson"
@@ -224,10 +223,11 @@ class PostgresqlRepository @Inject() (
 
   //note that this may incur substantial overhead because of the parsing en modifying of Json values
   //TODO -- Explore if injecting the geojson geometry can be done in SQL
-  def assemble(base: JsObject, geom: String): JsObject =
+  def assemble(base: JsObject, ewkt: String): JsObject =
     (for {
       js <- Try {
-        Json.parse(geom).as[JsObject]
+        val geom = Wkt.fromWkt(ewkt)
+        Json.toJson(geom)
       }.toOption
       gp = (__ \ "geometry").json.put(js)
       assembler = __.json.update(gp)
@@ -315,7 +315,7 @@ class PostgresqlRepository @Inject() (
   override def insert(database: String, collection: String, json: JsObject): Future[Int] =
     metadataFromDb(database, collection)
       .map { md =>
-        (FeatureTransformers.geometryReads(md.envelope), FeatureTransformers.validator(md.idType))
+        (GeoJsonFormats.geometryReads(md.envelope), GeoJsonFormats.featureValidator(md.idType))
       }.flatMap {
         case (geomReads, validator) =>
           batchInsert(database, collection, Seq((json.as(validator), json.as[Geometry](geomReads))))
@@ -332,10 +332,10 @@ class PostgresqlRepository @Inject() (
 
   override def update(database: String, collection: String, query: BooleanExpr, updateSpec: JsObject): Future[Int] =
     metadataFromDb(database, collection)
-      .map { md => FeatureTransformers.geometryReads(md.envelope)
+      .map { md => GeoJsonFormats.geometryReads(md.envelope)
       }.flatMap { implicit evr =>
         {
-          val ne = updateSpec.as[Geometry] //extract new envelope
+          val ne = updateSpec.as[Geometry](evr) //extract new envelope
           update(database, collection, query, updateSpec, ne)
         }
       }
@@ -585,7 +585,7 @@ class PostgresqlRepository @Inject() (
     }
 
     def wktGeometry(query: SpatialQuery): Option[String] = {
-      query.windowOpt.map(env => Wkt.toWkt(FeatureTransformers.toPolygon(env)))
+      query.windowOpt.map(env => Wkt.toWkt(GeoJsonFormats.toPolygon(env)))
     }
 
     def windowFilterExpr(query: SpatialQuery): Option[String] = {
@@ -632,8 +632,8 @@ class PostgresqlRepository @Inject() (
       }
 
       val projection =
-        if (query.metadata.jsonTable) "ID, ST_AsGeoJson( geometry, 156, 3) as geom , json"
-        else s" ${query.metadata.pkey}, ST_AsGeoJson( ${query.metadata.geometryColumn}, 15, 3 ) as $geoJsonCol, * "
+        if (query.metadata.jsonTable) "ID, ST_AsEWKT( geometry) as geom , json"
+        else s" ${query.metadata.pkey}, ST_AsEWKT( ${query.metadata.geometryColumn}) as $geoJsonCol, * "
 
       sql"""
          SELECT #$projection

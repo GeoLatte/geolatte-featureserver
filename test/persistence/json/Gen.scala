@@ -1,19 +1,17 @@
 package persistence.json
 
 import java.util.UUID
+import java.util.concurrent.atomic.AtomicInteger
 
 import org.geolatte.geom._
-import play.api.libs.json._
-import play.api.libs.json.Json.JsValueWrapper
-import utilities.GeometryReaders._
 import org.geolatte.geom.curve.MortonCode
-import scala.reflect.ClassTag
-import scala.util.Random
-import scala.Predef._
-import scala.Some
+import play.api.libs.json.Json.JsValueWrapper
+import play.api.libs.json._
+import persistence.GeoJsonFormats._
 
 import scala.language.implicitConversions
-import java.util.concurrent.atomic.AtomicInteger
+import scala.reflect.ClassTag
+import scala.util.Random
 
 //
 // TODO -- Make this compatible with ScalaCheck
@@ -108,17 +106,20 @@ object Gen {
       }
     }
 
-    def sample = Some(
-      Range(0, size).foldLeft((Point.createEmpty(), PointSequenceBuilders.fixedSized(size, dimFlag, extent.getCrsId)))(
-      (state, i) => {
-        val (startPnt, ps) = state
-        val pnt = createPnt
-        if (i == 0) (createPnt, ps.add(pnt))
-        else if (i == size && closed) (startPnt, ps.add(startPnt))
-        else (startPnt, ps.add(pnt))
+    def sample = {
+      val builder = PointSequenceBuilders.fixedSized(size, dimFlag, extent.getCrsId)
+      if (!closed) {
+
+        Range(0, size).foreach(_ => builder.add(createPnt))
+
+      } else {
+        val startPnt = createPnt
+        builder.add(startPnt)
+        Range(1, size - 1).foreach(_ => builder.add(createPnt))
+        builder.add(startPnt)
       }
-    )._2.toPointSequence
-    )
+      Some(builder.toPointSequence)
+    }
   }
 
   implicit def toFieldWrappingGen[T](g: Gen[T])(implicit w: Writes[T]): Gen[JsValueWrapper] = g.map(v => Json.toJsFieldJsValueWrapper(v))
@@ -152,6 +153,12 @@ object Gen {
     genListOfPolys.map(lp => new MultiPolygon(lp.toArray))
   }
 
+  def geometryCollection(size: Int, dimFlag: DimensionalFlag = d2D)(implicit extent: Envelope): Gen[GeometryCollection] = {
+    val sizedList: List[Int] = List.fill(size)(0)
+    val genListOf = sequence(sizedList.map(_ => point(dimFlag)))
+    genListOf.map(g => new GeometryCollection(g.toArray))
+  }
+
   def geoJsonFeature[T: ClassTag, G <: Geometry](id: Gen[T], geom: Gen[G], prop: Gen[JsObject]): Gen[JsObject] =
     for {
       g <- geom
@@ -159,9 +166,9 @@ object Gen {
       i <- id
     } yield {
       i match {
-        case i: String => Json.obj("type" -> "Feature", "id" -> i, "geometry" -> Json.toJson(g)(GeometryWithoutCrsWrites), "properties" -> p)
-        case i: Int => Json.obj("type" -> "Feature", "id" -> i, "geometry" -> Json.toJson(g)(GeometryWithoutCrsWrites), "properties" -> p)
-        case _ => Json.obj("type" -> "Feature", "id" -> i.toString, "geometry" -> Json.toJson(g)(GeometryWithoutCrsWrites), "properties" -> p)
+        case i: String => Json.obj("type" -> "Feature", "id" -> i, "geometry" -> Json.toJson(g).as[Geometry], "properties" -> p)
+        case i: Int => Json.obj("type" -> "Feature", "id" -> i, "geometry" -> Json.toJson(g).as[Geometry], "properties" -> p)
+        case _ => Json.obj("type" -> "Feature", "id" -> i.toString, "geometry" -> Json.toJson(g).as[Geometry], "properties" -> p)
       }
     }
 
