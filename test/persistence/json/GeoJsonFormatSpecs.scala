@@ -83,6 +83,34 @@ class GeoJsonFormatSpecs extends Specification {
 
   }
 
+  "the GeoJsonReader" should {
+
+    import GeoJsonFormats._
+    val jsonGC = """{"type":"GeometryCollection","crs":{"properties":{"name":"EPSG:31370"},"type":"name"},"geometries":[{"type":"Point","bbox":[173369.86,175371.1,173369.86,175371.1],"coordinates":[173369.86,175371.1]}]}"""
+
+    "read 2D Points " in {
+      val pnt = point( d2D )( "00" ).sample get
+      val json = Json.toJson( pnt )
+      val rec = json.as[Geometry]
+      matchCrs( rec, json ) and matchType(json, "Point") and matchCoordinate(rec.asInstanceOf[Point], json)
+    }
+
+    "read 2D GeometryCollections" in {
+      val gc = geometryCollection(2, d2D)("00").sample.get
+      val json = Json.toJson(gc)
+      val rec = json.as[Geometry]
+      matchCrs(rec, json)
+
+    }
+
+    "parse correctly a GeometryCollection met enkel CRS op hoogste niveau" in {
+      val json = Json.parse(jsonGC)
+      val gc = json.as[Geometry]
+      gc.getSRID must_=== 31370
+    }
+
+  }
+
   "the GeoJsonWrites" should {
 
     import GeoJsonFormats._
