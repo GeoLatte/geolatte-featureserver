@@ -295,35 +295,24 @@ class PostgresqlRepository @Inject() (
   override def delete(db: String, collection: String, query: BooleanExpr): Future[Boolean] =
     runOnDb("delete-data")(Sql.DELETE_DATA(db, collection, PGJsonQueryRenderer.render(query)(RenderContext("geometry")))) map { _ => true }
 
-  def batchInsert(db: String, collection: String, jsons: Seq[(JsObject, Geometry)]): Future[Int] = {
-    def id(json: JsValue): Any = json match {
-      case JsString(v) => v
-      case JsNumber(i) => i
+  def extractIdString(json: JsObject): String =
+    (json \ "id").getOrElse(JsNull) match {
+      case JsString(v) => s"'$v'"
+      case JsNumber(i) => i.toString()
       case _ => throw new IllegalArgumentException("No ID property of type String or Number")
     }
 
+  def batchInsert(db: String, collection: String, jsons: Seq[(JsObject, Geometry)]): Future[Int] = {
     val paramValues = jsons.map {
       case (json, geom) => (
-        id((json \ "id").getOrElse(JsNull)),
+        extractIdString(json),
         unescapeJson(stripGeometry(json)),
         org.geolatte.geom.codec.Wkb.toWkb(geom).toString
       )
     }
-    val dbio = DBIO.sequence(paramValues.map { case (id, json, geom) => Sql.INSERT_DATA(db, collection, id.toString, json, geom) })
-    runOnDb("batch-insert")(dbio).map(_.sum)
+    val dbio = DBIO.sequence(paramValues.map { case (id, json, geom) => Sql.INSERT_DATA(db, collection, id, json, geom) }).map(_.sum)
+    runOnDb("batch-insert")(dbio)
   }
-
-  override def insert(database: String, collection: String, json: JsObject): Future[Int] =
-    metadataFromDb(database, collection)
-      .map { md =>
-        (GeoJsonFormats.geometryReads(md.envelope), GeoJsonFormats.featureValidator(md.idType))
-      }.flatMap {
-        case (geomReads, validator) =>
-          batchInsert(database, collection, Seq((json.as(validator), json.as[Geometry](geomReads))))
-      }.recover {
-        case _: play.api.libs.json.JsResultException =>
-          throw InvalidParamsException("Invalid Json object")
-      }
 
   def update(db: String, collection: String, query: BooleanExpr, newValue: JsObject, geometry: Geometry): Future[Int] = {
     val whereExpr = PGJsonQueryRenderer.render(query)(RenderContext("geometry"))
@@ -331,39 +320,21 @@ class PostgresqlRepository @Inject() (
     runOnDb("update")(stmt)
   }
 
-  override def update(database: String, collection: String, query: BooleanExpr, updateSpec: JsObject): Future[Int] =
-    metadataFromDb(database, collection)
-      .map { md => GeoJsonFormats.geometryReads(md.envelope)
-      }.flatMap { implicit evr =>
-        {
-          val ne = updateSpec.as[Geometry](evr) //extract new envelope
-          update(database, collection, query, updateSpec, ne)
-        }
-      }
+  override def update(database: String, collection: String, query: BooleanExpr, updateSpec: JsObject): Future[Int] = {
+    val newGeometry = updateSpec.as[Geometry](GeoJsonFormats.geoJsonGeometryReads) //extract new geometry
+    update(database, collection, query, updateSpec, newGeometry)
+  }
 
-  override def upsert(database: String, collection: String, json: JsObject): Future[Int] = {
-
-    val idq = (json \ "id").getOrElse(JsNull) match {
-      case JsNumber(i) => s" id = $i"
-      case JsString(i) => s" id = '$i'"
-      case _ => throw new IllegalArgumentException("Id neither string nor number in json.")
+  def upsert(db: String, collection: String, jsons: Seq[(JsObject, Geometry)]): Future[Int] = {
+    val paramValues = jsons.map {
+      case (json, geom) => (
+        extractIdString(json),
+        unescapeJson(stripGeometry(json)),
+        org.geolatte.geom.codec.Wkb.toWkb(geom).toString
+      )
     }
-
-    val expr = QueryParser.parse(idq).get
-
-    def doUpsert(v: Option[_]): Future[Int] = v match {
-      case Some(_) => update(database, collection, expr, json)
-      case _ => insert(database, collection, json)
-    }
-
-    for {
-      md <- metadataFromDb(database, collection)
-      q = SpatialQuery(windowOpt = None, intersectionGeometryWktOpt = None, queryOpt = Some(expr), metadata = md)
-      (cnt, source) <- query(database, collection, q)
-      optValue <- source.runWith(Sink.headOption)
-      numChanged <- doUpsert(optValue)
-    } yield numChanged
-
+    val dbio = DBIO.sequence(paramValues.map { case (id, json, geom) => Sql.UPSERT_DATA(db, collection, id, json, geom) }).map(_.sum)
+    runOnDb("batch-upsert")(dbio)
   }
 
   /**
@@ -712,6 +683,12 @@ class PostgresqlRepository @Inject() (
     def INSERT_DATA(dbname: String, tableName: String, id: String, json: String, geometry: String) =
       sqlu"""INSERT INTO #${quote(dbname)}.#${quote(tableName)}  (id, json, geometry)
              VALUES ($id, $json::json, $geometry::geometry)
+       """
+
+    def UPSERT_DATA(dbname: String, tableName: String, id: String, json: String, geometry: String) =
+      sqlu"""INSERT INTO #${quote(dbname)}.#${quote(tableName)}  (id, json, geometry)
+             VALUES ($id, $json::json, $geometry::geometry)
+             ON CONFLICT (id) DO UPDATE SET json = EXCLUDED.json, geometry = EXCLUDED.geometry;
        """
 
     def DELETE_DATA(dbname: String, tableName: String, where: String) =

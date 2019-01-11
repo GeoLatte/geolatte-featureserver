@@ -26,10 +26,9 @@ class TxController @Inject() (val repository: Repository, val instrumentation: I
   import AppExecutionContexts.streamContext
 
   def insert(db: String, col: String) = {
-    val parser = mkJsonWritingBodyParser(db, col)
-    Action(parser) {
-      request => Ok(s"Written ${request.body} features")
-    }
+    val writer = repository.writer(db, col)
+    val parser = bodyParser(db, writer.insert, config.Constants.chunkSeparator)
+    Action(parser)(_.body)
   }
 
   private def parse(js: JsValue): Try[BooleanExpr] = js match {
@@ -65,14 +64,10 @@ class TxController @Inject() (val repository: Repository, val instrumentation: I
       }
   }
 
-  def upsert(db: String, col: String) = RepositoryAction {
-    implicit request =>
-      request.body.asJson match {
-        case Some(obj: JsObject) => repository.upsert(db, col, obj)
-          .map(_ => Ok("Objects upserted"))
-          .recover(commonExceptionHandler(db))
-        case _ => Future.successful(BadRequest(s"No Json object in request body."))
-      }
+  def upsert(db: String, col: String) = {
+    val writer = repository.writer(db, col)
+    val parser = bodyParser(db, writer.upsert, config.Constants.chunkSeparator).map(f => f)
+    Action(parser)(_.body)
   }
 
   private def extract[T <: JsValue: ClassTag](in: Option[JsValue], key: String): Try[T] =
@@ -93,27 +88,25 @@ class TxController @Inject() (val repository: Repository, val instrumentation: I
    * @param col the collection to write features to
    * @return a new BodyParser
    */
-  private def mkJsonWritingBodyParser(db: String, col: String): BodyParser[Int] = {
-    val writer = repository.writer(db, col)
-    bodyParser(writer, config.Constants.chunkSeparator)
-  }
-
-  private def bodyParser(writer: FeatureWriter, sep: String) = BodyParser("GeoJSON feature BodyParser") { request =>
-    {
+  private def bodyParser(db: String, writer: Seq[JsObject] => Future[Int], sep: String): BodyParser[Result] =
+    BodyParser("GeoJSON feature BodyParser") { request =>
       //TODO -- the "magic" numbers should be documented and configurable.
       //TODO -- Better to refactor FeatureWriter to a Sink, and have factory method for that Sink in the Repository
       val flow = JsonFraming.objectScanner(1024 * 1024)
         .map(_.utf8String)
         .map(s => Utils.withDebug(s"seen: $s") { s })
-        .map { str => Json.parse(str) }
+        .map(Json.parse)
         .collect { case js: JsObject => js } //TODO -- log where there is a parse failure
         .grouped(128)
-        .mapAsync(2)(group => writer.add(group)) //TODO -- better error-handling, using
+        .mapAsync(2)(writer.apply) //TODO -- better error-handling, using
         .toMat(Sink.fold(0)(_ + _))(Keep.right)
 
-      Accumulator(flow).map(Right.apply)
+      Accumulator(flow).map { r =>
+        Right(Ok(s"Written $r features"))
+      }.recover {
+        commonExceptionHandler(db).andThen(Left.apply)
+      }
     }
-  }
 
 }
 

@@ -1,20 +1,17 @@
 package persistence
 
 import java.sql.Timestamp
-import java.time.OffsetDateTime
 
 import akka.stream.scaladsl.Source
 import controllers.IndexDef
 import org.geolatte.geom.Envelope
-import org.geolatte.geom.curve.MortonCode
+import persistence.GeoJsonFormats._
+import persistence.querylang.{ BooleanExpr, ProjectionList }
 import play.api.data.validation.ValidationError
-import play.api.libs.iteratee.Enumerator
-import play.api.libs.json._
 import play.api.libs.functional.syntax._
-import querylang.{ BooleanExpr, ProjectionList }
-import GeoJsonFormats._
+import play.api.libs.json._
+
 import scala.concurrent.Future
-import scala.util.{ Failure, Success }
 
 case class Metadata(
   name: String,
@@ -89,7 +86,8 @@ case class SpatialQuery(
 
 trait FeatureWriter {
 
-  def add(features: Seq[JsObject]): Future[Int]
+  def insert(features: Seq[JsObject]): Future[Int]
+  def upsert(features: Seq[JsObject]): Future[Int]
 
 }
 
@@ -166,10 +164,6 @@ trait Repository {
 
   def query(database: String, collection: String, spatialQuery: SpatialQuery, start: Option[Int] = None,
     limit: Option[Int] = None): Future[CountedQueryResult]
-
-  def insert(database: String, collection: String, json: JsObject): Future[Int]
-
-  def upsert(database: String, collection: String, json: JsObject): Future[Int]
 
   def delete(database: String, collection: String, query: BooleanExpr): Future[Boolean]
 

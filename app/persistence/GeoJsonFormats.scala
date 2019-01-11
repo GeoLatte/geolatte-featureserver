@@ -129,14 +129,13 @@ object GeoJsonFormats {
     (__ \ "geometries").read[Array[JsValue]]
       .map(geometries => new GeometryCollection(geometries.map(geometry => mkGeometryReads(crsId).reads(geometry).get)))
 
-  def mkGeometryReads(defaultCrsId: CrsId) : Reads[Geometry] = (
+  def mkGeometryReads(defaultCrsId: CrsId): Reads[Geometry] = (
     (__ \ "type").read[String] and
     (__ \ "crs").readNullable[CrsId] and
     __.json.pick
   )((typeDiscriminator: String, crsOpt: Option[CrsId], js: JsValue) => {
 
       implicit val crsInUse: CrsId = crsOpt.getOrElse(defaultCrsId)
-      println(s"CRSID IN USE: $crsInUse for type $typeDiscriminator" )
       typeDiscriminator match {
         case "Point" => Json.fromJson[Point](js).get
         case "LineString" => Json.fromJson[LineString](js).get
@@ -148,15 +147,14 @@ object GeoJsonFormats {
       }
     })
 
-   implicit val geometryReads : Reads[Geometry] = mkGeometryReads(CrsId.UNDEFINED)
+  implicit val geometryReads: Reads[Geometry] = mkGeometryReads(CrsId.UNDEFINED)
 
   /**
-   * Extracts the Envelope from the GeoJson
+   * Extracts the Geometry from the GeoJson
    *
    * @return
    */
-  def geometryReads(extent: Envelope): Reads[Geometry] = {
-    implicit val crsId: CrsId = extent.getCrsId
+  val geoJsonGeometryReads: Reads[Geometry] = {
     (__ \ 'geometry).json.pick[JsObject] andThen geometryReads
   }
 

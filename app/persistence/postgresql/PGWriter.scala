@@ -1,11 +1,13 @@
 package persistence.postgresql
 
-import persistence.{ GeoJsonFormats, FeatureWriter, Metadata, Repository }
-import org.geolatte.geom.{ Geometry, Polygon }
+import Exceptions.InvalidParamsException
+import org.geolatte.geom.Geometry
+import persistence.{ FeatureWriter, GeoJsonFormats, Metadata }
 import play.api.Logger
 import play.api.libs.json.{ JsObject, Reads }
 
 import scala.concurrent.Future
+import scala.util.{ Failure, Success, Try }
 
 /**
  * A Writer for
@@ -19,30 +21,48 @@ case class PGWriter(repo: PostgresqlRepository, db: String, collection: String) 
 
   lazy val reads: Future[(Reads[Geometry], Reads[JsObject])] = metadata.map { md =>
     (
-      GeoJsonFormats.geometryReads(md.envelope),
+      GeoJsonFormats.geoJsonGeometryReads,
       GeoJsonFormats.featureValidator(md.idType)
     )
   }
 
-  override def add(features: Seq[JsObject]): Future[Int] =
+  override def insert(features: Seq[JsObject]): Future[Int] =
+    write(features, repo.batchInsert)
+
+  override def upsert(features: Seq[JsObject]): Future[Int] =
+    write(features, repo.upsert)
+
+  private def write(features: Seq[JsObject], writer: (String, String, Seq[(JsObject, Geometry)]) => Future[Int]): Future[Int] =
     if (features.isEmpty) Future.successful(0)
     else {
       reads.flatMap {
         case (geometryReader, validator) =>
-          val docs: Seq[(JsObject, Geometry)] = features.map { f =>
-            (f.asOpt(validator), f.asOpt[Geometry](geometryReader))
-          } collect {
-            case (Some(f), Some(geom)) => (f, geom)
+          val docsTry: Try[Seq[(JsObject, Geometry)]] =
+            features.foldLeft(Success(Seq()): Try[Seq[(JsObject, Geometry)]]) {
+              case (f @ Failure(_), _) => f // continue with failure
+              case (Success(acc), feature) =>
+                for {
+                  validatedFeature <- Try(feature.as(validator)).recover {
+                    case _: play.api.libs.json.JsResultException =>
+                      throw InvalidParamsException("Invalid Json object")
+                  }
+                  featureGeometry <- Try(feature.as[Geometry](geometryReader)).recover {
+                    case _: play.api.libs.json.JsResultException =>
+                      throw InvalidParamsException("Invalid Geometry in Json object")
+                  }
+                } yield acc :+ (validatedFeature, featureGeometry)
+            }
+          val fInt =
+            for {
+              docs <- Future.fromTry(docsTry)
+              i <- writer(db, collection, docs)
+            } yield i
+
+          fInt.onComplete {
+            case Success(num) => Logger.debug(s"Successfully written $num features")
+            case Failure(t) => Logger.warn(s"Write failed with error: ${t.getMessage}")
           }
-          val fInt = repo.batchInsert(db, collection, docs)
-          fInt.onSuccess {
-            case num => Logger.debug(s"Successfully inserted $num features")
-          }
-          fInt.recover {
-            case t: Throwable =>
-              Logger.warn(s"Insert failed with error: ${t.getMessage}")
-              0l
-          }
+
           fInt
       }
     }

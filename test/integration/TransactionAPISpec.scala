@@ -30,6 +30,9 @@ class TransactionAPISpec extends InCollectionSpecification {
         return OK when the collection exists, and data is valid                   $e5
         metadata query returns the inserted number of objects                     $e6
 
+     The transaction /bulkupsert should:
+        return OK when the collection exists, and data is valid                   $e5u
+
       The transaction /delete should:
         deleting an element and return status OK                                  $e7
 
@@ -132,13 +135,28 @@ class TransactionAPISpec extends InCollectionSpecification {
     }
   }
 
+  def e5u = {
+    val fs = featureArray(size = 100).sample.get
+    removeData(testDbName, testColName)
+    val data = fs.value map (j => Json.stringify(j)) mkString Constants.chunkSeparator getBytes "UTF-8"
+    upsertData(testDbName, testColName, ByteString(data)) // intentionally calling upsert twice to show that everything goes well
+    val res1 = upsertData(testDbName, testColName, ByteString(data))
+    val res2 = getList(testDbName, testColName, "")
+
+    res1.applyMatcher {
+      _.status must equalTo(OK)
+    } and res2.applyMatcher {
+      res => res.responseBody must beSome(matchFeaturesInJson(fs))
+    }
+  }
+
   def e6 = pending
 
   def e62 = {
     val newColName = testColName + "2"
     makeCollection(testDbName, newColName, metaWithTextIdType)
     val f = featureWithStringId().sample.get
-    val res = postUpsert(testDbName, newColName, f).status must equalTo(OK)
+    val res = postInsert(testDbName, newColName, f).status must equalTo(OK)
     deleteCollection(testDbName, newColName)
     res
   }
@@ -147,7 +165,7 @@ class TransactionAPISpec extends InCollectionSpecification {
     val newColName = testColName + "2"
     makeCollection(testDbName, newColName, metaWithTextIdType)
     val f = featureWithIntId().sample.get
-    val res = postUpsert(testDbName, newColName, f).status must equalTo(BAD_REQUEST)
+    val res = postInsert(testDbName, newColName, f).status must equalTo(BAD_REQUEST)
     deleteCollection(testDbName, newColName)
     res
   }

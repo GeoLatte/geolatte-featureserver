@@ -175,9 +175,15 @@ trait RestApiDriver {
     FakeRequestResult.POSTJson(url, reqBody, contentAsJson)
   }
 
+  def postInsert(dbName: String, colName: String, reqBody: JsObject) = {
+    Logger.info("START INSERT COLLECTION")
+    val url = DATABASES / dbName / colName / TX / INSERT
+    FakeRequestResult.POSTJson(url, reqBody, contentAsJson)
+  }
+
   def postUpdate(dbName: String, colName: String, reqBody: JsObject) = {
     Logger.info("START UPDATE COLLECTION")
-    val url = DATABASES / dbName / colName / TX / UPSERT
+    val url = DATABASES / dbName / colName / TX / UPDATE
     FakeRequestResult.POSTJson(url, reqBody, contentAsJson)
   }
 
@@ -254,7 +260,16 @@ trait RestApiDriver {
     val url = DATABASES / db / col / TX / INSERT
     val res = FakeRequestResult.POSTRaw(url, data, contentAsJson)
     Logger.info("LOADED TEST DATA")
-    Logger.info("LOader status " + res.status)
+    Logger.info("Loader status " + res.status)
+    res
+  }
+
+  def upsertData[B](db: String, col: String, data: ByteString) = {
+    Logger.info("START LOADING TEST DATA")
+    val url = DATABASES / db / col / TX / UPSERT
+    val res = FakeRequestResult.POSTRaw(url, data, contentAsJson)
+    Logger.info("UPSERTED TEST DATA")
+    Logger.info("Loader status " + res.status)
     res
   }
 

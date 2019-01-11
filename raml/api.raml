@@ -171,13 +171,17 @@ mediaType: application/vnd.geolatte-featureserver+json;version=1.0
           displayName: upserts features
           post:
             description: |
-              POST an GeoJson feature to upsert into the specified collection. 
-              
+              POST a stream of GeoJson features to this resource for bulk upsert into the specified collection.
+
+              The features must be seperated by a newline.
+
               An upsert performs an update if the collection already contains the feature, and an insert otherwise. Features are identified by their `id` property.
             body:
               application/vnd.geolatte-featureserver+json;version=1.0 :
                 example: |
-                  {id = 433, geometry":{"type":"Point","crs":{"properties":{"name":"EPSG:31370"},"type":"name"},"bbox":[158000,191400,158050,191400],"coordinates":[158000,191400]},"type":"Feature","properties":{"some-property":"some-value"}}
+                  {id = 433, geometry":{"type":"Point","crs":{"properties":{"name":"EPSG:31370"},"type":"name"},"bbox":[158000,191400,158050,191400],"coordinates":[158000,191400]},"type":"Feature","properties":{"some-property":"some-value"}}\n
+                  {id = 434, geometry":{"type":"Point","crs":{"properties":{"name":"EPSG:31370"},"type":"name"},"bbox":[158000,191400,158050,191400],"coordinates":[158000,191400]},"type":"Feature","properties":{"some-property":"some-value"}}\n
+                  ....
       /query:
         displayName: Queries the collection
         get:
