@@ -89,10 +89,10 @@ class GeoJsonFormatSpecs extends Specification {
     val jsonGC = """{"type":"GeometryCollection","crs":{"properties":{"name":"EPSG:31370"},"type":"name"},"geometries":[{"type":"Point","bbox":[173369.86,175371.1,173369.86,175371.1],"coordinates":[173369.86,175371.1]}]}"""
 
     "read 2D Points " in {
-      val pnt = point( d2D )( "00" ).sample get
-      val json = Json.toJson( pnt )
+      val pnt = point(d2D)("00").sample get
+      val json = Json.toJson(pnt)
       val rec = json.as[Geometry]
-      matchCrs( rec, json ) and matchType(json, "Point") and matchCoordinate(rec.asInstanceOf[Point], json)
+      matchCrs(rec, json) and matchType(json, "Point") and matchCoordinate(rec.asInstanceOf[Point], json)
     }
 
     "read 2D GeometryCollections" in {
