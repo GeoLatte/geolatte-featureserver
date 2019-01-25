@@ -30,7 +30,7 @@ class TransactionAPISpec extends InCollectionSpecification {
         return OK when the collection exists, and data is valid                   $e5
         metadata query returns the inserted number of objects                     $e6
 
-     The transaction /bulkupsert should:
+     The transaction /upsert should:
         return OK when the collection exists, and data is valid                   $e5u
 
       The transaction /delete should:
