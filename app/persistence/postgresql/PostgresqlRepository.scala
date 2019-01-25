@@ -297,7 +297,7 @@ class PostgresqlRepository @Inject() (
 
   def extractIdString(json: JsObject): String =
     (json \ "id").getOrElse(JsNull) match {
-      case JsString(v) => s"'$v'"
+      case JsString(v) => v
       case JsNumber(i) => i.toString()
       case _ => throw new IllegalArgumentException("No ID property of type String or Number")
     }
