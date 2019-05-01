@@ -282,6 +282,16 @@ class QueryParserSpec extends Specification {
       )
     }
 
+    "support the between .. and ..  expression" in {
+      QueryParser.parse(""" to_date( a.b.c, 'YYYY-MM-DD') between '2011-01-01' and '2012-01-01' """) must beSuccessfulTry[BooleanExpr].withValue(
+        BetweenAndPredicate(
+          ToDate(PropertyExpr("a.b.c"), LiteralString("YYYY-MM-DD")),
+          LiteralString("2011-01-01"),
+          LiteralString("2012-01-01")
+        )
+      )
+    }
+
   }
 
 }

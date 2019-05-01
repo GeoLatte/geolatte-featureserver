@@ -33,6 +33,8 @@ trait BaseQueryRenderer extends QueryRenderer[String, RenderContext] {
 
   def renderToDate(date: AtomicExpr, fmt: AtomicExpr): String
 
+  def renderBetween(lhs: AtomicExpr, lb: AtomicExpr, up: AtomicExpr): String
+
   def renderIntersects(wkt: Option[String], geometryColumn: String, bbox: Option[String]): String = {
     wkt match {
       case Some(geo) => s""" ST_Intersects( $geometryColumn, '${geo}' )"""
@@ -53,6 +55,7 @@ trait BaseQueryRenderer extends QueryRenderer[String, RenderContext] {
     case BooleanNot(inner) => renderBooleanNot(inner)
     case LiteralBoolean(b) => renderLiteralBoolean(b)
     case ComparisonPredicate(lhs, op, rhs) => renderComparisonPredicate(lhs, op, rhs)
+    case BetweenAndPredicate(lhs, lb, up) => renderBetween(lhs, lb, up)
     case InPredicate(lhs, rhs) => renderInPredicate(lhs, rhs)
     case RegexPredicate(lhs, rhs) => renderRegexPredicate(lhs, rhs)
     case LikePredicate(lhs, rhs) => renderLikePredicate(lhs, rhs)

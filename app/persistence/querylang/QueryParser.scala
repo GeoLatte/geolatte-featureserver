@@ -26,6 +26,7 @@ case class IntersectsPredicate(wkt: Option[String]) extends Predicate {
   def intersectsWithBbox: Boolean = wkt.isDefined
 }
 case class JsonContainsPredicate(lhs: PropertyExpr, rhs: LiteralString) extends Predicate
+case class BetweenAndPredicate(date: AtomicExpr, lb: AtomicExpr, up: AtomicExpr) extends Predicate
 
 sealed trait AtomicExpr extends Expr
 
@@ -67,7 +68,7 @@ class QueryParser(val input: ParserInput) extends Parser
 
   def BooleanPrim = rule { WS ~ ch('(') ~ WS ~ BooleanExpression ~ WS ~ ch(')') ~ WS | Predicate }
 
-  def Predicate = rule { spatialRelPred | ComparisonPred | InPred | LikePred | RegexPred | LiteralBool | isNullPred | JsonContainsPred }
+  def Predicate = rule { spatialRelPred | BetweenAndPred | ComparisonPred | InPred | LikePred | RegexPred | LiteralBool | isNullPred | JsonContainsPred }
 
   def spatialRelPred = rule { intersectsTest }
 
@@ -84,6 +85,8 @@ class QueryParser(val input: ParserInput) extends Parser
   def RegexPred = rule { (WS ~ AtomicExpression ~ WS ~ "~" ~ WS ~ Regex) ~> RegexPredicate }
 
   def InPred = rule { (WS ~ AtomicExpression ~ WS ~ ignoreCase("in") ~ WS ~ ExpressionList ~ WS) ~> InPredicate }
+
+  def BetweenAndPred = rule { (WS ~ AtomicExpression ~ WS ~ ignoreCase("between") ~ WS ~ AtomicExpression ~ WS ~ ignoreCase("and") ~ WS ~ AtomicExpression ~ WS) ~> BetweenAndPredicate }
 
   def ComparisonPred = rule { (WS ~ AtomicExpression ~ WS ~ ComparisonOp ~ AtomicExpression ~ WS) ~> ComparisonPredicate }
 

@@ -114,6 +114,11 @@ class PGQueryRenderSpec extends Specification {
       compressWS(renderer.render(expr)) === """to_date(json_extract_path_text(json, 'properties','foo'), 'YYYY-MM-DD' ) = ( to_date( '2019-04-30' , 'YYYY-MM-DD' ) )"""
     }
 
+    "properly render between .. and operator in expression" in {
+      val expr = QueryParser.parse(" to_date(properties.foo, 'YYYY-MM-DD') between '2011-01-01' and '2012-01-01' ").get
+      compressWS(renderer.render(expr)) === """( to_date(json_extract_path_text(json, 'properties','foo'), 'YYYY-MM-DD' ) between '2011-01-01' and '2012-01-01' )"""
+    }
+
   }
 
   "The PGRegularQueryRenderer " should {
@@ -216,6 +221,11 @@ class PGQueryRenderSpec extends Specification {
     "properly render to_date functions in expression" in {
       val expr = QueryParser.parse(" to_date( foo, 'YYYY-MM-DD') = to_date('2019-04-30', 'YYYY-MM-DD') ").get
       compressWS(renderer.render(expr)) === """to_date(foo, 'YYYY-MM-DD' ) = ( to_date( '2019-04-30' , 'YYYY-MM-DD' ) )"""
+    }
+
+    "properly render between .. and operator in expression" in {
+      val expr = QueryParser.parse(" to_date( foo, 'YYYY-MM-DD') between '2011-01-01' and '2012-01-01' ").get
+      compressWS(renderer.render(expr)) === """( to_date(foo, 'YYYY-MM-DD' ) between '2011-01-01' and '2012-01-01' )"""
     }
 
   }

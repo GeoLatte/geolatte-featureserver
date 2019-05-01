@@ -46,6 +46,9 @@ object PGJsonQueryRenderer extends BaseQueryRenderer {
 
   override def renderBooleanNot(inner: BooleanExpr)(implicit ctxt: RenderContext): String = s" NOT ( ${render(inner)} ) "
 
+  override def renderBetween(lhs: AtomicExpr, lb: AtomicExpr, up: AtomicExpr): String =
+    s" ( ${renderAtomic(PropertyPathAsJsonText)(lhs)} between ${renderAtomic(PropertyPathAsJsonText)(lb)} and ${renderAtomic(PropertyPathAsJsonText)(up)} ) "
+
   override def renderComparisonPredicate(
     lhs: AtomicExpr,
     op: ComparisonOperator,

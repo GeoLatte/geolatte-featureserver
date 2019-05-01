@@ -33,6 +33,12 @@ object PGRegularQueryRenderer extends BaseQueryRenderer {
 
   override def renderBooleanNot(inner: BooleanExpr)(implicit ctxt: RenderContext): String = s" NOT ( ${render(inner)} ) "
 
+  override def renderBetween(
+    lhs: AtomicExpr,
+    lb: AtomicExpr,
+    up: AtomicExpr
+  ): String = s" ( ${renderAtomic(PER)(lhs)} between ${renderAtomic(PER)(lb)} and ${renderAtomic(PER)(up)} ) "
+
   override def renderComparisonPredicate(
     lhs: AtomicExpr,
     op: ComparisonOperator,
