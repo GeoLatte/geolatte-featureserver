@@ -17,27 +17,27 @@ case class BooleanAnd(lhs: BooleanExpr, rhs: BooleanExpr) extends BooleanExpr
 case class BooleanNot(expr: BooleanExpr) extends BooleanExpr
 
 sealed trait Predicate extends BooleanExpr
-case class ComparisonPredicate(lhs: PropertyExpr, op: ComparisonOperator, rhs: ValueExpr) extends Predicate
-case class InPredicate(lhs: PropertyExpr, rhs: ValueListExpr) extends Predicate
-case class RegexPredicate(lhs: PropertyExpr, rhs: RegexExpr) extends Predicate
-case class LikePredicate(lhs: PropertyExpr, rhs: LikeExpr) extends Predicate
-case class NullTestPredicate(lhs: PropertyExpr, isNull: Boolean) extends Predicate
+case class ComparisonPredicate(lhs: AtomicExpr, op: ComparisonOperator, rhs: AtomicExpr) extends Predicate
+case class InPredicate(lhs: AtomicExpr, rhs: ValueListExpr) extends Predicate
+case class RegexPredicate(lhs: AtomicExpr, rhs: RegexExpr) extends Predicate
+case class LikePredicate(lhs: AtomicExpr, rhs: LikeExpr) extends Predicate
+case class NullTestPredicate(lhs: AtomicExpr, isNull: Boolean) extends Predicate
 case class IntersectsPredicate(wkt: Option[String]) extends Predicate {
   def intersectsWithBbox: Boolean = wkt.isDefined
 }
 case class JsonContainsPredicate(lhs: PropertyExpr, rhs: LiteralString) extends Predicate
 
-sealed trait ValueExpr extends Expr
-case class LiteralString(value: String) extends ValueExpr
-case class LiteralNumber(value: BigDecimal) extends ValueExpr
-case class LiteralBoolean(value: Boolean) extends ValueExpr with BooleanExpr
+sealed trait AtomicExpr extends Expr
 
-case class ValueListExpr(values: List[ValueExpr]) extends Expr
+case class LiteralString(value: String) extends AtomicExpr
+case class LiteralNumber(value: BigDecimal) extends AtomicExpr
+case class LiteralBoolean(value: Boolean) extends AtomicExpr with BooleanExpr
+case class PropertyExpr(path: String) extends AtomicExpr
+
+case class ValueListExpr(values: List[AtomicExpr]) extends Expr
 
 case class RegexExpr(pattern: String) extends Expr
 case class LikeExpr(pattern: String) extends Expr
-
-case class PropertyExpr(path: String) extends Expr
 
 sealed trait ComparisonOperator
 case object EQ extends ComparisonOperator
@@ -46,6 +46,10 @@ case object LT extends ComparisonOperator
 case object GT extends ComparisonOperator
 case object LTE extends ComparisonOperator
 case object GTE extends ComparisonOperator
+
+sealed trait Arg
+case class PropertyArg(propery: PropertyExpr) extends Arg
+case class ValueArg(value: AtomicExpr) extends Arg
 
 class QueryParserException(message: String = null) extends RuntimeException(message)
 
@@ -70,27 +74,27 @@ class QueryParser(val input: ParserInput) extends Parser
 
   def GeomLiteral = rule { (ignoreCase("bbox") ~ push(None)) | LiteralStr ~> (s => Some(s.value)) }
 
-  def isNullPred = rule { WS ~ Property ~ WS ~ MayBe ~ WS ~ ignoreCase("null") ~> NullTestPredicate }
+  def isNullPred = rule { WS ~ AtomicExpression ~ WS ~ MayBe ~ WS ~ ignoreCase("null") ~> NullTestPredicate }
 
   def MayBe: Rule1[Boolean] = rule { ignoreCase("is") ~ push(true) ~ WS ~ optional(ignoreCase("not") ~> ((_: Boolean) => false)) }
 
-  def LikePred = rule { (WS ~ Property ~ WS ~ ignoreCase("like") ~ WS ~ Like) ~> LikePredicate }
+  def LikePred = rule { (WS ~ AtomicExpression ~ WS ~ ignoreCase("like") ~ WS ~ Like) ~> LikePredicate }
 
-  def RegexPred = rule { (WS ~ Property ~ WS ~ "~" ~ WS ~ Regex) ~> RegexPredicate }
+  def RegexPred = rule { (WS ~ AtomicExpression ~ WS ~ "~" ~ WS ~ Regex) ~> RegexPredicate }
 
-  def InPred = rule { (WS ~ Property ~ WS ~ ignoreCase("in") ~ WS ~ ExpressionList ~ WS) ~> InPredicate }
+  def InPred = rule { (WS ~ AtomicExpression ~ WS ~ ignoreCase("in") ~ WS ~ ExpressionList ~ WS) ~> InPredicate }
 
-  def ComparisonPred = rule { (WS ~ Property ~ WS ~ ComparisonOp ~ Expression ~ WS) ~> ComparisonPredicate }
+  def ComparisonPred = rule { (WS ~ AtomicExpression ~ WS ~ ComparisonOp ~ AtomicExpression ~ WS) ~> ComparisonPredicate }
 
   def ComparisonOp = rule { ">=" ~ push(GTE) | "<=" ~ push(LTE) | "=" ~ push(EQ) | "!=" ~ push(NEQ) | "<" ~ push(LT) | ">" ~ push(GT) }
 
   def JsonContainsPred = rule { (WS ~ Property ~ WS ~ ignoreCase("@>") ~ WS ~ LiteralStr ~ WS) ~> JsonContainsPredicate }
 
-  val toValList: ValueExpr => ValueListExpr = v => ValueListExpr(List(v))
-  val combineVals: (ValueListExpr, ValueExpr) => ValueListExpr = (list, ve) => ValueListExpr(ve :: list.values)
-  def ExpressionList = rule { WS ~ "(" ~ WS ~ (Expression ~> toValList) ~ WS ~ zeroOrMore("," ~ WS ~ (Expression ~> combineVals) ~ WS) ~ WS ~ ")" }
+  val toValList: AtomicExpr => ValueListExpr = v => ValueListExpr(List(v))
+  val combineVals: (ValueListExpr, AtomicExpr) => ValueListExpr = (list, ve) => ValueListExpr(ve :: list.values)
+  def ExpressionList = rule { WS ~ "(" ~ WS ~ (AtomicExpression ~> toValList) ~ WS ~ zeroOrMore("," ~ WS ~ (AtomicExpression ~> combineVals) ~ WS) ~ WS ~ ")" }
 
-  def Expression = rule { LiteralBool | LiteralStr | LiteralNum }
+  def AtomicExpression = rule { LiteralBool | LiteralStr | LiteralNum | Property }
 
   private val toNum: String => LiteralNumber = (s: String) => LiteralNumber(BigDecimal(s))
 

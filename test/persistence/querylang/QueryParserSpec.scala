@@ -252,6 +252,15 @@ class QueryParserSpec extends Specification {
             )
     }
 
+    //    "support the to_date function for strings" in {
+    //      QueryParser.parse(""" var = to_date('2019-04-30', 'YYYY-MM-DD') """) must beSuccessfulTry[BooleanExpr].withValue(
+    //        ComparisonPredicate(
+    //          PropertyExpr("var"),
+    //          EQ,
+    //          ToDate(ValueArg(LiteralString("2019-04-30"), ValueArg(LiteralString("YYYY-MM-DD"))))
+    //      )
+    //    }
+
   }
 
 }

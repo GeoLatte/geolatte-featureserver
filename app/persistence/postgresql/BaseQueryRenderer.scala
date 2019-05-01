@@ -1,6 +1,5 @@
 package persistence.postgresql
 
-import persistence.postgresql.PGJsonQueryRenderer.renderPropertyExprAsJson
 import persistence.querylang.{ GTE, LTE, _ }
 
 case class RenderContext(geometryColumn: String, bbox: Option[String] = None)
@@ -10,6 +9,10 @@ case class RenderContext(geometryColumn: String, bbox: Option[String] = None)
  */
 trait BaseQueryRenderer extends QueryRenderer[String, RenderContext] {
 
+  trait PropertyExprRenderer {
+    def render(p: PropertyExpr): String
+  }
+
   def renderBooleanAnd(lhs: BooleanExpr, rhs: BooleanExpr)(implicit ctxt: RenderContext): String
 
   def renderBooleanOr(lhs: BooleanExpr, rhs: BooleanExpr)(implicit ctxt: RenderContext): String
@@ -18,15 +21,15 @@ trait BaseQueryRenderer extends QueryRenderer[String, RenderContext] {
 
   def renderLiteralBoolean(b: Boolean)(implicit ctxt: RenderContext): String = if (b) " true " else " false "
 
-  def renderComparisonPredicate(lhs: PropertyExpr, op: ComparisonOperator, rhs: ValueExpr)(implicit ctxt: RenderContext): String
+  def renderComparisonPredicate(lhs: AtomicExpr, op: ComparisonOperator, rhs: AtomicExpr)(implicit ctxt: RenderContext): String
 
-  def renderInPredicate(lhs: PropertyExpr, rhs: ValueListExpr)(implicit ctxt: RenderContext): String
+  def renderInPredicate(lhs: AtomicExpr, rhs: ValueListExpr)(implicit ctxt: RenderContext): String
 
-  def renderRegexPredicate(lhs: PropertyExpr, rhs: RegexExpr)(implicit ctxt: RenderContext): String
+  def renderRegexPredicate(lhs: AtomicExpr, rhs: RegexExpr)(implicit ctxt: RenderContext): String
 
-  def renderLikePredicate(lhs: PropertyExpr, rhs: LikeExpr)(implicit ctxt: RenderContext): String
+  def renderLikePredicate(lhs: AtomicExpr, rhs: LikeExpr)(implicit ctxt: RenderContext): String
 
-  def renderNullTestPredicate(lhs: PropertyExpr, is: Boolean)(implicit ctxt: RenderContext): String
+  def renderNullTestPredicate(lhs: AtomicExpr, is: Boolean)(implicit ctxt: RenderContext): String
 
   def renderIntersects(wkt: Option[String], geometryColumn: String, bbox: Option[String]): String = {
     wkt match {
@@ -35,12 +38,12 @@ trait BaseQueryRenderer extends QueryRenderer[String, RenderContext] {
     }
   }
 
-  def renderPropertyExprAsJson(expr: PropertyExpr): String
+  def defaultPropertyExprRenderer: PropertyExprRenderer
 
   def renderJsonContains(
     lhs: PropertyExpr,
     rhs: LiteralString
-  )(implicit ctxt: RenderContext): String = s"${renderPropertyExprAsJson(lhs)}::jsonb @> '${rhs.value}'::jsonb "
+  )(implicit ctxt: RenderContext): String = s"${defaultPropertyExprRenderer.render(lhs)}::jsonb @> '${rhs.value}'::jsonb "
 
   def render(expr: BooleanExpr)(implicit ctxt: RenderContext): String = expr match {
     case BooleanAnd(lhs, rhs) => renderBooleanAnd(lhs, rhs)
@@ -56,14 +59,15 @@ trait BaseQueryRenderer extends QueryRenderer[String, RenderContext] {
     case JsonContainsPredicate(lhs, rhs) => renderJsonContains(lhs, rhs)
   }
 
-  def renderValue(expr: ValueExpr): String = expr match {
+  def renderAtomic(pr: PropertyExprRenderer)(expr: AtomicExpr): String = expr match {
     case LiteralBoolean(b) => if (b) " true " else " false "
     case LiteralNumber(n) => s" ${n.toString} "
     case LiteralString(s) => s" '$s' "
+    case p @ PropertyExpr(_) => pr.render(p)
   }
 
-  def renderValueList(expr: ValueListExpr): String =
-    s"(${expr.values.map(renderValue).map(_.trim).mkString(",")})"
+  def renderValueList(expr: ValueListExpr, pr: PropertyExprRenderer): String =
+    s"(${expr.values.map(renderAtomic(pr)).map(_.trim).mkString(",")})"
 
   def sym(op: ComparisonOperator): String = op match {
     case EQ => " = "

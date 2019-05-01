@@ -7,6 +7,23 @@ import persistence.querylang._
  */
 object PGJsonQueryRenderer extends BaseQueryRenderer {
 
+  object PropertyPathAsJson extends PropertyExprRenderer {
+    override def render(expr: PropertyExpr): String = {
+      val variadicPath = path2VariadicList(expr)
+      s"json_extract_path(json, $variadicPath)"
+    }
+  }
+
+  object PropertyPathAsJsonText extends PropertyExprRenderer {
+
+    override def render(expr: PropertyExpr): String = {
+      val variadicPath = path2VariadicList(expr)
+      s"json_extract_path_text(json, $variadicPath)"
+    }
+  }
+
+  override def defaultPropertyExprRenderer: PGJsonQueryRenderer.PropertyExprRenderer = PropertyPathAsJson
+
   def cast(exp: Expr): String = exp match {
     case LiteralBoolean(_) => "bool"
     case LiteralNumber(_) => "decimal"
@@ -30,30 +47,30 @@ object PGJsonQueryRenderer extends BaseQueryRenderer {
   override def renderBooleanNot(inner: BooleanExpr)(implicit ctxt: RenderContext): String = s" NOT ( ${render(inner)} ) "
 
   override def renderComparisonPredicate(
-    lhs: PropertyExpr,
+    lhs: AtomicExpr,
     op: ComparisonOperator,
-    rhs: ValueExpr
-  )(implicit ctxt: RenderContext): String = s" ${renderPropertyExpr(lhs, rhs)} ${sym(op)} ( ${renderValue(rhs)} )"
+    rhs: AtomicExpr
+  )(implicit ctxt: RenderContext): String = s" ${renderAtomicCasting(lhs, rhs)} ${sym(op)} ( ${renderAtomic(PropertyPathAsJson)(rhs)} )"
 
   override def renderInPredicate(
-    lhs: PropertyExpr,
+    lhs: AtomicExpr,
     rhs: ValueListExpr
-  )(implicit ctxt: RenderContext): String = s" ${renderPropertyExpr(lhs, rhs)} in ${renderValueList(rhs)}"
+  )(implicit ctxt: RenderContext): String = s" ${renderAtomicCasting(lhs, rhs)} in ${renderValueList(rhs, PropertyPathAsJson)}"
 
   override def renderRegexPredicate(
-    lhs: PropertyExpr,
+    lhs: AtomicExpr,
     rhs: RegexExpr
-  )(implicit ctxt: RenderContext): String = s" ${renderPropertyExpr(lhs, rhs)} ~ '${rhs.pattern}'"
+  )(implicit ctxt: RenderContext): String = s" ${renderAtomicCasting(lhs, rhs)} ~ '${rhs.pattern}'"
 
   override def renderLikePredicate(
-    lhs: PropertyExpr,
+    lhs: AtomicExpr,
     rhs: LikeExpr
-  )(implicit ctxt: RenderContext): String = s" ${renderPropertyExpr(lhs, rhs)} ilike '${rhs.pattern}'"
+  )(implicit ctxt: RenderContext): String = s" ${renderAtomicCasting(lhs, rhs)} ilike '${rhs.pattern}'"
 
   override def renderNullTestPredicate(
-    lhs: PropertyExpr,
+    lhs: AtomicExpr,
     is: Boolean
-  )(implicit ctxt: RenderContext): String = s" ${renderPropertyExprwithoutCast(lhs)} ${
+  )(implicit ctxt: RenderContext): String = s" ${renderAtomic(PropertyPathAsJsonText)(lhs)} ${
     if (is) {
       "is"
     } else {
@@ -69,13 +86,9 @@ object PGJsonQueryRenderer extends BaseQueryRenderer {
   private def path2VariadicList(propertyExpr: PropertyExpr): String =
     "'" + propertyExpr.path.replaceAll("\\.", "','") + "'"
 
-  override def renderPropertyExprAsJson(expr: PropertyExpr): String = {
-    val variadicPath = path2VariadicList(expr)
-    s"json_extract_path(json, $variadicPath)"
+  private def renderAtomicCasting(lhs: AtomicExpr, rhs: Expr): String = lhs match {
+    case p @ PropertyExpr(_) => s"${PropertyPathAsJsonText.render(p)}::${cast(rhs)}"
+    case _ => renderAtomic(PropertyPathAsJson)(lhs)
   }
 
-  private def renderPropertyExpr(lhs: PropertyExpr, rhs: Expr): String = {
-    val variadicPath: String = path2VariadicList(lhs)
-    s"json_extract_path_text(json, $variadicPath)::${cast(rhs)}"
-  }
 }
