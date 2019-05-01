@@ -98,16 +98,6 @@ class PostgresqlRepository @Inject() (
 
   })
 
-  var migrationsStatus: Option[Boolean] = None
-
-  {
-    import Utils._
-    val result: Future[Boolean] = listDatabases.flatMap { dbs => sequence(dbs)(s => Migrations.executeOn(s)(database)) }
-    result.onSuccess {
-      case b => migrationsStatus = Some(b)
-    }
-  }
-
   override def createDb(dbname: String): Future[Boolean] = {
     val dbio = Sql.CREATE_SCHEMA(dbname) andThen Sql.CREATE_METADATA_TABLE_IN(dbname) andThen Sql.CREATE_VIEW_TABLE_IN(dbname)
     runOnDb("create-db")(dbio.transactionally)
@@ -462,12 +452,6 @@ class PostgresqlRepository @Inject() (
       case _ =>
         metrics.prometheusMetrics.dbio.labels(label).observe((System.nanoTime - startTimeNano) / 10E6)
     }
-  }
-
-  //TODO -- fix that database.runs are "guarded"
-  private def guardReady[T](block: => T): T = this.migrationsStatus match {
-    case Some(b) => block
-    case _ => throw NotReadyException("Busy migrating databases")
   }
 
   private def getPrimaryKey(db: String, coll: String): Future[(String, String)] = {
