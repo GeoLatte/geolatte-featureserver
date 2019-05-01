@@ -1,17 +1,5 @@
 <configuration>
 
-    <appender name="FILE" class="ch.qos.logback.core.rolling.RollingFileAppender">
-        <file>${LOGGING_DIR:-/var/log}/application.log</file>
-        <rollingPolicy class="ch.qos.logback.core.rolling.FixedWindowRollingPolicy">
-            <maxIndex>20</maxIndex>
-            <FileNamePattern>${LOGGING_DIR:-/var/log}/application.%i.log.gz</FileNamePattern>
-        </rollingPolicy>
-        <triggeringPolicy class="ch.qos.logback.core.rolling.SizeBasedTriggeringPolicy">
-            <MaxFileSize>50MB</MaxFileSize>
-        </triggeringPolicy>
-        <encoder class="net.logstash.logback.encoder.LogstashEncoder"/>
-    </appender>
-
     <appender name="STDOUT" class="ch.qos.logback.core.ConsoleAppender">
         <!-- encoders are assigned the type
              ch.qos.logback.classic.encoder.PatternLayoutEncoder by default -->
@@ -20,49 +8,20 @@
         </encoder>
     </appender>
 
-    <appender name="ACCESSFILE" class="ch.qos.logback.core.rolling.RollingFileAppender">
-        <file>${LOGGING_DIR:-/var/log}/requests.log</file>
-        <rollingPolicy class="ch.qos.logback.core.rolling.FixedWindowRollingPolicy">
-            <maxIndex>20</maxIndex>
-            <FileNamePattern>${LOGGING_DIR:-/var/log}/requests.%i.log.gz</FileNamePattern>
-        </rollingPolicy>
-        <triggeringPolicy class="ch.qos.logback.core.rolling.SizeBasedTriggeringPolicy">
-            <MaxFileSize>50MB</MaxFileSize>
-        </triggeringPolicy>
-        <encoder class="net.logstash.logback.encoder.LogstashEncoder"/>
-    </appender>
-
-    <appender name="ASYNCACCESSFILE" class="ch.qos.logback.classic.AsyncAppender">
-        <appender-ref ref="ACCESSFILE"/>
-    </appender>
-
-
-
     <!-- we loggen alls waarschuwingen -->
     <root level="INFO">
         <appender-ref ref="STDOUT"/>
     </root>
 
     <!-- Logger "application" is default Play logger -->
-    <logger name="application" level="INFO" additivity="false">
-        <appender-ref ref="FILE"/>
-        <appender-ref ref="STDOUT"/>
-    </logger>
+    <logger name="application" level="INFO"/>
 
     <!-- dit is voor access logging -->
-    <logger name="requests" level="INFO" additivity="false">
-        <appender-ref ref="ASYNCACCESSFILE"/>
-    </logger>
+    <logger name="requests" level="INFO"/>
 
-    <logger name="slick.jdbc.JdbcBackend.statement" level="WARN" additivity="false">
-        <appender-ref ref="FILE"/>
-    </logger>
+    <!-- Set to level DEBUG to log all SQL statements -->
+    <logger name="slick.jdbc.JdbcBackend.statement" level="DEBUG"/>
 
-
-
-    <logger name="com.zaxxer.hikari" level="WARN" additivity="false">
-        <appender-ref ref="FILE"/>
-    </logger>
-
+    <logger name="com.zaxxer.hikari" level="WARN" />
 
 </configuration>
