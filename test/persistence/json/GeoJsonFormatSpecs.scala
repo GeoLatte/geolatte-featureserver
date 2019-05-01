@@ -142,9 +142,7 @@ class GeoJsonFormatSpecs extends Specification {
 
     "write 2D polygons" in {
       val p = polygon(12)("00").sample.get
-      println(s"Polygon is $p")
       val json = Json.toJson(p)
-      println(s"JSON IS: ${json.toString}")
       matchCrs(p, json) and matchType(json, "Polygon") and matchBbox(p, json) and matchCoordinates(p, json)
     }
 
