@@ -9,45 +9,78 @@ case class RenderContext(geometryColumn: String, bbox: Option[String] = None)
  */
 trait BaseQueryRenderer extends QueryRenderer[String, RenderContext] {
 
-  trait PropertyExprRenderer {
-    def render(p: PropertyExpr): String
+  def renderPropertyExpr(exp: PropertyExpr): String
+
+  def renderAtomic(expr: AtomicExpr): String = expr match {
+    case ToDate(date, fmt) => renderToDate(date, fmt)
+    case LiteralBoolean(b) => if (b) " true " else " false "
+    case LiteralNumber(n) => s" ${n.toString} "
+    case LiteralString(s) => s" '$s' "
+    case p @ PropertyExpr(_) => renderPropertyExpr(p)
   }
 
-  def renderBooleanAnd(lhs: BooleanExpr, rhs: BooleanExpr)(implicit ctxt: RenderContext): String
+  def renderBooleanAnd(
+    lhs: BooleanExpr,
+    rhs: BooleanExpr
+  )(implicit ctxt: RenderContext): String = s" ( ${render(lhs)} ) AND ( ${render(rhs)} )"
 
-  def renderBooleanOr(lhs: BooleanExpr, rhs: BooleanExpr)(implicit ctxt: RenderContext): String
+  def renderBooleanOr(
+    lhs: BooleanExpr,
+    rhs: BooleanExpr
+  )(implicit ctxt: RenderContext): String = s" ( ${render(lhs)} ) OR ( ${render(rhs)} )"
 
-  def renderBooleanNot(inner: BooleanExpr)(implicit ctxt: RenderContext): String
+  def renderBooleanNot(inner: BooleanExpr)(implicit ctxt: RenderContext): String = s" NOT ( ${render(inner)} ) "
+
+  def renderBetween(
+    lhs: AtomicExpr,
+    lb: AtomicExpr,
+    up: AtomicExpr
+  ): String = s" ( ${renderAtomic(lhs)} between ${renderAtomic(lb)} and ${renderAtomic(up)} ) "
+
+  def renderComparisonPredicate(
+    lhs: AtomicExpr,
+    op: ComparisonOperator,
+    rhs: AtomicExpr
+  )(implicit ctxt: RenderContext): String = s" ${renderAtomicCasting(lhs, rhs)} ${sym(op)} ( ${renderAtomic(rhs)} )"
+
+  def renderInPredicate(
+    lhs: AtomicExpr,
+    rhs: ValueListExpr
+  )(implicit ctxt: RenderContext): String = s" ${renderAtomicCasting(lhs, rhs)} in ${renderValueList(rhs)}"
+
+  def renderRegexPredicate(
+    lhs: AtomicExpr,
+    rhs: RegexExpr
+  )(implicit ctxt: RenderContext): String = s" ${renderAtomicCasting(lhs, rhs)} ~ '${rhs.pattern}'"
+
+  def renderLikePredicate(
+    lhs: AtomicExpr,
+    rhs: LikeExpr
+  )(implicit ctxt: RenderContext): String = s" ${renderAtomicCasting(lhs, rhs)} ilike '${rhs.pattern}'"
+
+  def renderNullTestPredicate(
+    lhs: AtomicExpr,
+    is: Boolean
+  )(implicit ctxt: RenderContext): String = s" ${renderAtomic(lhs)} ${if (is) "is" else "is not"} null"
+
+  def renderToDate(
+    date: AtomicExpr,
+    fmt: AtomicExpr
+  ): String = s" to_date(${renderAtomic(date)}, ${renderAtomic(fmt)}) "
 
   def renderLiteralBoolean(b: Boolean)(implicit ctxt: RenderContext): String = if (b) " true " else " false "
 
-  def renderComparisonPredicate(lhs: AtomicExpr, op: ComparisonOperator, rhs: AtomicExpr)(implicit ctxt: RenderContext): String
-
-  def renderInPredicate(lhs: AtomicExpr, rhs: ValueListExpr)(implicit ctxt: RenderContext): String
-
-  def renderRegexPredicate(lhs: AtomicExpr, rhs: RegexExpr)(implicit ctxt: RenderContext): String
-
-  def renderLikePredicate(lhs: AtomicExpr, rhs: LikeExpr)(implicit ctxt: RenderContext): String
-
-  def renderNullTestPredicate(lhs: AtomicExpr, is: Boolean)(implicit ctxt: RenderContext): String
-
-  def renderToDate(date: AtomicExpr, fmt: AtomicExpr): String
-
-  def renderBetween(lhs: AtomicExpr, lb: AtomicExpr, up: AtomicExpr): String
-
   def renderIntersects(wkt: Option[String], geometryColumn: String, bbox: Option[String]): String = {
     wkt match {
-      case Some(geo) => s""" ST_Intersects( $geometryColumn, '${geo}' )"""
+      case Some(geo) => s""" ST_Intersects( $geometryColumn, '$geo' )"""
       case _ => s""" ST_Intersects( $geometryColumn, '${bbox.getOrElse("POINT EMPTY")}' )"""
     }
   }
 
-  def defaultPropertyExprRenderer: PropertyExprRenderer
-
   def renderJsonContains(
     lhs: PropertyExpr,
     rhs: LiteralString
-  )(implicit ctxt: RenderContext): String = s"${defaultPropertyExprRenderer.render(lhs)}::jsonb @> '${rhs.value}'::jsonb "
+  )(implicit ctxt: RenderContext): String = s"${renderPropertyExpr(lhs)}::jsonb @> '${rhs.value}'::jsonb "
 
   def render(expr: BooleanExpr)(implicit ctxt: RenderContext): String = expr match {
     case BooleanAnd(lhs, rhs) => renderBooleanAnd(lhs, rhs)
@@ -64,16 +97,23 @@ trait BaseQueryRenderer extends QueryRenderer[String, RenderContext] {
     case JsonContainsPredicate(lhs, rhs) => renderJsonContains(lhs, rhs)
   }
 
-  def renderAtomic(pr: PropertyExprRenderer)(expr: AtomicExpr): String = expr match {
-    case ToDate(date, fmt) => renderToDate(date, fmt)
-    case LiteralBoolean(b) => if (b) " true " else " false "
-    case LiteralNumber(n) => s" ${n.toString} "
-    case LiteralString(s) => s" '$s' "
-    case p @ PropertyExpr(_) => pr.render(p)
+  def renderValueList(expr: ValueListExpr): String =
+    s"(${expr.values.map(renderAtomic).map(_.trim).mkString(",")})"
+
+  def cast(exp: Expr): String = exp match {
+    case LiteralBoolean(_) => "::bool"
+    case LiteralNumber(_) => "::decimal"
+    case LiteralString(_) => "::text"
+    case ValueListExpr(values) => cast(values.head)
+    case RegexExpr(_) => "::text"
+    case LikeExpr(_) => "::text"
+    case _ => ""
   }
 
-  def renderValueList(expr: ValueListExpr, pr: PropertyExprRenderer): String =
-    s"(${expr.values.map(renderAtomic(pr)).map(_.trim).mkString(",")})"
+  def renderAtomicCasting(lhs: AtomicExpr, rhs: Expr): String = lhs match {
+    case p @ PropertyExpr(_) => s"${renderPropertyExpr(p)}${cast(rhs)}"
+    case _ => s"${renderAtomic(lhs)}${cast(rhs)}"
+  }
 
   def sym(op: ComparisonOperator): String = op match {
     case EQ => " = "
