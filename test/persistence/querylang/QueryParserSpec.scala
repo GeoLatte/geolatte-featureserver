@@ -252,14 +252,35 @@ class QueryParserSpec extends Specification {
             )
     }
 
-    //    "support the to_date function for strings" in {
-    //      QueryParser.parse(""" var = to_date('2019-04-30', 'YYYY-MM-DD') """) must beSuccessfulTry[BooleanExpr].withValue(
-    //        ComparisonPredicate(
-    //          PropertyExpr("var"),
-    //          EQ,
-    //          ToDate(ValueArg(LiteralString("2019-04-30"), ValueArg(LiteralString("YYYY-MM-DD"))))
-    //      )
-    //    }
+    "support the to_date function for strings" in {
+      QueryParser.parse(""" var = to_date( '2019-04-30', 'YYYY-MM-DD')""") must beSuccessfulTry[BooleanExpr].withValue(
+        ComparisonPredicate(
+          PropertyExpr("var"),
+          EQ,
+          ToDate(LiteralString("2019-04-30"), LiteralString("YYYY-MM-DD"))
+        )
+      )
+    }
+
+    "support the to_date function on properties" in {
+      QueryParser.parse(""" var = to_date( a.b.c, 'YYYY-MM-DD')""") must beSuccessfulTry[BooleanExpr].withValue(
+        ComparisonPredicate(
+          PropertyExpr("var"),
+          EQ,
+          ToDate(PropertyExpr("a.b.c"), LiteralString("YYYY-MM-DD"))
+        )
+      )
+    }
+
+    "supports comparison on dates" in {
+      QueryParser.parse(""" to_date( a.b.c, 'YYYY-MM-DD') = to_date('2019-04-30', 'YYYY-MM-DD') """) must beSuccessfulTry[BooleanExpr].withValue(
+        ComparisonPredicate(
+          ToDate(PropertyExpr("a.b.c"), LiteralString("YYYY-MM-DD")),
+          EQ,
+          ToDate(LiteralString("2019-04-30"), LiteralString("YYYY-MM-DD"))
+        )
+      )
+    }
 
   }
 

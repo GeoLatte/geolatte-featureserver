@@ -33,6 +33,7 @@ case class LiteralString(value: String) extends AtomicExpr
 case class LiteralNumber(value: BigDecimal) extends AtomicExpr
 case class LiteralBoolean(value: Boolean) extends AtomicExpr with BooleanExpr
 case class PropertyExpr(path: String) extends AtomicExpr
+case class ToDate(date: AtomicExpr, fmt: AtomicExpr) extends AtomicExpr
 
 case class ValueListExpr(values: List[AtomicExpr]) extends Expr
 
@@ -94,7 +95,11 @@ class QueryParser(val input: ParserInput) extends Parser
   val combineVals: (ValueListExpr, AtomicExpr) => ValueListExpr = (list, ve) => ValueListExpr(ve :: list.values)
   def ExpressionList = rule { WS ~ "(" ~ WS ~ (AtomicExpression ~> toValList) ~ WS ~ zeroOrMore("," ~ WS ~ (AtomicExpression ~> combineVals) ~ WS) ~ WS ~ ")" }
 
-  def AtomicExpression = rule { LiteralBool | LiteralStr | LiteralNum | Property }
+  def AtomicExpression = rule { FunctionApp | LiteralBool | LiteralStr | LiteralNum | Property }
+
+  def FunctionApp = rule { ToDateApp }
+
+  def ToDateApp = rule { (WS ~ ignoreCase("to_date") ~ WS ~ "(" ~ (LiteralStr | Property) ~ WS ~ "," ~ WS ~ LiteralStr ~ WS ~ ")" ~ WS) ~> ToDate }
 
   private val toNum: String => LiteralNumber = (s: String) => LiteralNumber(BigDecimal(s))
 
