@@ -109,6 +109,11 @@ class PGQueryRenderSpec extends Specification {
       compressWS(renderer.render(expr)) === """json_extract_path(json, 'properties','test')::jsonb @> '["a", 2]'::jsonb"""
     }
 
+    "properly render to_date functions in expression" in {
+      val expr = QueryParser.parse(" to_date(properties.foo, 'YYYY-MM-DD') = to_date('2019-04-30', 'YYYY-MM-DD') ").get
+      compressWS(renderer.render(expr)) === """to_date(json_extract_path_text(json, 'properties','foo'), 'YYYY-MM-DD' ) = ( to_date( '2019-04-30' , 'YYYY-MM-DD' ) )"""
+    }
+
   }
 
   "The PGRegularQueryRenderer " should {
@@ -206,6 +211,11 @@ class PGQueryRenderSpec extends Specification {
     "properly render JsonContains expression" in {
       val expr = QueryParser.parse(""" properties.test @> '["a", 2]' """).get
       compressWS(renderer.render(expr)) === """test::jsonb @> '["a", 2]'::jsonb"""
+    }
+
+    "properly render to_date functions in expression" in {
+      val expr = QueryParser.parse(" to_date( foo, 'YYYY-MM-DD') = to_date('2019-04-30', 'YYYY-MM-DD') ").get
+      compressWS(renderer.render(expr)) === """to_date(foo, 'YYYY-MM-DD' ) = ( to_date( '2019-04-30' , 'YYYY-MM-DD' ) )"""
     }
 
   }

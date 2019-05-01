@@ -59,4 +59,9 @@ object PGRegularQueryRenderer extends BaseQueryRenderer {
     is: Boolean
   )(implicit ctxt: RenderContext): String = s" ${renderAtomic(lhs)} ${if (is) "is" else "is not"} null"
 
+  override def renderToDate(
+    date: AtomicExpr,
+    fmt: AtomicExpr
+  ): String = s" to_date(${renderAtomic(PER)(date)}, ${renderAtomic(PER)(fmt)}) "
+
 }

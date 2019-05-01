@@ -78,6 +78,11 @@ object PGJsonQueryRenderer extends BaseQueryRenderer {
     }
   } null"
 
+  override def renderToDate(
+    date: AtomicExpr,
+    fmt: AtomicExpr
+  ): String = s" to_date(${renderAtomic(PropertyPathAsJsonText)(date)}, ${renderAtomic(PropertyPathAsJsonText)(fmt)}) "
+
   private def renderPropertyExprwithoutCast(lhs: PropertyExpr): String = {
     val variadicPath: String = path2VariadicList(lhs)
     s"json_extract_path_text(json, $variadicPath)"

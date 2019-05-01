@@ -31,6 +31,8 @@ trait BaseQueryRenderer extends QueryRenderer[String, RenderContext] {
 
   def renderNullTestPredicate(lhs: AtomicExpr, is: Boolean)(implicit ctxt: RenderContext): String
 
+  def renderToDate(date: AtomicExpr, fmt: AtomicExpr): String
+
   def renderIntersects(wkt: Option[String], geometryColumn: String, bbox: Option[String]): String = {
     wkt match {
       case Some(geo) => s""" ST_Intersects( $geometryColumn, '${geo}' )"""
@@ -60,6 +62,7 @@ trait BaseQueryRenderer extends QueryRenderer[String, RenderContext] {
   }
 
   def renderAtomic(pr: PropertyExprRenderer)(expr: AtomicExpr): String = expr match {
+    case ToDate(date, fmt) => renderToDate(date, fmt)
     case LiteralBoolean(b) => if (b) " true " else " false "
     case LiteralNumber(n) => s" ${n.toString} "
     case LiteralString(s) => s" '$s' "
