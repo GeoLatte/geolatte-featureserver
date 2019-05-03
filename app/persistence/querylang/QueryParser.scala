@@ -21,6 +21,7 @@ case class ComparisonPredicate(lhs: AtomicExpr, op: ComparisonOperator, rhs: Ato
 case class InPredicate(lhs: AtomicExpr, rhs: ValueListExpr) extends Predicate
 case class RegexPredicate(lhs: AtomicExpr, rhs: RegexExpr) extends Predicate
 case class LikePredicate(lhs: AtomicExpr, rhs: LikeExpr) extends Predicate
+case class ILikePredicate(lhs: AtomicExpr, rhs: LikeExpr) extends Predicate
 case class NullTestPredicate(lhs: AtomicExpr, isNull: Boolean) extends Predicate
 case class IntersectsPredicate(wkt: Option[String]) extends Predicate {
   def intersectsWithBbox: Boolean = wkt.isDefined
@@ -68,7 +69,7 @@ class QueryParser(val input: ParserInput) extends Parser
 
   def BooleanPrim = rule { WS ~ ch('(') ~ WS ~ BooleanExpression ~ WS ~ ch(')') ~ WS | Predicate }
 
-  def Predicate = rule { spatialRelPred | BetweenAndPred | ComparisonPred | InPred | LikePred | RegexPred | LiteralBool | isNullPred | JsonContainsPred }
+  def Predicate = rule { spatialRelPred | BetweenAndPred | ComparisonPred | ILikePred | InPred | LikePred | RegexPred | LiteralBool | isNullPred | JsonContainsPred }
 
   def spatialRelPred = rule { intersectsTest }
 
@@ -81,6 +82,8 @@ class QueryParser(val input: ParserInput) extends Parser
   def MayBe: Rule1[Boolean] = rule { ignoreCase("is") ~ push(true) ~ WS ~ optional(ignoreCase("not") ~> ((_: Boolean) => false)) }
 
   def LikePred = rule { (WS ~ AtomicExpression ~ WS ~ ignoreCase("like") ~ WS ~ Like) ~> LikePredicate }
+
+  def ILikePred = rule { (WS ~ AtomicExpression ~ WS ~ ignoreCase("ilike") ~ WS ~ Like) ~> ILikePredicate }
 
   def RegexPred = rule { (WS ~ AtomicExpression ~ WS ~ "~" ~ WS ~ Regex) ~> RegexPredicate }
 

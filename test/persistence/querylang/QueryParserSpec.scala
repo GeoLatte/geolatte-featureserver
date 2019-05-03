@@ -214,6 +214,12 @@ class QueryParserSpec extends Specification {
       )
     }
 
+    "support ilike predicate" in {
+      QueryParser.parse("""var ilike 'a%b' """) must beSuccessfulTry[BooleanExpr].withValue(
+        ILikePredicate(PropertyExpr("var"), LikeExpr("""a%b"""))
+      )
+    }
+
     "support the is null predicate" in {
       QueryParser.parse(""" var is null """) must beSuccessfulTry[BooleanExpr].withValue(
         NullTestPredicate(PropertyExpr("var"), isNull = true)

@@ -55,8 +55,10 @@ trait BaseQueryRenderer extends QueryRenderer[String, RenderContext] {
 
   def renderLikePredicate(
     lhs: AtomicExpr,
-    rhs: LikeExpr
-  )(implicit ctxt: RenderContext): String = s" ${renderAtomicCasting(lhs, rhs)} ilike '${rhs.pattern}'"
+    rhs: LikeExpr,
+    caseSensitive: Boolean = true
+  )(implicit ctxt: RenderContext): String = if (caseSensitive) s" ${renderAtomicCasting(lhs, rhs)} like '${rhs.pattern}'"
+  else s" ${renderAtomicCasting(lhs, rhs)} ilike '${rhs.pattern}'"
 
   def renderNullTestPredicate(
     lhs: AtomicExpr,
@@ -91,7 +93,8 @@ trait BaseQueryRenderer extends QueryRenderer[String, RenderContext] {
     case BetweenAndPredicate(lhs, lb, up) => renderBetween(lhs, lb, up)
     case InPredicate(lhs, rhs) => renderInPredicate(lhs, rhs)
     case RegexPredicate(lhs, rhs) => renderRegexPredicate(lhs, rhs)
-    case LikePredicate(lhs, rhs) => renderLikePredicate(lhs, rhs)
+    case LikePredicate(lhs, rhs) => renderLikePredicate(lhs, rhs, caseSensitive = true)
+    case ILikePredicate(lhs, rhs) => renderLikePredicate(lhs, rhs, caseSensitive = false)
     case NullTestPredicate(lhs, is) => renderNullTestPredicate(lhs, is)
     case IntersectsPredicate(wkt) => renderIntersects(wkt, ctxt.geometryColumn, ctxt.bbox)
     case JsonContainsPredicate(lhs, rhs) => renderJsonContains(lhs, rhs)
