@@ -17,6 +17,7 @@ object Operation {
   val DELETE = Operation("delete")
   val QUERY_COLLECTION = Operation("query_collection")
   val QUERY_STREAM = Operation("query_stream")
+  val QUERY_DISTINCT = Operation("query_distinct")
   val CREATE_TABLE = Operation("create_table")
   val DROP_TABLE = Operation("drop_table")
 

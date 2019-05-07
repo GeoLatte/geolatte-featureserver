@@ -163,6 +163,12 @@ trait RestApiDriver {
     FakeRequestResult.GET(url, format)
   }
 
+  def getDistinct[T: TypeTag](dbName: String, colName: String, queryStr: String)(format: Future[Result] => T) = {
+    Logger.info("Start Collection Distinct with QUERY parameter: " + queryStr)
+    val url = DATABASES / dbName / colName / DISTINCT ? queryStr
+    FakeRequestResult.GET(url, format)
+  }
+
   def getList(dbName: String, colName: String, queryStr: String) = {
     Logger.info("Start /list on collection")
     val url = DATABASES / dbName / colName / FEATURECOLLECTION ? queryStr
@@ -435,6 +441,8 @@ object API {
   val DOWNLOAD = "download"
 
   val QUERY = "query"
+
+  val DISTINCT = "distinct"
 
   val FEATURECOLLECTION = "featurecollection"
 

@@ -1,0 +1,15 @@
+projection:
+  description: Specifies a feature property path to get the distinct values from
+  type: string
+  required: true
+  example: properties.foo
+bbox:
+  description: Bounding box in string-representation (`<min-x>,<min-y>,<max-x>,<max-y>`)
+  type: string
+  required: false
+  example: "0,0,90,90"
+query:
+  description: Query expression
+  type: string
+  required: false
+  example: Properties.foo = 'bar'

@@ -96,6 +96,13 @@ class QueryController @Inject() (val repository: Repository, val instrumentation
     explode: Boolean = false
   )
 
+  case class DistinctRequest(
+    bbox: Option[String],
+    query: Option[BooleanExpr],
+    intersectionGeometryWkt: Option[String],
+    simpleProjection: SimpleProjection
+  )
+
   def query(db: String, collection: String) = RepositoryAction { implicit request =>
     {
       implicit val format = QueryParams.FMT.value
@@ -136,12 +143,43 @@ class QueryController @Inject() (val repository: Repository, val instrumentation
 
   )
 
+  def distinct(db: String, collection: String) = RepositoryAction(
+    implicit request => {
+      for {
+        fcr <- extractFeatureCollectionRequest(request)
+        simpleProjection = fcr.projection
+          .getOrElse(throw InvalidQueryException("Projection parameter is required")).paths.headOption.collect {
+            case s: SimpleProjection => s
+          }
+          .getOrElse(throw InvalidQueryException("Only one simple projection supported at this time"))
+        res <- distinctToResult(db, collection, DistinctRequest(fcr.bbox, fcr.query, fcr.intersectionGeometryWkt, simpleProjection)) { distinctValues =>
+          Ok(Json.toJson(distinctValues))
+        }
+        _ = instrumentation.incrementOperation(Operation.QUERY_DISTINCT, db, collection)
+      } yield res
+
+    } recover commonExceptionHandler(db, collection)
+  )
+
   def featuresToResult(db: String, collection: String, featureCollectionRequest: FeatureCollectionRequest)(toResult: ((Option[Long], Source[JsObject, _])) => Result): Future[Result] = {
 
     val fResult = for {
       md <- repository.metadata(db, collection)
       _ = Logger.debug(s"Query $featureCollectionRequest on $db, collection $collection")
       result <- doQuery(db, collection, md, featureCollectionRequest).map[Result] {
+        toResult
+      }
+    } yield result
+
+    fResult.recover(commonExceptionHandler(db, collection))
+  }
+
+  def distinctToResult(db: String, collection: String, distinctRequest: DistinctRequest)(toResult: List[String] => Result): Future[Result] = {
+
+    val fResult = for {
+      md <- repository.metadata(db, collection)
+      _ = Logger.debug(s"Query $distinctRequest distinct on $db, collection $collection")
+      result <- doDistinctQuery(db, collection, md, distinctRequest).map[Result] {
         toResult
       }
     } yield result
@@ -190,6 +228,24 @@ class QueryController @Inject() (val repository: Repository, val instrumentation
         request.explode
       )
       result <- repository.query(db, collection, spatialQuery, Some(request.start), request.limit)
+      _ = instrumentation.updateSpatialQueryMetrics(db, collection, spatialQuery)
+    } yield result
+
+  }
+
+  private def doDistinctQuery(db: String, collection: String, smd: Metadata, request: DistinctRequest): Future[List[String]] = {
+
+    val spatialQuery = SpatialQuery(
+      Bbox(request.bbox.getOrElse(""), smd.envelope.getCrsId),
+      request.intersectionGeometryWkt,
+      request.query,
+      None,
+      Nil,
+      smd
+    )
+
+    for {
+      result <- repository.distinct(db, collection, spatialQuery, request.simpleProjection)
       _ = instrumentation.updateSpatialQueryMetrics(db, collection, spatialQuery)
     } yield result
 
