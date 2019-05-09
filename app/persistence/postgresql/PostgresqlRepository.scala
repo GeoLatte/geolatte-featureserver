@@ -613,17 +613,32 @@ class PostgresqlRepository @Inject() (
 
       val cond = condition(query)
 
-      // construct string ->'properties'->>'foo'
-      val path = {
-        projection.path.path.collect {
-          case KeyPathNode(key) => key
-        }.map(str => s"'$str'").reverse match {
-          case head :: tail => s"->>$head" :: tail.map(str => s"->$str")
-          case Nil => Nil
-        }
-      }.reverse.mkString
+      def constructJsonQuery: String = {
+        // construct string json->'properties'->>'foo'
+        "json" + {
+          projection.path.path.collect {
+            case KeyPathNode(key) => key
+          }.map(str => s"'$str'").reverse match {
+            // head will become last element after next reverse and will be prefixed by ->>, other elements will be prefixed by ->
+            case head :: tail => s"->>$head" :: tail.map(str => s"->$str")
+            case Nil => Nil
+          }
+        }.reverse.mkString
+      }
 
-      val select = "distinct json" + path
+      def findDistinctField: Option[String] = {
+        projection.path.path.collectFirst {
+          case KeyPathNode(key) => key
+        }.map(str => s"`$str`")
+      }
+
+      val select =
+        if (query.metadata.jsonTable) {
+          "distinct " + constructJsonQuery
+        } else {
+          "distinct " + findDistinctField
+            .getOrElse(throw InvalidQueryException("There was no distinct field provided via projection parameter"))
+        }
 
       sql"""
          SELECT #$select
