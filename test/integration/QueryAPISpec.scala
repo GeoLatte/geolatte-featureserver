@@ -39,6 +39,9 @@ class QueryAPISpec extends InCollectionSpecification {
         BAD_REQUEST response code if the PROJECTION parameter is invalid              $e10
         BAD_REQUEST response code if the Query parameter is an invalid expression   $e11
 
+      The FeatureCollection /distinct should:
+        return distinct values                                                      $e14b
+
       General:
         Query parameters should be case insensitive                                 $e12
 
@@ -196,6 +199,19 @@ class QueryAPISpec extends InCollectionSpecification {
         res => res.responseBody must beSomeFeatures(projected)
       }
     }
+  }
+
+  def e14b = withTestFeatures(100, 200) {
+    (bbox: String, featuresIn01: JsArray) =>
+      {
+        val picksFoo = (__ \ "properties" \ "foo").json.pick
+        val distinctFoo = featuresIn01.value.flatMap(jsv => jsv.asOpt(picksFoo)).map(_.as[String]).distinct
+
+        getDistinct(testDbName, testColName, Map("bbox" -> bbox, "projection" -> "properties.foo"))(contentAsJsonStream) applyMatcher { res =>
+          val strings = res.responseBody.map(_.value.flatMap(_.as[List[String]])).getOrElse(Nil)
+          strings must containTheSameElementsAs(distinctFoo)
+        }
+      }
   }
 
   def e15 = withTestFeatures(100, 200) {

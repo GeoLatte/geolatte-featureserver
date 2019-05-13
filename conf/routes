@@ -26,8 +26,10 @@ POST /api/databases/:db/:collection/tx/upsert           controllers.TxController
 
 GET /api/databases/:db/:collection/query                controllers.QueryController.query(db: String, collection: String)
 GET /api/databases/:db/:collection/featurecollection    controllers.QueryController.list(db: String, collection: String)
+GET /api/databases/:db/:collection/distinct             controllers.QueryController.distinct(db: String, collection: String)
 POST /api/databases/:db/:collection/query               controllers.QueryController.query(db: String, collection: String)
 POST /api/databases/:db/:collection/featurecollection   controllers.QueryController.list(db: String, collection: String)
+POST /api/databases/:db/:collection/distinct            controllers.QueryController.distinct(db: String, collection: String)
 
 PUT /api/databases/:db/:collection/views/:view          controllers.ViewController.put(db: String, collection: String, view: String)
 GET /api/databases/:db/:collection/views                controllers.ViewController.list(db: String, collection: String)

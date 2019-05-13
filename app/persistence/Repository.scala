@@ -6,7 +6,7 @@ import akka.stream.scaladsl.Source
 import controllers.IndexDef
 import org.geolatte.geom.Envelope
 import persistence.GeoJsonFormats._
-import persistence.querylang.{ BooleanExpr, ProjectionList }
+import persistence.querylang.{ BooleanExpr, ProjectionList, SimpleProjection }
 import play.api.data.validation.ValidationError
 import play.api.libs.functional.syntax._
 import play.api.libs.json._
@@ -164,6 +164,8 @@ trait Repository {
 
   def query(database: String, collection: String, spatialQuery: SpatialQuery, start: Option[Int] = None,
     limit: Option[Int] = None): Future[CountedQueryResult]
+
+  def distinct(database: String, collection: String, spatialQuery: SpatialQuery, projection: SimpleProjection): Future[List[String]]
 
   def delete(database: String, collection: String, query: BooleanExpr): Future[Boolean]
 

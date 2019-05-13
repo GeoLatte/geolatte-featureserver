@@ -9,10 +9,10 @@ import config.AppExecutionContexts
 import controllers.{ Formats, IndexDef }
 import metrics.Metrics
 import org.geolatte.geom.codec.{ Wkb, Wkt }
-import org.geolatte.geom.{ Envelope, Geometry, Polygon }
+import org.geolatte.geom.{ Envelope, Geometry }
 import org.postgresql.util.PSQLException
 import persistence._
-import persistence.querylang.{ BooleanExpr, QueryParser }
+import persistence.querylang.{ BooleanExpr, SimpleProjection }
 import play.api.inject.ApplicationLifecycle
 import play.api.libs.json._
 import play.api.{ Configuration, Logger }
@@ -22,8 +22,9 @@ import slick.jdbc.hikaricp.HikariCPJdbcDataSource
 import slick.jdbc.{ GetResult, PositionedResult }
 import utilities.{ JsonUtils, Utils }
 import GeoJsonFormats._
+
 import scala.concurrent.Future
-import scala.util.{ Success, Try }
+import scala.util.Try
 
 @Singleton
 class PostgresqlRepository @Inject() (
@@ -280,6 +281,12 @@ class PostgresqlRepository @Inject() (
       cnt <- fCnt
     } yield (cnt, Source.fromPublisher(publisher).via(new MetricCalculator(startMillis, db, collection)))
 
+  }
+
+  override def distinct(db: String, collection: String, spatialQuery: SpatialQuery, projection: SimpleProjection): Future[List[String]] = {
+    val from = s"${quote(db)}.${quote(collection)}"
+
+    database.run(Sql.SELECT_DISTINCT(from, spatialQuery, projection)).map(_.filter(s => s != null).sorted.toList)
   }
 
   override def delete(db: String, collection: String, query: BooleanExpr): Future[Boolean] =
@@ -599,6 +606,45 @@ class PostgresqlRepository @Inject() (
          #$offsetClause
          #$limitClause
      """.as[Row](getRowResultFromTable(query.metadata))
+
+    }
+
+    def SELECT_DISTINCT(from: String, query: SpatialQuery, projection: SimpleProjection) = {
+
+      val cond = condition(query)
+
+      def constructJsonQuery: String = {
+        // construct string json->'properties'->>'foo'
+        "json" + {
+          projection.path.path.collect {
+            case KeyPathNode(key) => key
+          }.map(str => s"'$str'").reverse match {
+            // head will become last element after next reverse and will be prefixed by ->>, other elements will be prefixed by ->
+            case head :: tail => s"->>$head" :: tail.map(str => s"->$str")
+            case Nil => Nil
+          }
+        }.reverse.mkString
+      }
+
+      def findDistinctField: Option[String] = {
+        projection.path.path.collectFirst {
+          case KeyPathNode(key) => key
+        }.map(str => s"`$str`")
+      }
+
+      val select =
+        if (query.metadata.jsonTable) {
+          "distinct " + constructJsonQuery
+        } else {
+          "distinct " + findDistinctField
+            .getOrElse(throw InvalidQueryException("There was no distinct field provided via projection parameter"))
+        }
+
+      sql"""
+         SELECT #$select
+         FROM #$from
+         #${cond.map(c => s"WHERE $c").getOrElse("")}
+     """.as[String]
 
     }
 

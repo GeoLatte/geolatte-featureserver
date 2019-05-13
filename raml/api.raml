@@ -204,6 +204,21 @@ mediaType: application/vnd.geolatte-featureserver+json;version=1.0
                      id, geometry-wkt, some-property
                      433,SRID=31370;POINT(158000 191400),"some-value"
                      434,SRID=31370;POINT(158001 191401),"some-other-value"
+      /distinct:
+        displayName: Queries the distinct values of a collection
+        get:
+          description: |
+            Executes a query to find the distinct values, using the `projection` parameter.
+            The `bbox` and `query` parameters are ANDed together.
+
+          queryParameters: !include distinct-query-params.raml
+          responses:
+            200:
+              description: Successfully executed the query
+              body:
+                 application/vnd.geolatte-featureserver+json;version=1.0 :
+                   example: |
+                    ["bar1", "bar2", "bar3"]
       /featurecollection:
         get:
           description: |
@@ -220,11 +235,10 @@ mediaType: application/vnd.geolatte-featureserver+json;version=1.0
                  example: |
                    {
                      "total":151921,
-                     "count":3,
+                     "count":2,
                      "features":[
-                      {id = 433, geometry":{"type":"Point","crs":{"properties":{"name":"EPSG:31370"},"type":"name"},"bbox":[158000,191400,158050,191400],"coordinates":[158000,191400]},"type":"Feature","properties":{"some-property":"some-value"}}
-                      {id = 434, geometry":{"type":"Point","crs":{"properties":{"name":"EPSG:31370"},"type":"name"},"bbox":[158001,191401,158051,191401],"coordinates":[158001,191401]},"type":"Feature","properties":{"some-property":"some-other-value"}}
-                      ...
+                        {"id": 433, "geometry":{"type":"Point","crs":{"properties":{"name":"EPSG:31370"},"type":"name"},"bbox":[158000,191400,158050,191400],"coordinates":[158000,191400]},"type":"Feature","properties":{"some-property":"some-value"}},
+                        {"id": 434, "geometry":{"type":"Point","crs":{"properties":{"name":"EPSG:31370"},"type":"name"},"bbox":[158001,191401,158051,191401],"coordinates":[158001,191401]},"type":"Feature","properties":{"some-property":"some-other-value"}}
                       ]
                     }
       /indexes:
@@ -354,4 +368,3 @@ mediaType: application/vnd.geolatte-featureserver+json;version=1.0
                 
               
                   
-              
