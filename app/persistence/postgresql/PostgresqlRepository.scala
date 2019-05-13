@@ -629,7 +629,7 @@ class PostgresqlRepository @Inject() (
       def findDistinctField: Option[String] = {
         projection.path.path.collectFirst {
           case KeyPathNode(key) => key
-        }.map(str => s"`$str`")
+        }.map(str => s""""$str"""")
       }
 
       val select =
