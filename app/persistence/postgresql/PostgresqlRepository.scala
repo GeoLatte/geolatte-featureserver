@@ -12,7 +12,7 @@ import org.geolatte.geom.codec.{ Wkb, Wkt }
 import org.geolatte.geom.{ Envelope, Geometry }
 import org.postgresql.util.PSQLException
 import persistence._
-import persistence.querylang.{ BooleanExpr, SimpleProjection }
+import persistence.querylang.{ BooleanExpr, PropertyExpr, SimpleProjection }
 import play.api.inject.ApplicationLifecycle
 import play.api.libs.json._
 import play.api.{ Configuration, Logger }
@@ -613,32 +613,21 @@ class PostgresqlRepository @Inject() (
 
       val cond = condition(query)
 
-      def constructJsonQuery: String = {
-        // construct string json->'properties'->>'foo'
-        "json" + {
+      val propertyExpr =
+        PropertyExpr(
           projection.path.path.collect {
             case KeyPathNode(key) => key
-          }.map(str => s"'$str'").reverse match {
-            // head will become last element after next reverse and will be prefixed by ->>, other elements will be prefixed by ->
-            case head :: tail => s"->>$head" :: tail.map(str => s"->$str")
-            case Nil => Nil
-          }
-        }.reverse.mkString
-      }
+          }.mkString(".")
+        )
 
-      def findDistinctField: Option[String] = {
-        projection.path.path.collectFirst {
-          case KeyPathNode(key) => key
-        }.map(str => s""""$str"""")
-      }
-
-      val select =
+      val renderedPropertyExpr =
         if (query.metadata.jsonTable) {
-          "distinct " + constructJsonQuery
+          PGJsonQueryRenderer.propertyPathAsJsonText(propertyExpr)
         } else {
-          "distinct " + findDistinctField
-            .getOrElse(throw InvalidQueryException("There was no distinct field provided via projection parameter"))
+          PGRegularQueryRenderer.renderPropertyExpr(propertyExpr)
         }
+
+      val select = "distinct " + renderedPropertyExpr
 
       sql"""
          SELECT #$select
