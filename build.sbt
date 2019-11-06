@@ -12,9 +12,8 @@ lazy val commonResolvers = Seq(
   Resolver.typesafeRepo("releases"),
   "Sonatype Repo" at "https://oss.sonatype.org/content/repositories/releases/",
   "Sonatype Snapshots" at "https://oss.sonatype.org/content/repositories/snapshots/",
-    //  "scalaz-bintray" at "https://dl.bintray.com/scalaz/releases",
   Resolver.jcenterRepo,
-  Resolver.url( "artifactory", url( "http://scalasbt.artifactoryonline.com/scalasbt/sbt-plugin-releases" ) )(
+  Resolver.url( "artifactory", url( "https://scalasbt.artifactoryonline.com/scalasbt/sbt-plugin-releases" ) )(
     Resolver
       .ivyStylePatterns
     )
@@ -22,22 +21,22 @@ lazy val commonResolvers = Seq(
 
 lazy val coreDependencies = Seq(
   "org.geolatte" % "geolatte-geom" % "0.14",
-  "commons-codec" % "commons-codec" % "1.8",
-  "net.sf.supercsv" % "super-csv" % "2.1.0",
-  "org.parboiled" %% "parboiled" % "2.1.4",
+//  "commons-codec" % "commons-codec" % "1.8",
+  "net.sf.supercsv" % "super-csv" % "2.4.0",
+  "org.parboiled" %% "parboiled" % "2.1.8",
   "com.typesafe.akka" %% "akka-slf4j" % "2.5.26",
-  "net.logstash.logback" % "logstash-logback-encoder" % "4.6",
+  "net.logstash.logback" % "logstash-logback-encoder" % "6.2",
   filters,
   guice
   )
 
 lazy val psqlDependencies = Seq(
-  "com.typesafe.slick" %% "slick" % "3.2.0",
-  "com.typesafe.slick" %% "slick-hikaricp" % "3.2.0",
+  "com.typesafe.slick" %% "slick" % "3.2.3",
+  "com.typesafe.slick" %% "slick-hikaricp" % "3.2.3",
   "org.postgresql" % "postgresql" % "42.1.1"
   )
 
-lazy val prometheusClientVersion = "0.0.23"
+lazy val prometheusClientVersion = "0.8.0"
 
 lazy val prometheusDependencies = Seq(
   "io.prometheus" % "simpleclient" % prometheusClientVersion,
