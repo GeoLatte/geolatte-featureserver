@@ -150,8 +150,7 @@ class GeoJsonFormatSpecs extends Specification {
       val gc = geometryCollection(2, d3DM)("00").sample.get
       val json = Json.toJson(gc)
       matchCrs(gc, json) and matchBbox(gc, json) and matchType(json, "GeometryCollection") and (
-        (json \ "geometries").as[JsArray].value.size must_== 2
-      )
+        (json \ "geometries").as[JsArray].value.size must_== 2)
     }
 
   }
@@ -204,8 +203,7 @@ class GeoJsonFormatSpecs extends Specification {
   private def matchCoordinates(p: Polygon, json: JsValue) = {
     val interior = 0.until(p.getNumInteriorRing).map(i => pointsToJsArray(p.getInteriorRingN(i).getPoints))
     (json \ "coordinates").get must_=== JsArray(
-      Seq(pointsToJsArray(p.getExteriorRing.getPoints)) ++ interior
-    )
+      Seq(pointsToJsArray(p.getExteriorRing.getPoints)) ++ interior)
   }
 
   private def matchBbox(pnt: Geometry, json: JsValue) = {

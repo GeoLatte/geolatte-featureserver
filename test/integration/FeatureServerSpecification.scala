@@ -11,12 +11,13 @@ import play.api.libs.json.{ JsArray, JsObject, Json, _ }
  *         creation-date: 12/3/13
  */
 abstract class FeatureServerSpecification extends Specification
-    with RestApiDriver {
+  with RestApiDriver {
 
   val testDbName = "xfstestdb"
   val testColName = "xfstestcoll"
 
   implicit val currentApp = GuiceApplicationBuilder().build()
+  implicit val currentMat = currentApp.materializer
 
   //override decorate so we can inject 'include' en 'sequential' arguments
   override def decorate(is: SpecStructure, env: Env) = {
@@ -50,8 +51,7 @@ abstract class InCollectionSpecification extends FeatureServerSpecification {
     step(makeDatabase(testDbName)) ^
       step(makeCollection(testDbName, testColName)) ^
       fs ^
-      step(dropDatabase(testDbName))
-  )
+      step(dropDatabase(testDbName)))
 
   def pruneSpecialProperties(js: JsValue): JsValue = {
     val tr: Reads[JsObject] = (__ \ "_id").json.prune andThen (__ \ "_mc").json.prune andThen (__ \ "_bbox").json.prune
@@ -66,23 +66,20 @@ abstract class InCollectionSpecification extends FeatureServerSpecification {
     (js: JsValue) => {
       val receivedFeatureArray = (js \ "features").as[JsValue]
       (receivedFeatureArray must beFeatures(expected)).isSuccess
-    }, s"Featurecollection Json doesn't contain expected features (${Json.stringify(expected)})"
-  )
+    }, s"Featurecollection Json doesn't contain expected features (${Json.stringify(expected)})")
 
   def matchFeaturesInCsv(expectedColumnHeader: String): Matcher[Seq[String]] = (
     (received: Seq[String]) => {
       val lines = received.flatMap(l => received(0).split("\n")).map(_.trim)
       val header = lines(0)
       header == expectedColumnHeader
-    }, "Featurecollection CSV doesn't contain expected columns"
-  )
+    }, "Featurecollection CSV doesn't contain expected columns")
 
   def matchTotalInJson(expectedTotal: Int): Matcher[JsValue] = (
     (recJs: JsValue) => {
       val optTotalReceived = (recJs \ "total").asOpt[Int]
       (optTotalReceived must beSome(expectedTotal)).isSuccess
-    }, s"FeatureCollection Json doesn't have expected value for total field ($expectedTotal)."
-  )
+    }, s"FeatureCollection Json doesn't have expected value for total field ($expectedTotal).")
 
   def filterCoordinates(in: JsValue): JsValue = {
     in.transform(coordinateFilter) match {
@@ -130,8 +127,7 @@ abstract class InCollectionSpecification extends FeatureServerSpecification {
         succ,
         msg,
         msg,
-        r
-      )
+        r)
     }
   }
 
@@ -146,8 +142,7 @@ abstract class InCollectionSpecification extends FeatureServerSpecification {
         succ,
         "received Some(<features>) with features matching expected",
         msg,
-        r
-      )
+        r)
     }
   }
 

@@ -33,15 +33,15 @@ import scala.language.implicitConversions
  * @tparam R Type of result body content
  */
 case class FakeRequestResult[B, T, R](
-    url: String,
-    format: Option[Future[Result] => R] = None,
-    requestBody: Option[B] = None,
-    mkRequest: (String, Option[B]) => FakeRequest[T]
-)(
-    implicit
-    val w: Writeable[T],
-    val app: Application
-) {
+  url: String,
+  format: Option[Future[Result] => R] = None,
+  requestBody: Option[B] = None,
+  mkRequest: (String, Option[B]) => FakeRequest[T])(
+  implicit
+  val w: Writeable[T],
+  val app: Application) {
+
+  implicit val mat = app.materializer
 
   import UtilityMethods._
 
@@ -84,16 +84,16 @@ object FakeRequestResult {
     }
 
   def PUT(url: String, body: Option[JsValue] = None)(implicit app: Application) =
-    new FakeRequestResult(url = url, requestBody = body, mkRequest = makePutRequest)
+    FakeRequestResult(url = url, requestBody = body, mkRequest = makePutRequest)
 
   def DELETE(url: String)(implicit app: Application) =
-    new FakeRequestResult[JsValue, AnyContentAsEmpty.type, JsValue](url = url, mkRequest = makeDeleteRequest)
+    FakeRequestResult[JsValue, AnyContentAsEmpty.type, JsValue](url = url, mkRequest = makeDeleteRequest)
 
   def POSTJson(url: String, body: JsValue, format: Future[Result] => JsValue)(implicit app: Application) =
-    new FakeRequestResult(url = url, format = Some(format), requestBody = Some(body), mkRequest = makePostRequestJson)
+    FakeRequestResult(url = url, format = Some(format), requestBody = Some(body), mkRequest = makePostRequestJson)
 
   def POSTRaw(url: String, body: ByteString, format: Future[Result] => JsValue)(implicit app: Application) =
-    new FakeRequestResult(url = url, format = Some(format), requestBody = Some(body), mkRequest = makePostRequestRaw)
+    FakeRequestResult(url = url, format = Some(format), requestBody = Some(body), mkRequest = makePostRequestRaw)
 
 }
 
@@ -305,20 +305,20 @@ trait RestApiDriver {
 }
 
 object UtilityMethods extends PlayRunners
-    with HeaderNames
-    with Status
-    with HttpProtocol
-    with DefaultAwaitTimeout
-    with ResultExtractors
-    with Writeables
-    with RouteInvokers
-    //with WsTestClient
-    with FutureAwaits {
+  with HeaderNames
+  with Status
+  with HttpProtocol
+  with DefaultAwaitTimeout
+  with ResultExtractors
+  with Writeables
+  with RouteInvokers
+  //with WsTestClient
+  with FutureAwaits {
 
   override implicit def defaultAwaitTimeout = 60.seconds
 
-  implicit val actorSys = ActorSystem()
-  implicit val mat = ActorMaterializer()
+  //  implicit val actorSys = ActorSystem()
+  //  implicit val mat = ActorMaterializer()
 
   val defaultIndexLevel = 4
   implicit val defaultExtent = new Envelope(0, 0, 90, 90, CrsId.valueOf(4326))
@@ -328,8 +328,7 @@ object UtilityMethods extends PlayRunners
     "extent" -> Json.obj("crs" -> defaultExtent.getCrsId.getCode, "envelope" ->
       Json.arr(defaultExtent.getMinX, defaultExtent.getMinY, defaultExtent.getMaxX, defaultExtent.getMaxY)),
     "index-level" -> defaultIndexLevel,
-    "id-type" -> "decimal"
-  )
+    "id-type" -> "decimal")
 
   implicit def mapOfQParams2QueryStr[T](params: Map[String, T]): String = params.map { case (k, v) => s"$k=$v" } mkString "&"
 
@@ -368,7 +367,7 @@ object UtilityMethods extends PlayRunners
     bytes.decodeString("UTF8")
   }
 
-  private def readChunked[T](result: Future[Result], parse: String => T)(timeout: Timeout): Seq[T] = {
+  private def readChunked[T](result: Future[Result], parse: String => T)(timeout: Timeout)(implicit mat: Materializer): Seq[T] = {
     val buffer = ListBuffer[T]()
 
     val body = Await.result(result, timeout.duration).body.dataStream
@@ -395,8 +394,7 @@ object UtilityMethods extends PlayRunners
   def contentAsJsonStringStream(result: Future[Result])(implicit timeout: Timeout, mat: Materializer): JsObject =
     isTransferEncoded(result)(timeout) match {
       case true => Json.parse(
-        readChunked(result, s => s)(timeout).foldLeft("")((s, result) => s + result)
-      ).asInstanceOf[JsObject]
+        readChunked(result, s => s)(timeout).foldLeft("")((s, result) => s + result)).asInstanceOf[JsObject]
       case _ => Json.parse(contentAsString(result)(timeout, mat)).asInstanceOf[JsObject]
     }
 

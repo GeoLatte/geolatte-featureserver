@@ -90,8 +90,7 @@ class ProjectionParserSpec extends Specification {
 
       val expected = Json.obj("a2" ->
         Json.obj(
-          "doesnotexist" -> JsArray()
-        ))
+          "doesnotexist" -> JsArray()))
 
       obj must_== expected
     }
@@ -102,8 +101,7 @@ class ProjectionParserSpec extends Specification {
       val obj = json.as(projection.reads)
 
       val expected = Json.obj(
-        "doesnotexist" -> JsArray()
-      )
+        "doesnotexist" -> JsArray())
 
       obj must_== expected
     }
@@ -119,14 +117,9 @@ class ProjectionParserSpec extends Specification {
           "b1" -> Json.arr(
             Json.obj(
               "ca" -> 2,
-              "cb" -> 3
-            ), Json.obj(
+              "cb" -> 3), Json.obj(
               "ca" -> 4,
-              "cb" -> 5
-            )
-          )
-        )
-      )
+              "cb" -> 5))))
 
       obj must_== expected
     }
@@ -172,8 +165,7 @@ class ProjectionParserSpec extends Specification {
       val obj = json.as(projection.reads)
 
       val expected = Json.obj(
-        "data" -> JsArray()
-      )
+        "data" -> JsArray())
 
       obj must_== expected
     }
@@ -187,14 +179,10 @@ class ProjectionParserSpec extends Specification {
         "items" -> Seq(
           Json.obj(
             "key" -> "value1",
-            "nested" -> JsArray()
-          ),
+            "nested" -> JsArray()),
           Json.obj(
             "key" -> "value2",
-            "nested" -> JsArray()
-          )
-        )
-      )
+            "nested" -> JsArray())))
 
       obj must_== expected
 
@@ -208,19 +196,13 @@ class ProjectionParserSpec extends Specification {
       val expected = Json.obj(
         "items" -> Seq(
           Json.obj(
-            "data" -> JsArray()
-          ),
+            "data" -> JsArray()),
           Json.obj(
             "data" -> Seq(
               Json.obj(
                 "key2" -> "value3",
                 "key3" -> JsNull,
-                "nested" -> JsArray()
-              )
-            )
-          )
-        )
-      )
+                "nested" -> JsArray())))))
 
       obj must_== expected
 
@@ -467,9 +449,7 @@ class ProjectionParserSpec extends Specification {
 
       val expected = Json.obj(
         "properties" -> Json.obj(
-          "id" -> 166613
-        )
-      )
+          "id" -> 166613))
 
       obj must_== expected
     }
@@ -483,9 +463,7 @@ class ProjectionParserSpec extends Specification {
         "properties" -> Json.obj(
           "id" -> 166613,
           "zijdeVanDeRijweg" -> "RECHTS",
-          "ident8" -> "N0110001"
-        )
-      )
+          "ident8" -> "N0110001"))
 
       obj must_== expected
     }
@@ -502,16 +480,11 @@ class ProjectionParserSpec extends Specification {
             Json.obj(
               "clientId" -> "steun1",
               "diameter" -> 76,
-              "lengte" -> 1700
-            ),
+              "lengte" -> 1700),
             Json.obj(
               "clientId" -> "steun2",
               "diameter" -> 76,
-              "lengte" -> 1700
-            )
-          )
-        )
-      )
+              "lengte" -> 1700))))
 
       obj must_== expected
     }
@@ -530,13 +503,7 @@ class ProjectionParserSpec extends Specification {
               "borden" -> Seq(
                 Json.obj(
                   "code" -> "F37",
-                  "clientId" -> "bord1"
-                )
-              )
-            )
-          )
-        )
-      )
+                  "clientId" -> "bord1"))))))
 
       obj must_== expected
     }
@@ -552,17 +519,10 @@ class ProjectionParserSpec extends Specification {
           "ophangingen" -> Seq(
             Json.obj(
               "kleur" -> Json.obj(
-                "naam" -> "Grijs (Standaardbestek 250)"
-              )
-            ),
+                "naam" -> "Grijs (Standaardbestek 250)")),
             Json.obj(
               "kleur" -> Json.obj(
-                "naam" -> "Grijs (Standaardbestek 250)"
-              )
-            )
-          )
-        )
-      )
+                "naam" -> "Grijs (Standaardbestek 250)")))))
 
       obj must_== expected
     }
@@ -575,9 +535,7 @@ class ProjectionParserSpec extends Specification {
       val expected = Json.obj(
         "properties" -> Json.obj(
           "id" -> 166613,
-          "zijdes" -> JsArray()
-        )
-      )
+          "zijdes" -> JsArray()))
 
       obj must_== expected
     }
@@ -600,24 +558,11 @@ class ProjectionParserSpec extends Specification {
                         Json.obj(
                           "id" -> 387430,
                           "type" -> Json.obj(
-                            "naam" -> "Steun"
-                          )
-                        ),
+                            "naam" -> "Steun")),
                         Json.obj(
                           "id" -> 387431,
                           "type" -> Json.obj(
-                            "naam" -> "Steun"
-                          )
-                        )
-                      )
-                    )
-                  )
-                )
-              )
-            )
-          )
-        )
-      )
+                            "naam" -> "Steun")))))))))))
 
       obj must_== expected
     }

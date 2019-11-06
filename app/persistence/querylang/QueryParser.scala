@@ -57,7 +57,7 @@ case class ValueArg(value: AtomicExpr) extends Arg
 class QueryParserException(message: String = null) extends RuntimeException(message)
 
 class QueryParser(val input: ParserInput) extends Parser
-    with StringBuilding {
+  with StringBuilding {
 
   def InputLine = rule { BooleanExpression ~ EOI }
 

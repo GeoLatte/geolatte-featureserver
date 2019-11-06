@@ -4,7 +4,8 @@ import config.Constants._
 import controllers.SupportedMediaTypes
 import org.specs2.mutable._
 import play.api.http.{ MediaRange, MediaType }
-import play.api.test.{ FakeHeaders, FakeRequest }
+import play.api.test._
+import play.api.test.Helpers._
 
 /**
  * @author Karel Maesen, Geovise BVBA
@@ -18,7 +19,7 @@ class SupportedMediaTypeSpec extends Specification {
 
   def mkRequest(mediatype: String, version: String = null) = {
     val mt: String = mkMediatype(mediatype, version)
-    new FakeRequest[String]("GET", "/databases", mkHeader(mt), "")
+    FakeRequest[String]("GET", "/databases", mkHeader(mt), "")
   }
 
   def specDescription[T](mediatype: String, specifiedVersion: String, expected: Option[(Format.Value, Version.Value)]) = {

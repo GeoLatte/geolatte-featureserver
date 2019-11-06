@@ -1,6 +1,5 @@
 package utilities
 
-import play.api.data.validation.ValidationError
 import play.api.libs.functional.syntax._
 import play.api.libs.json.Reads._
 import play.api.libs.json._
@@ -49,7 +48,7 @@ object JsonHelper {
    * @param errors JsonValidation errors
    * @return
    */
-  implicit def JsValidationErrors2String(errors: Seq[(JsPath, Seq[ValidationError])]): String = {
+  implicit def JsValidationErrors2String(errors: Seq[(JsPath, Seq[JsonValidationError])]): String = {
     errors map {
       case (jspath, valerrors) => jspath + " :" + valerrors.map(ve => ve.message).mkString("; ")
     } mkString "\n"

@@ -27,8 +27,7 @@ object SimpleProjection {
 
 case class TraversableProjection(simplePath: SimpleProjection, inner: ProjectionList) extends Projection {
   lazy val reads = simplePath.path.json.copyFrom(
-    simplePath.path.json.pick[JsArray].map(js => JsArray(js.as(Reads.seq(inner.reads)))).orElse(Reads[JsArray] { _ => JsSuccess(JsArray()) })
-  )
+    simplePath.path.json.pick[JsArray].map(js => JsArray(js.as(Reads.seq(inner.reads)))).orElse(Reads[JsArray] { _ => JsSuccess(JsArray()) }))
 }
 
 case class ProjectionList(paths: Seq[Projection]) extends Projection {
@@ -72,7 +71,7 @@ object ProjectionList {
  * @param input the ParserInput
  */
 class ProjectionParser(val input: ParserInput) extends Parser
-    with StringBuilding {
+  with StringBuilding {
 
   def InputLine = rule { ProjectionExpressionList ~ EOI }
 
@@ -110,8 +109,7 @@ object ProjectionParser {
 
   def mkProjection(paths: List[JsPath]): Option[Reads[JsObject]] = {
     val ppl = ProjectionList(
-      paths.map(SimpleProjection.apply)
-    )
+      paths.map(SimpleProjection.apply))
     if (ppl.isEmpty) None
     else Some(ppl.reads)
   }

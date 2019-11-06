@@ -22,6 +22,7 @@ import slick.jdbc.hikaricp.HikariCPJdbcDataSource
 import slick.jdbc.{ GetResult, PositionedResult }
 import utilities.{ JsonUtils, Utils }
 import GeoJsonFormats._
+import com.typesafe.config.ConfigFactory
 
 import scala.concurrent.Future
 import scala.util.Try
@@ -31,16 +32,15 @@ class PostgresqlRepository @Inject() (
   configuration: Configuration,
   applicationLifecycle: ApplicationLifecycle,
   metrics: Metrics,
-  implicit val mat: Materializer
-)
-    extends Repository with RepoHealth {
+  implicit val mat: Materializer)
+  extends Repository with RepoHealth {
 
   import AppExecutionContexts.streamContext
   import utilities.Utils._
 
   private val geoJsonCol = "__geojson"
 
-  private lazy val excludedSchemas: Option[Seq[String]] = configuration.getStringSeq("fs.exclude")
+  private val excludedSchemas: Option[Seq[String]] = configuration.get[Option[Seq[String]]]("fs.exclude")
 
   private def mkDatabaseWithMetrics(db: Database): Database =
     db.source match {
@@ -52,13 +52,13 @@ class PostgresqlRepository @Inject() (
       case _ => db
     }
 
-  lazy val database = mkDatabaseWithMetrics(Database.forConfig("fs.postgresql"))
+  val config = Database.forConfig("fs.postgresql")
+  lazy val database = mkDatabaseWithMetrics(config)
 
   applicationLifecycle.addStopHook(
     () => Utils.withInfo("Closing database") {
       Future.successful(database.close)
-    }
-  )
+    })
 
   case class Row(id: String, geometry: String, json: JsObject)
 
@@ -144,8 +144,7 @@ class PostgresqlRepository @Inject() (
     withInfo(s"Starting with Registration of $db / $collection ") {
 
       def reg(db: String, meta: Metadata): Future[Boolean] = runOnDb("register-collection")(
-        Sql.INSERT_METADATA_REGISTERED(db, collection, meta)
-      ).map(_ => true)
+        Sql.INSERT_METADATA_REGISTERED(db, collection, meta)).map(_ => true)
 
       for {
         _ <- existsCollection(db, collection) flatMap { b =>
@@ -304,8 +303,7 @@ class PostgresqlRepository @Inject() (
       case (json, geom) => (
         extractIdString(json),
         unescapeJson(stripGeometry(json)),
-        org.geolatte.geom.codec.Wkb.toWkb(geom).toString
-      )
+        org.geolatte.geom.codec.Wkb.toWkb(geom).toString)
     }
     val dbio = DBIO.sequence(paramValues.map { case (id, json, geom) => Sql.INSERT_DATA(db, collection, id, json, geom) }).map(_.sum)
     runOnDb("batch-insert")(dbio)
@@ -327,8 +325,7 @@ class PostgresqlRepository @Inject() (
       case (json, geom) => (
         extractIdString(json),
         unescapeJson(stripGeometry(json)),
-        org.geolatte.geom.codec.Wkb.toWkb(geom).toString
-      )
+        org.geolatte.geom.codec.Wkb.toWkb(geom).toString)
     }
     val dbio = DBIO.sequence(paramValues.map { case (id, json, geom) => Sql.UPSERT_DATA(db, collection, id, json, geom) }).map(_.sum)
     runOnDb("batch-upsert")(dbio)
@@ -387,11 +384,9 @@ class PostgresqlRepository @Inject() (
 
   override def createIndex(dbName: String, colName: String, indexDef: IndexDef): Future[Boolean] = {
     val fRes = if (indexDef.regex) runOnDb("create-index")(
-      Sql.CREATE_INDEX_WITH_TRGM(dbName, colName, indexDef.name, indexDef.path, indexDef.cast)
-    )
+      Sql.CREATE_INDEX_WITH_TRGM(dbName, colName, indexDef.name, indexDef.path, indexDef.cast))
     else runOnDb("create-index")(
-      Sql.CREATE_INDEX(dbName, colName, indexDef.name, indexDef.path, indexDef.cast)
-    )
+      Sql.CREATE_INDEX(dbName, colName, indexDef.name, indexDef.path, indexDef.cast))
 
     fRes map { _ => true } recover {
       case MappableException(dbe) => throw dbe
@@ -617,8 +612,7 @@ class PostgresqlRepository @Inject() (
         PropertyExpr(
           projection.path.path.collect {
             case KeyPathNode(key) => key
-          }.mkString(".")
-        )
+          }.mkString("."))
 
       val renderedPropertyExpr =
         if (query.metadata.jsonTable) {
@@ -814,8 +808,7 @@ class PostgresqlRepository @Inject() (
 
     def CREATE_INDEX(dbName: String, colName: String, indexName: String, path: String, cast: String) = {
       val pathExp = path.split("\\.").map(
-        el => single_quote(el)
-      ).mkString(",")
+        el => single_quote(el)).mkString(",")
       sqlu"""CREATE INDEX #${quote(indexName)}
              ON #${quote(dbName)}.#${quote(colName)} ( (json_extract_path_text(json, #$pathExp)::#$cast) )
       """
@@ -823,8 +816,7 @@ class PostgresqlRepository @Inject() (
 
     def CREATE_INDEX_WITH_TRGM(dbName: String, colName: String, indexName: String, path: String, cast: String) = {
       val pathExp = path.split("\\.").map(
-        el => single_quote(el)
-      ).mkString(",")
+        el => single_quote(el)).mkString(",")
       sqlu"""CREATE INDEX #${quote(indexName)}
              ON #${quote(dbName)}.#${quote(colName)} using gist
              ( (json_extract_path_text(json, #$pathExp)::#$cast) gist_trgm_ops)

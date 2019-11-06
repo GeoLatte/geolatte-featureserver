@@ -31,7 +31,7 @@ trait Instrumentation {
 }
 
 class StdInstrumentation @Inject() (implicit metrics: Metrics)
-    extends Instrumentation {
+  extends Instrumentation {
 
   def incrementOperation(op: Operation, db: String, coll: String): Unit =
     try {

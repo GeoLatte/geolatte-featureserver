@@ -11,8 +11,7 @@ object SupportedMediaTypes {
     private val mediaTypeSubTypePrefix = "vnd.geolatte-featureserver+"
 
     val supported: Set[String] = (
-      for { f <- Format.values } yield mediaTypeSubTypePrefix + Format.stringify(f)
-    ) + "json"
+      for { f <- Format.values } yield mediaTypeSubTypePrefix + Format.stringify(f)) + "json"
 
     def apply(format: Format.Value): String = mediaTypeSubTypePrefix + Format.stringify(format)
 

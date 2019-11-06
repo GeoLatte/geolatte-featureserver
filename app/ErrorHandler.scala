@@ -21,8 +21,7 @@ class ErrorHandler extends HttpErrorHandler {
       }
       case _ => Utils.withWarning(s"Request $request failed with code $statusCode: $message") {
         Future.successful(
-          Status(statusCode)("A client error occurred: " + message)
-        )
+          Status(statusCode)("A client error occurred: " + message))
       }
     }
 

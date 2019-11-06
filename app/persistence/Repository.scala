@@ -7,8 +7,8 @@ import controllers.IndexDef
 import org.geolatte.geom.Envelope
 import persistence.GeoJsonFormats._
 import persistence.querylang.{ BooleanExpr, ProjectionList, SimpleProjection }
-import play.api.data.validation.ValidationError
 import play.api.libs.functional.syntax._
+import play.api.libs.json.JsonValidationError
 import play.api.libs.json._
 
 import scala.concurrent.Future
@@ -50,8 +50,7 @@ object Metadata {
     (__ \ CollectionField).read[String] and
     (__ \ ExtentField).read[Envelope](EnvelopeFormats) and
     (__ \ IndexLevelField).read[Int] and
-    (__ \ IdTypeField).read[String](Reads.filter[String](ValidationError("Requires 'text' or 'decimal"))(tpe => tpe == "text" || tpe == "decimal"))
-  )(Metadata.fromReads _)
+    (__ \ IdTypeField).read[String](Reads.filter[String](JsonValidationError("Requires 'text' or 'decimal"))(tpe => tpe == "text" || tpe == "decimal")))(Metadata.fromReads _)
 }
 
 sealed trait Direction
@@ -81,8 +80,7 @@ case class SpatialQuery(
   sort: List[FldSortSpec] = List(),
   metadata: Metadata,
   withCount: Boolean = false,
-  explode: Boolean = false
-)
+  explode: Boolean = false)
 
 trait FeatureWriter {
 
@@ -104,8 +102,7 @@ case class TableStats(
   vacuumCount: Long,
   autovacuumCount: Long,
   analyzeCount: Long,
-  autoanalyzeCount: Long
-)
+  autoanalyzeCount: Long)
 
 case class ActivityStats(
   pid: Long,
@@ -115,8 +112,7 @@ case class ActivityStats(
   waitEventType: Option[String],
   waitEvent: Option[String],
   state: Option[String],
-  query: Option[String]
-)
+  query: Option[String])
 
 /**
  * Exposes "Health" information on the Repository

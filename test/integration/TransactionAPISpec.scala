@@ -57,8 +57,7 @@ class TransactionAPISpec extends InCollectionSpecification {
     "extent" -> Json.obj("crs" -> defaultExtent.getCrsId.getCode, "envelope" ->
       Json.arr(defaultExtent.getMinX, defaultExtent.getMinY, defaultExtent.getMaxX, defaultExtent.getMaxY)),
     "index-level" -> defaultIndexLevel,
-    "id-type" -> "text"
-  )
+    "id-type" -> "text")
 
   //Generators for data
   val prop = Gen.properties("foo" -> Gen.oneOf("bar1", "bar2", "bar3"), "num" -> Gen.oneOf(1, 2, 3))

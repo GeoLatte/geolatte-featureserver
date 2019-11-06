@@ -35,8 +35,7 @@ class IndexAPISpec extends InCollectionSpecification {
 
   val indexDef = Json.obj(
     "path" -> "a.b",
-    "type" -> "text"
-  )
+    "type" -> "text")
 
   def e1 = putIndex(testDbName, "NonExistingCollection", "my_idx", indexDef) applyMatcher (_.status must equalTo(NOT_FOUND))
 
@@ -52,9 +51,7 @@ class IndexAPISpec extends InCollectionSpecification {
     (res.status must equalTo(OK)) and
       (res.responseBody must beSome(
         Json.arr(
-          Json.obj("name" -> "my_idx", "url" -> "/api/databases/xfstestdb/xfstestcoll/indexes/my_idx")
-        )
-      )))
+          Json.obj("name" -> "my_idx", "url" -> "/api/databases/xfstestdb/xfstestcoll/indexes/my_idx")))))
 
   def e7 = getIndex(testDbName, testColName, "doesntexist") applyMatcher (_.status must equalTo(NOT_FOUND))
 
@@ -70,7 +67,6 @@ class IndexAPISpec extends InCollectionSpecification {
   def e11 = getIndices(testDbName, testColName) applyMatcher (res =>
     (res.status must equalTo(OK)) and
       (res.responseBody must beSome(
-        Json.arr()
-      )))
+        Json.arr())))
 
 }

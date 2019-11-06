@@ -93,15 +93,13 @@ class QueryController @Inject() (val repository: Repository, val instrumentation
     limit: Option[Int],
     intersectionGeometryWkt: Option[String],
     withCount: Boolean = false,
-    explode: Boolean = false
-  )
+    explode: Boolean = false)
 
   case class DistinctRequest(
     bbox: Option[String],
     query: Option[BooleanExpr],
     intersectionGeometryWkt: Option[String],
-    simpleProjection: SimpleProjection
-  )
+    simpleProjection: SimpleProjection)
 
   def query(db: String, collection: String) = RepositoryAction { implicit request =>
     {
@@ -116,8 +114,7 @@ class QueryController @Inject() (val repository: Repository, val instrumentation
             val result = Ok.chunked(
               FeatureStream(optTotal, features)
                 .asSource(writeable)
-                .log("Query stream")
-            ).as(contentType)
+                .log("Query stream")).as(contentType)
 
             filename match {
               case Some(fn) => result.withHeaders(headers = ("content-disposition", s"attachment; filename=$fn"))
@@ -139,9 +136,7 @@ class QueryController @Inject() (val repository: Repository, val instrumentation
         _ = instrumentation.incrementOperation(Operation.QUERY_COLLECTION, db, collection)
       } yield res
 
-    } recover commonExceptionHandler(db, collection)
-
-  )
+    } recover commonExceptionHandler(db, collection))
 
   def distinct(db: String, collection: String) = RepositoryAction(
     implicit request => {
@@ -158,8 +153,7 @@ class QueryController @Inject() (val repository: Repository, val instrumentation
         _ = instrumentation.incrementOperation(Operation.QUERY_DISTINCT, db, collection)
       } yield res
 
-    } recover commonExceptionHandler(db, collection)
-  )
+    } recover commonExceptionHandler(db, collection))
 
   def featuresToResult(db: String, collection: String, featureCollectionRequest: FeatureCollectionRequest)(toResult: ((Option[Long], Source[JsObject, _])) => Result): Future[Result] = {
 
@@ -225,8 +219,7 @@ class QueryController @Inject() (val repository: Repository, val instrumentation
         toFldSortSpecList(request.sort, request.sortDir),
         smd,
         request.withCount,
-        request.explode
-      )
+        request.explode)
       result <- repository.query(db, collection, spatialQuery, Some(request.start), request.limit)
       _ = instrumentation.updateSpatialQueryMetrics(db, collection, spatialQuery)
     } yield result
@@ -241,8 +234,7 @@ class QueryController @Inject() (val repository: Repository, val instrumentation
       request.query,
       None,
       Nil,
-      smd
-    )
+      smd)
 
     for {
       result <- repository.distinct(db, collection, spatialQuery, request.simpleProjection)

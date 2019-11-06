@@ -12,3 +12,4 @@ RUNNING_PID
 **.pyc
 *.log
 .vagrant
+**/testdata

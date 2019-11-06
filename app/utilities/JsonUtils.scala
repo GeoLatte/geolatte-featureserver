@@ -16,8 +16,7 @@ object JsonUtils {
     case d: Double => JsNumber(BigDecimal(d))
     case b: BigDecimal => JsNumber(b)
     case e => Utils.withTrace(s"Converting value $e (${e.getClass.getCanonicalName}) by toString method")(
-      Try { JsString(e.toString) }.toOption.getOrElse(JsNull)
-    )
+      Try { JsString(e.toString) }.toOption.getOrElse(JsNull))
   }
 
   def toGeoJson(idColumn: String, geomCol: String, propertyMap: Map[String, Any]): JsObject = {
@@ -31,8 +30,7 @@ object JsonUtils {
         Json.parse(Utils.string(propertyMap("__geojson")))
       }.getOrElse(Utils.withWarning(s"Failed to parse ${Utils.string(propertyMap("__geojson"))}")(JsNull)),
       "type" -> JsString("Feature"),
-      "properties" -> JsObject(props.toSeq)
-    )
+      "properties" -> JsObject(props.toSeq))
     JsObject(flds)
   }
 

@@ -74,30 +74,26 @@ class QueryAPISpec extends InCollectionSpecification {
     val features = gjFeatureArrayGenerator(size = 1).sample.get
     withFeatures(testDbName, testColName, features) {
       getQuery(testDbName, testColName, "")(contentAsJsonStream).applyMatcher(
-        res => (res.status must equalTo(OK)) and (res.responseBody must beSomeFeatures(features))
-      )
+        res => (res.status must equalTo(OK)) and (res.responseBody must beSomeFeatures(features)))
     }
   }
 
   def e3 = withTestFeatures(10, 10) {
     (bbox: String, featuresIn01: JsArray) =>
       getList(testDbName, testColName, Map("bbox" -> bbox)).applyMatcher(
-        res => (res.status must equalTo(OK)) and (res.responseBody must beSome(matchFeaturesInJson(featuresIn01)))
-      )
+        res => (res.status must equalTo(OK)) and (res.responseBody must beSome(matchFeaturesInJson(featuresIn01))))
   }
 
   def e4 = withTestFeatures(100, 10) {
     (bbox: String, featuresIn01: JsArray) =>
       getList(testDbName, testColName, Map("bbox" -> bbox, "start" -> 10)).applyMatcher(
-        res => (res.status must equalTo(OK)) and (res.responseBody must beSome(matchTotalInJson(100)))
-      )
+        res => (res.status must equalTo(OK)) and (res.responseBody must beSome(matchTotalInJson(100))))
   }
 
   def e5 = withTestFeatures(100, 10) {
     (bbox: String, featuresIn01: JsArray) =>
       getList(testDbName, testColName, Map("bbox" -> bbox, "limit" -> 10)).applyMatcher(
-        res => (res.status must equalTo(OK)) and (res.responseBody must beSome(matchTotalInJson(100)))
-      )
+        res => (res.status must equalTo(OK)) and (res.responseBody must beSome(matchTotalInJson(100))))
   }
 
   def e5b = pending
@@ -160,8 +156,7 @@ class QueryAPISpec extends InCollectionSpecification {
         val projectedFeatures = project(projection)(featuresIn01)
         val sortedFeatures = JsArray(projectedFeatures.value.sortBy[String](jsValue => (jsValue \ "properties" \ "foo").as[String]).reverse)
         getQuery(testDbName, testColName, Map("bbox" -> bbox, "projection" -> projection, "sort" -> sort, "sort-direction" -> sortdir))(
-          contentAsJsonStream
-        ).applyMatcher {
+          contentAsJsonStream).applyMatcher {
           res =>
             {
               res.responseBody must beSomeFeatures(sortedFeatures, true)
@@ -175,8 +170,7 @@ class QueryAPISpec extends InCollectionSpecification {
       {
         val picksFoo = (__ \ "properties" \ "foo").json.pick
         val filteredFeatures = JsArray(
-          featuresIn01.value.filter(jsv => jsv.asOpt(picksFoo) == Some(JsString("bar1")))
-        )
+          featuresIn01.value.filter(jsv => jsv.asOpt(picksFoo) == Some(JsString("bar1"))))
         val queryObj = "properties.foo='bar1'"
         getQuery(testDbName, testColName, Map("bbox" -> bbox, "query" -> encode(queryObj, "UTF-8")))(contentAsJsonStream) applyMatcher {
           res => res.responseBody must beSomeFeatures(filteredFeatures)
@@ -192,8 +186,7 @@ class QueryAPISpec extends InCollectionSpecification {
     (bbox: String, featuresIn01: JsArray) => {
       val picksFoo = (__ \ "properties" \ "foo").json.pick
       val filteredFeatures = JsArray(
-        featuresIn01.value.filter(jsv => jsv.asOpt(picksFoo) == Some(JsString("bar1")))
-      )
+        featuresIn01.value.filter(jsv => jsv.asOpt(picksFoo) == Some(JsString("bar1"))))
       val projected = project(projection)(filteredFeatures)
       getQuery(testDbName, testColName, Map("bbox" -> bbox, "with-view" -> "view-1"))(contentAsJsonStream) applyMatcher {
         res => res.responseBody must beSomeFeatures(projected)
@@ -221,8 +214,7 @@ class QueryAPISpec extends InCollectionSpecification {
     (bbox: String, featuresIn01: JsArray) => {
       val picksFoo = (__ \ "properties" \ "foo").json.pick
       val filteredFeatures = JsArray(
-        featuresIn01.value.filter(jsv => jsv.asOpt(picksFoo) == Some(JsString("bar1")))
-      )
+        featuresIn01.value.filter(jsv => jsv.asOpt(picksFoo) == Some(JsString("bar1"))))
       getQuery(testDbName, testColName, Map("bbox" -> bbox, "with-view" -> "view-2"))(contentAsJsonStream) applyMatcher {
         res => res.responseBody must beSomeFeatures(filteredFeatures)
       }
@@ -249,8 +241,7 @@ class QueryAPISpec extends InCollectionSpecification {
   def e13 = withTestFeatures(3, 6) {
     (bbox: String, featuresIn01: JsArray) =>
       getQuery(testDbName, testColName, Map("bbox" -> bbox))(contentAsStringStream).applyMatcher(
-        res => (res.status must equalTo(OK)) and (res.responseBody must beSome(matchFeaturesInCsv("id,geometry-wkt,foo,nestedprop.nestedfoo,num,something")))
-      )
+        res => (res.status must equalTo(OK)) and (res.responseBody must beSome(matchFeaturesInCsv("id,geometry-wkt,foo,nestedprop.nestedfoo,num,something"))))
   }
 
   def e16 = withTestFeatures(10, 10) {
@@ -311,8 +302,7 @@ class QueryAPISpec extends InCollectionSpecification {
       for {
         f <- features.value
         pruned = f.transform(pruner)
-      } yield pruned.asOpt.get
-    )
+      } yield pruned.asOpt.get)
   }
 
   def collectFeatures(listOfResponses: Seq[JsValue]) =

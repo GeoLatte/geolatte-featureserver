@@ -61,8 +61,7 @@ class DatabasesController @Inject() (val repository: Repository, val instrumenta
           case JsNull => Left(Json.obj("error" -> "Received empty request body (null json)."))
           case js: JsValue => js.validate(Formats.CollectionReadsForJsonTable).fold(
             invalid = errs => Left(JsError.toJson(errs)),
-            valid = v => Right(v)
-          )
+            valid = v => Right(v))
           case _ => Left(Json.obj("error" -> "Received no request body."))
         }
 
