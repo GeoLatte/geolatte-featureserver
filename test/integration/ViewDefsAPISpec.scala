@@ -64,8 +64,8 @@ class ViewDefsAPISpec extends InCollectionSpecification {
   val pruneUrlReads: Reads[JsObject] = (__ \ "url").json.prune
   def pruneUrl(inJs: JsValue): JsValue = inJs match {
     case js: JsObject => js.transform(pruneUrlReads).asOpt.get
-    case js: JsArray => JsArray(js.value.map(pruneUrl))
-    case _ => JsNull
+    case js: JsArray  => JsArray(js.value.map(pruneUrl))
+    case _            => JsNull
   }
 
   def pruneUrl(inOpt: Option[JsValue]): Option[JsValue] = inOpt.map(js => pruneUrl(js))

@@ -148,9 +148,9 @@ object QueryParser {
     val parser = new QueryParser(s)
     //parse input, and in case of ParseErrors format a nice message
     parser.InputLine.run() match {
-      case s @ Success(_) => s
+      case s @ Success(_)          => s
       case Failure(pe: ParseError) => Failure(new QueryParserException(parser.formatError(pe, new ErrorFormatter(showExpected = true, showPosition = true))))
-      case f @ Failure(_) => f
+      case f @ Failure(_)          => f
     }
   }
 

@@ -21,7 +21,8 @@ class ErrorHandler extends HttpErrorHandler {
       }
       case _ => Utils.withWarning(s"Request $request failed with code $statusCode: $message") {
         Future.successful(
-          Status(statusCode)("A client error occurred: " + message))
+          Status(statusCode)("A client error occurred: " + message)
+        )
       }
     }
 
@@ -31,7 +32,7 @@ class ErrorHandler extends HttpErrorHandler {
 
     val useful = exception match {
       case e: UsefulException => e
-      case _ => UnexpectedException(unexpected = Some(exception))
+      case _                  => UnexpectedException(unexpected = Some(exception))
     }
     Logger.error(s"Error on request $request", useful)
     Future.successful { InternalServerError(s"A server error occured: $useful") }

@@ -26,7 +26,7 @@ class SupportedMediaTypeSpec extends Specification {
     val mt = mkMediatype(mediatype, specifiedVersion)
     expected match {
       case Some((format, version)) => s"matches a $mt with format = ${format.toString} and version = ${Version.stringify(version)}"
-      case None => s"doesn't match a $mt"
+      case None                    => s"doesn't match a $mt"
     }
 
   }
@@ -41,13 +41,13 @@ class SupportedMediaTypeSpec extends Specification {
   def satisfySpec(mediatype: String, specifiedVersion: String, expected: Option[(Format.Value, Version.Value)]) = {
     val matcher = expected match {
       case Some((format, version)) => beSome(format, version)
-      case None => beNone
+      case None                    => beNone
     }
     specDescription(mediatype, specifiedVersion, expected) in {
       val req = mkRequest(mediatype, specifiedVersion)
       val res = req match {
         case SupportedMediaTypes(f, v) => Some(f, v)
-        case _ => None
+        case _                         => None
       }
       res must matcher
     }

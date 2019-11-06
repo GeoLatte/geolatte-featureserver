@@ -36,9 +36,12 @@ class PGQueryRenderSpec extends Specification {
       val expr3 = QueryParser.parse("ab.cd != 'abc'").get
 
       (
-        compressWS(renderer.render(expr1)) === "json_extract_path_text(json, 'ab','cd')::decimal > ( 12 )") and (
-          compressWS(renderer.render(expr2)) === "json_extract_path_text(json, 'ab','cd')::decimal >= ( 12 )") and (
-            compressWS(renderer.render(expr3)) === "json_extract_path_text(json, 'ab','cd')::text != ( 'abc' )")
+        compressWS(renderer.render(expr1)) === "json_extract_path_text(json, 'ab','cd')::decimal > ( 12 )"
+      ) and (
+          compressWS(renderer.render(expr2)) === "json_extract_path_text(json, 'ab','cd')::decimal >= ( 12 )"
+        ) and (
+            compressWS(renderer.render(expr3)) === "json_extract_path_text(json, 'ab','cd')::text != ( 'abc' )"
+          )
     }
 
     "properly render negated expressions " in {
@@ -147,9 +150,12 @@ class PGQueryRenderSpec extends Specification {
       val expr3 = QueryParser.parse("abcd != 'abc'").get
 
       (
-        compressWS(renderer.render(expr1)) === """"abcd" > ( 12 )""") and (
-          compressWS(renderer.render(expr2)) === """"abcd" >= ( 12 )""") and (
-            compressWS(renderer.render(expr3)) === """"abcd" != ( 'abc' )""")
+        compressWS(renderer.render(expr1)) === """"abcd" > ( 12 )"""
+      ) and (
+          compressWS(renderer.render(expr2)) === """"abcd" >= ( 12 )"""
+        ) and (
+            compressWS(renderer.render(expr3)) === """"abcd" != ( 'abc' )"""
+          )
     }
 
     "properly render negated expressions " in {

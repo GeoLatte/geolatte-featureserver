@@ -34,9 +34,10 @@ trait AsSource[A] {
 object ResourceWriteables {
 
   def selectWriteable(
-    req: RequestHeader,
+    req:  RequestHeader,
     qFmt: Option[Constants.Format.Formats],
-    sep: Option[String] = None): (Writeable[JsObject], String) = {
+    sep:  Option[String]                   = None
+  ): (Writeable[JsObject], String) = {
     val (fmt, mediaType) = getFormat(req, qFmt)
     fmt match {
       case Constants.Format.CSV => (mkCsVWriteable(req, sep), mediaType.toString)
@@ -50,9 +51,9 @@ object ResourceWriteables {
   def getFormat(req: RequestHeader, qFmt: Option[Constants.Format.Value]): (Constants.Format.Value, MediaType) = {
 
     val (fmt, version) = (qFmt, req) match {
-      case (Some(f), _) => (f, Constants.Version.default)
+      case (Some(f), _)                    => (f, Constants.Version.default)
       case (_, SupportedMediaTypes(f, ve)) => (f, ve)
-      case _ => (Constants.Format.JSON, Constants.Version.default)
+      case _                               => (Constants.Format.JSON, Constants.Version.default)
     }
 
     val ctype = SupportedMediaTypes(fmt, version)
@@ -72,17 +73,18 @@ object ResourceWriteables {
 
     def encode(v: JsString) = "\"" + encoder.encode(v.value, cc, CsvPreference.STANDARD_PREFERENCE).replaceAll(
       "\n",
-      " ")
+      " "
+    )
       .replaceAll("\r", " ") + "\""
 
     def expand(v: JsValue): Seq[(String, String)] =
       utilities.JsonHelper.flatten(v.asInstanceOf[JsObject]) sortBy {
         case (k, _) => k
       } map {
-        case (k, v: JsString) => (k, encode(v))
-        case (k, v: JsNumber) => (k, Json.stringify(v))
+        case (k, v: JsString)  => (k, encode(v))
+        case (k, v: JsNumber)  => (k, Json.stringify(v))
         case (k, v: JsBoolean) => (k, Json.stringify(v))
-        case (k, _) => (k, "")
+        case (k, _)            => (k, "")
       }
 
     def project(js: JsValue)(selector: PartialFunction[(String, String), String], geomToString: Geometry => String): Seq[String] = {
@@ -96,12 +98,12 @@ object ResourceWriteables {
 
     val toCsvRecord = (js: JsValue) => project(js)({
       case (k, v) => v
-      case _ => "None"
+      case _      => "None"
     }, g => s""""${g.asText}"""").mkString(sep)
 
     val toCsvHeader = (js: JsValue) => project(js)({
       case (k, v) => k
-      case _ => "None"
+      case _      => "None"
     }, _ => "geometry-wkt").mkString(sep)
 
     var i: Int = 0
@@ -146,7 +148,8 @@ object ResourceWriteables {
 
 case class DatabasesResource(dbNames: Traversable[String]) extends Resource {
   lazy val json: JsValue = Json.toJson(
-    dbNames map (name => Map("name" -> name, "url" -> routes.DatabasesController.getDb(name).url)))
+    dbNames map (name => Map("name" -> name, "url" -> routes.DatabasesController.getDb(name).url))
+  )
 
 }
 
@@ -154,7 +157,8 @@ case class DatabaseResource(db: String, collections: Traversable[String]) extend
   lazy val intermediate = collections map (name => Map(
     "name" -> name,
     "url" -> routes.DatabasesController.getCollection(db, name)
-      .url))
+      .url
+  ))
   lazy val json = Json.toJson(intermediate)
 }
 
@@ -192,7 +196,8 @@ case class IndexDefsResource(dbName: String, colName: String, indexNames: Traver
   lazy val intermediate = indexNames map (name => Map("name" -> name, "url" -> routes.IndexController.get(
     dbName,
     colName,
-    name).url))
+    name
+  ).url))
 
   def toJson = Json.toJson(intermediate)
 }
@@ -214,11 +219,14 @@ object Formats {
     (__ \ MetadataIdentifiers.IndexLevelField).read[Int](min(0)) and
     (__ \ MetadataIdentifiers.IdTypeField).read[String](
       Reads
-        .filter[String](JsonValidationError("Requires 'text' or 'decimal"))(tpe => tpe == "text" || tpe == "decimal")))(newCollectionMetadata _)
+        .filter[String](JsonValidationError("Requires 'text' or 'decimal"))(tpe => tpe == "text" || tpe == "decimal")
+    )
+  )(newCollectionMetadata _)
   val CollectionReadsForRegisteredTable: Reads[Metadata] = (
     (__ \ MetadataIdentifiers.CollectionField).read[String] and
     (__ \ MetadataIdentifiers.ExtentField).read(EnvelopeFormats) and
-    (__ \ MetadataIdentifiers.GeometryColumnField).read[String])(registerTableMetadata _)
+    (__ \ MetadataIdentifiers.GeometryColumnField).read[String]
+  )(registerTableMetadata _)
   val CollectionWrites: Writes[Metadata] = (
     (__ \ MetadataIdentifiers.CollectionField).write[String] and
     (__ \ MetadataIdentifiers.ExtentField).write[Envelope] and
@@ -227,14 +235,17 @@ object Formats {
     (__ \ MetadataIdentifiers.CountField).write[Long] and
     (__ \ MetadataIdentifiers.GeometryColumnField).write[String] and
     (__ \ MetadataIdentifiers.PkeyField).write[String] and
-    (__ \ MetadataIdentifiers.IsJsonField).write[Boolean])(unlift(Metadata.unapply))
+    (__ \ MetadataIdentifiers.IsJsonField).write[Boolean]
+  )(unlift(Metadata.unapply))
   val projection: Reads[JsArray] = (__ \ "projection").readNullable[JsArray].map(js => js.getOrElse(Json.arr()))
   val ViewDefIn = (
     (__ \ 'query).json.pickBranch(of[JsString]) and
-    (__ \ 'projection).json.copyFrom(projection)).reduce
+    (__ \ 'projection).json.copyFrom(projection)
+  ).reduce
   val ViewDefExtract = (
     (__ \ "query").readNullable[String] and
-    (__ \ "projection").readNullable[JsArray]).tupled
+    (__ \ "projection").readNullable[JsArray]
+  ).tupled
 
   def toByteArray(implicit r: Reads[String]): Reads[Array[Byte]] = r.map(str => Base64.decodeBase64(str))
 
@@ -249,7 +260,8 @@ object Formats {
     (__ \ 'query).json.pickBranch(of[JsString]) and
     (__ \ 'projection).json.pickBranch(of[JsArray]) and
     (__ \ 'url).json.copyFrom((__ \ 'name).json.pick.map(name => JsString(controllers.routes.ViewController
-      .get(db, col, name.as[String]).url)))).reduce
+      .get(db, col, name.as[String]).url)))
+  ).reduce
 
   implicit val IndexDefReads: Reads[IndexDef] = (
     (__ \ 'name).readNullable[String].map {
@@ -257,14 +269,17 @@ object Formats {
     } and
     (__ \ 'path).read[String] and
     (__ \ 'type).read[String](filter[String](JsonValidationError("Type must be either 'text', 'bool' or 'decimal'"))(
-      s => List("text", "bool", "decimal").contains(s))) and
-    (__ \ 'regex).readNullable[Boolean].map(_.getOrElse(false)))(IndexDef)
+      s => List("text", "bool", "decimal").contains(s)
+    )) and
+    (__ \ 'regex).readNullable[Boolean].map(_.getOrElse(false))
+  )(IndexDef)
 
   implicit val IndexDefWrites: Writes[IndexDef] = (
     (__ \ 'name).write[String] and
     (__ \ 'path).write[String] and
     (__ \ 'type).write[String] and
-    (__ \ 'regex).write[Boolean])(unlift(IndexDef.unapply))
+    (__ \ 'regex).write[Boolean]
+  )(unlift(IndexDef.unapply))
 
   implicit val IndexDefFormat: Format[IndexDef] = Format(IndexDefReads, IndexDefWrites)
 

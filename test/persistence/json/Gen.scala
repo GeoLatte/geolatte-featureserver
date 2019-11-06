@@ -41,7 +41,7 @@ trait Gen[T] {
 
   def filter(f: (T) => Boolean): Gen[T] = gen(() => sample match {
     case Some(t) if f(t) => Some(t)
-    case _ => None
+    case _               => None
   })
 
 }
@@ -99,8 +99,8 @@ object Gen {
       val z = 1 + 100 * Math.random()
       val m = 1 + 100 * Math.random()
       dimFlag match {
-        case DimensionalFlag.d2D => Points.create2D(x, y, extent.getCrsId)
-        case DimensionalFlag.d3D => Points.create3D(x, y, z, extent.getCrsId)
+        case DimensionalFlag.d2D  => Points.create2D(x, y, extent.getCrsId)
+        case DimensionalFlag.d3D  => Points.create3D(x, y, z, extent.getCrsId)
         case DimensionalFlag.d2DM => Points.create2DM(x, y, m, extent.getCrsId)
         case DimensionalFlag.d3DM => Points.create3DM(x, y, z, m, extent.getCrsId)
       }
@@ -167,8 +167,8 @@ object Gen {
     } yield {
       i match {
         case i: String => Json.obj("type" -> "Feature", "id" -> i, "geometry" -> Json.toJson(g).as[Geometry], "properties" -> p)
-        case i: Int => Json.obj("type" -> "Feature", "id" -> i, "geometry" -> Json.toJson(g).as[Geometry], "properties" -> p)
-        case _ => Json.obj("type" -> "Feature", "id" -> i.toString, "geometry" -> Json.toJson(g).as[Geometry], "properties" -> p)
+        case i: Int    => Json.obj("type" -> "Feature", "id" -> i, "geometry" -> Json.toJson(g).as[Geometry], "properties" -> p)
+        case _         => Json.obj("type" -> "Feature", "id" -> i.toString, "geometry" -> Json.toJson(g).as[Geometry], "properties" -> p)
       }
     }
 

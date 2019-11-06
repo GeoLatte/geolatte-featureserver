@@ -22,7 +22,8 @@ case class PGWriter(repo: PostgresqlRepository, db: String, collection: String) 
   lazy val reads: Future[(Reads[Geometry], Reads[JsObject])] = metadata.map { md =>
     (
       GeoJsonFormats.geoJsonGeometryReads,
-      GeoJsonFormats.featureValidator(md.idType))
+      GeoJsonFormats.featureValidator(md.idType)
+    )
   }
 
   override def insert(features: Seq[JsObject]): Future[Int] =
@@ -59,7 +60,7 @@ case class PGWriter(repo: PostgresqlRepository, db: String, collection: String) 
 
           fInt.onComplete {
             case Success(num) => Logger.debug(s"Successfully written $num features")
-            case Failure(t) => Logger.warn(s"Write failed with error: ${t.getMessage}")
+            case Failure(t)   => Logger.warn(s"Write failed with error: ${t.getMessage}")
           }
 
           fInt

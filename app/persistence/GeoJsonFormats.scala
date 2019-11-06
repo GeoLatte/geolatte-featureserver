@@ -33,7 +33,8 @@ object GeoJsonFormats {
         JsArray()
       } else {
         Json.arr(e.getMinX, e.getMinY, e.getMaxX, e.getMaxY)
-      }))
+      })
+    )
 
     def toEnvelope(jsValue: JsValue, crs: CrsId): JsResult[Envelope] = jsValue match {
       case array: JsArray if array.value.isEmpty => JsSuccess(Envelope.EMPTY)
@@ -51,11 +52,13 @@ object GeoJsonFormats {
 
   implicit val crsWrites: Writes[CrsId] = (
     (__ \ "type").write[String] and
-    (__ \ "properties" \ "name").write[String])((to: CrsId) => ("name", to.toString()))
+    (__ \ "properties" \ "name").write[String]
+  )((to: CrsId) => ("name", to.toString()))
 
   implicit val crsReads: Reads[CrsId] = (
     (__ \ "type").read[String] and
-    (__ \ "properties" \ "name").read[String])((_: String, name: String) => CrsId.parse(name))
+    (__ \ "properties" \ "name").read[String]
+  )((_: String, name: String) => CrsId.parse(name))
 
   //READS
   /**
@@ -129,16 +132,17 @@ object GeoJsonFormats {
   def mkGeometryReads(defaultCrsId: CrsId): Reads[Geometry] = (
     (__ \ "type").read[String] and
     (__ \ "crs").readNullable[CrsId] and
-    __.json.pick)((typeDiscriminator: String, crsOpt: Option[CrsId], js: JsValue) => {
+    __.json.pick
+  )((typeDiscriminator: String, crsOpt: Option[CrsId], js: JsValue) => {
 
       implicit val crsInUse: CrsId = crsOpt.getOrElse(defaultCrsId)
       typeDiscriminator match {
-        case "Point" => Json.fromJson[Point](js).get
-        case "LineString" => Json.fromJson[LineString](js).get
-        case "Polygon" => Json.fromJson[Polygon](js).get
-        case "MultiPoint" => Json.fromJson[MultiPoint](js).get
-        case "MultiLineString" => Json.fromJson[MultiLineString](js).get
-        case "MultiPolygon" => Json.fromJson[MultiPolygon](js).get
+        case "Point"              => Json.fromJson[Point](js).get
+        case "LineString"         => Json.fromJson[LineString](js).get
+        case "Polygon"            => Json.fromJson[Polygon](js).get
+        case "MultiPoint"         => Json.fromJson[MultiPoint](js).get
+        case "MultiLineString"    => Json.fromJson[MultiLineString](js).get
+        case "MultiPolygon"       => Json.fromJson[MultiPolygon](js).get
         case "GeometryCollection" => Json.fromJson[GeometryCollection](js).get
       }
     })
@@ -166,8 +170,8 @@ object GeoJsonFormats {
 
   def featureValidator(idType: String): Reads[JsObject] = idType match {
     case "decimal" => (__ \ "id").read[Long] andKeep __.read[JsObject]
-    case "text" => (__ \ "id").read[String] andKeep __.read[JsObject]
-    case _ => throw new IllegalArgumentException("Invalid metadata")
+    case "text"    => (__ \ "id").read[String] andKeep __.read[JsObject]
+    case _         => throw new IllegalArgumentException("Invalid metadata")
   }
 
   // alle GeoJsonTo classes delen deze properties
@@ -184,7 +188,8 @@ object GeoJsonFormats {
       } else {
         (
           baseGeoJsonToWrites and
-          (__ \ "coordinates").write[Array[Double]])((p: Point) => {
+          (__ \ "coordinates").write[Array[Double]]
+        )((p: Point) => {
             val coords = coordinates(p)
             val crs = p.getCrsId
             ("Point", crs, bbox(p), coords)
@@ -195,7 +200,8 @@ object GeoJsonFormats {
 
   implicit val linestringWrites: Writes[LineString] = (
     baseGeoJsonToWrites and
-    (__ \ "coordinates").write[Array[Array[Double]]])((l: LineString) => {
+    (__ \ "coordinates").write[Array[Array[Double]]]
+  )((l: LineString) => {
       val crs = l.getCrsId
       val coords = coordinates(l)
       ("LineString", crs, bbox(l), coords)
@@ -203,7 +209,8 @@ object GeoJsonFormats {
 
   implicit val polygonWrites: Writes[Polygon] = (
     baseGeoJsonToWrites and
-    (__ \ "coordinates").write[Array[Array[Array[Double]]]])((l: Polygon) => {
+    (__ \ "coordinates").write[Array[Array[Array[Double]]]]
+  )((l: Polygon) => {
       val crs = l.getCrsId
       val coords = coordinates(l)
       ("Polygon", crs, bbox(l), coords)
@@ -211,7 +218,8 @@ object GeoJsonFormats {
 
   implicit val multilinestringWrites: Writes[MultiLineString] = (
     baseGeoJsonToWrites and
-    (__ \ "coordinates").write[Array[Array[Array[Double]]]])((m: MultiLineString) => {
+    (__ \ "coordinates").write[Array[Array[Array[Double]]]]
+  )((m: MultiLineString) => {
       val crs = m.getCrsId
       val coords = coordinates(m)
       ("MultiLineString", crs, bbox(m), coords)
@@ -219,7 +227,8 @@ object GeoJsonFormats {
 
   implicit val multipolygonWrites: Writes[MultiPolygon] = (
     baseGeoJsonToWrites and
-    (__ \ "coordinates").write[Array[Array[Array[Array[Double]]]]])((m: MultiPolygon) => {
+    (__ \ "coordinates").write[Array[Array[Array[Array[Double]]]]]
+  )((m: MultiPolygon) => {
       val crs = m.getCrsId
       val coords = coordinates(m)
       ("MultiPolygon", crs, bbox(m), coords)
@@ -236,8 +245,8 @@ object GeoJsonFormats {
 
   private def coordinates(p: Point): Array[Double] = {
     p.getDimensionalFlag match {
-      case DimensionalFlag.d2D => Array(p.getX, p.getY)
-      case DimensionalFlag.d3D => Array(p.getX, p.getY, p.getZ)
+      case DimensionalFlag.d2D  => Array(p.getX, p.getY)
+      case DimensionalFlag.d3D  => Array(p.getX, p.getY, p.getZ)
       case DimensionalFlag.d3DM => Array(p.getX, p.getY, p.getZ, p.getM)
       case DimensionalFlag.d2DM => Array(p.getX, p.getY, 0, p.getM)
     }
@@ -272,11 +281,11 @@ object GeoJsonFormats {
   implicit val geometryWrites: Writes[Geometry] = new Writes[Geometry] {
     def writes(geom: Geometry) = {
       geom match {
-        case x: Point => pointWrites.writes(x)
-        case x: LineString => linestringWrites.writes(x)
-        case x: Polygon => polygonWrites.writes(x)
-        case x: MultiLineString => multilinestringWrites.writes(x)
-        case x: MultiPolygon => multipolygonWrites.writes(x)
+        case x: Point              => pointWrites.writes(x)
+        case x: LineString         => linestringWrites.writes(x)
+        case x: Polygon            => polygonWrites.writes(x)
+        case x: MultiLineString    => multilinestringWrites.writes(x)
+        case x: MultiPolygon       => multipolygonWrites.writes(x)
         case x: GeometryCollection => geometryCollectionWrites.writes(x)
       }
     }
@@ -284,7 +293,8 @@ object GeoJsonFormats {
 
   implicit lazy val geometryCollectionWrites: Writes[GeometryCollection] = (
     baseGeoJsonToWrites and
-    (__ \ "geometries").write[Array[JsValue]])((g: GeometryCollection) => {
+    (__ \ "geometries").write[Array[JsValue]]
+  )((g: GeometryCollection) => {
       val crs = g.getCrsId
       val geometries = g.iterator().asScala.toList
       ("GeometryCollection", crs, bbox(g), geometries.map(geometryWrites.writes).toArray[JsValue])

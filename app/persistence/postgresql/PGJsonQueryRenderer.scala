@@ -19,17 +19,18 @@ object PGJsonQueryRenderer extends BaseQueryRenderer {
 
   def renderAtomicPropsAsText(expr: AtomicExpr): String = expr match {
     case p @ PropertyExpr(_) => propertyPathAsJsonText(p)
-    case _ => super.renderAtomic(expr)
+    case _                   => super.renderAtomic(expr)
   }
 
   override def renderAtomicCasting(lhs: AtomicExpr, rhs: Expr): String = lhs match {
     case p @ PropertyExpr(_) => s"${propertyPathAsJsonText(p)}${cast(rhs)}"
-    case _ => s"${renderAtomic(lhs)}${cast(rhs)}"
+    case _                   => s"${renderAtomic(lhs)}${cast(rhs)}"
   }
 
   override def renderNullTestPredicate(
     lhs: AtomicExpr,
-    is: Boolean)(implicit ctxt: RenderContext): String = s" ${renderAtomicPropsAsText(lhs)} ${
+    is:  Boolean
+  )(implicit ctxt: RenderContext): String = s" ${renderAtomicPropsAsText(lhs)} ${
     if (is) {
       "is"
     } else {
@@ -39,7 +40,8 @@ object PGJsonQueryRenderer extends BaseQueryRenderer {
 
   override def renderToDate(
     date: AtomicExpr,
-    fmt: AtomicExpr): String = s" to_date(${renderAtomicPropsAsText(date)}, ${renderAtomicPropsAsText(fmt)}) "
+    fmt:  AtomicExpr
+  ): String = s" to_date(${renderAtomicPropsAsText(date)}, ${renderAtomicPropsAsText(fmt)}) "
 
   private def renderPropertyExprwithoutCast(lhs: PropertyExpr): String = {
     val variadicPath: String = path2VariadicList(lhs)

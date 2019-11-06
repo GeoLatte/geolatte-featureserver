@@ -50,7 +50,8 @@ class ViewController @Inject() (val repository: Repository, val instrumentation:
           Some(
             repository.getViews(db, collection)
               .map(res => res.map(el => format(db, collection)(el)))
-              .map(res => Ok(JsArray(res)).as(SupportedMediaTypes(Format.JSON).toString())))
+              .map(res => Ok(JsArray(res)).as(SupportedMediaTypes(Format.JSON).toString()))
+          )
         }.get.recover(commonExceptionHandler(db, collection))
       }
   }
@@ -82,7 +83,8 @@ class ViewController @Inject() (val repository: Repository, val instrumentation:
       case JsSuccess(out, _) => out
       case JsError(err) =>
         throw new RuntimeException(
-          s"Error when formatting view definition: ${JsonHelper.JsValidationErrors2String(err)}")
+          s"Error when formatting view definition: ${JsonHelper.JsValidationErrors2String(err)}"
+        )
     }
   }
 

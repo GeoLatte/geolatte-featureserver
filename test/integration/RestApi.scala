@@ -33,13 +33,15 @@ import scala.language.implicitConversions
  * @tparam R Type of result body content
  */
 case class FakeRequestResult[B, T, R](
-  url: String,
-  format: Option[Future[Result] => R] = None,
-  requestBody: Option[B] = None,
-  mkRequest: (String, Option[B]) => FakeRequest[T])(
+  url:         String,
+  format:      Option[Future[Result] => R]           = None,
+  requestBody: Option[B]                             = None,
+  mkRequest:   (String, Option[B]) => FakeRequest[T]
+)(
   implicit
-  val w: Writeable[T],
-  val app: Application) {
+  val w:   Writeable[T],
+  val app: Application
+) {
 
   implicit val mat = app.materializer
 
@@ -125,7 +127,7 @@ trait RestApiDriver {
   def getDatabases = {
     val format: Future[Result] => JsValue = (resp: Future[Result]) => contentAsJson(resp) match {
       case jArray: JsArray => jArray
-      case _ => JsNull //indicates that something wrong
+      case _               => JsNull //indicates that something wrong
     }
     FakeRequestResult.GET(DATABASES, format)
 
@@ -134,7 +136,7 @@ trait RestApiDriver {
   def getDatabase(dbName: String) = {
     val format = (resp: Future[Result]) => contentAsJson(resp) match {
       case jArray: JsArray => jArray
-      case _ => JsNull //indicates that something wrong
+      case _               => JsNull //indicates that something wrong
     }
     FakeRequestResult.GET(DATABASES / dbName, format)
   }
@@ -204,7 +206,7 @@ trait RestApiDriver {
 
     val format = (posted: Future[Result]) => contentAsJson(posted) match {
       case obj: JsObject => obj
-      case _ => JsNull
+      case _             => JsNull
     }
     FakeRequestResult.POSTJson(url, mediaObject, format)
   }
@@ -212,7 +214,7 @@ trait RestApiDriver {
   def getMediaObject(url: String) = {
     val format = (resp: Future[Result]) => contentAsJson(resp) match {
       case obj: JsObject => obj
-      case _ => JsNull //indicates that something wrong
+      case _             => JsNull //indicates that something wrong
     }
     FakeRequestResult.GET(url, format)
   }
@@ -328,7 +330,8 @@ object UtilityMethods extends PlayRunners
     "extent" -> Json.obj("crs" -> defaultExtent.getCrsId.getCode, "envelope" ->
       Json.arr(defaultExtent.getMinX, defaultExtent.getMinY, defaultExtent.getMaxX, defaultExtent.getMaxY)),
     "index-level" -> defaultIndexLevel,
-    "id-type" -> "decimal")
+    "id-type" -> "decimal"
+  )
 
   implicit def mapOfQParams2QueryStr[T](params: Map[String, T]): String = params.map { case (k, v) => s"$k=$v" } mkString "&"
 
@@ -394,25 +397,26 @@ object UtilityMethods extends PlayRunners
   def contentAsJsonStringStream(result: Future[Result])(implicit timeout: Timeout, mat: Materializer): JsObject =
     isTransferEncoded(result)(timeout) match {
       case true => Json.parse(
-        readChunked(result, s => s)(timeout).foldLeft("")((s, result) => s + result)).asInstanceOf[JsObject]
+        readChunked(result, s => s)(timeout).foldLeft("")((s, result) => s + result)
+      ).asInstanceOf[JsObject]
       case _ => Json.parse(contentAsString(result)(timeout, mat)).asInstanceOf[JsObject]
     }
 
   def contentAsJsonStream(result: Future[Result])(implicit timeout: Timeout, mat: Materializer): JsArray =
     isTransferEncoded(result)(timeout) match {
       case true => JsArray(readChunked(result, Json.parse)(timeout))
-      case _ => Json.arr(contentAsJson(result)(timeout, mat))
+      case _    => Json.arr(contentAsJson(result)(timeout, mat))
     }
 
   def contentAsStringStream(result: Future[Result])(implicit timeout: Timeout, mat: Materializer): Seq[String] =
     isTransferEncoded(result)(timeout) match {
       case true => readChunked(result, identity[String])(timeout)
-      case _ => Seq(contentAsString(result)(timeout, mat))
+      case _    => Seq(contentAsString(result)(timeout, mat))
     }
 
   implicit def toArrayOpt(js: Option[JsValue]): Option[JsArray] = js match {
     case Some(ja: JsArray) => Some(ja)
-    case _ => None
+    case _                 => None
   }
 
   implicit def fakeRequestToResult[B, T, R](fake: FakeRequestResult[B, T, R]): Future[Result] = fake.wrappedResult

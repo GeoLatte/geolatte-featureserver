@@ -33,19 +33,19 @@ class QueryController @Inject() (val repository: Repository, val instrumentation
 
   def parseQueryExpr(s: String): Option[BooleanExpr] = QueryParser.parse(s) match {
     case Success(expr) => Some(expr)
-    case Failure(t) => throw InvalidQueryException(s"Failure in parsing QUERY parameter: ${t.getMessage}")
+    case Failure(t)    => throw InvalidQueryException(s"Failure in parsing QUERY parameter: ${t.getMessage}")
   }
 
   def parseProjectionExpr(s: String): Option[ProjectionList] = if (s.isEmpty) None
   else ProjectionParser.parse(s) match {
     case Success(ppl) if ppl.isEmpty => None
-    case Success(ppl) => Some(ppl)
-    case Failure(t) => throw InvalidQueryException(s"Failure in parsing PROJECTION parameter: ${t.getMessage}")
+    case Success(ppl)                => Some(ppl)
+    case Failure(t)                  => throw InvalidQueryException(s"Failure in parsing PROJECTION parameter: ${t.getMessage}")
   }
 
   def parseFormat(s: String): Option[Format.Value] = s match {
     case Format(fmt) => Some(fmt)
-    case _ => None
+    case _           => None
   }
 
   object QueryParams {
@@ -86,23 +86,25 @@ class QueryController @Inject() (val repository: Repository, val instrumentation
   }
 
   case class FeatureCollectionRequest(
-    bbox: Option[String],
-    query: Option[BooleanExpr],
-    projection: Option[ProjectionList],
-    withView: Option[String],
-    sort: List[String],
-    sortDir: List[String],
-    start: Int,
-    limit: Option[Int],
+    bbox:                    Option[String],
+    query:                   Option[BooleanExpr],
+    projection:              Option[ProjectionList],
+    withView:                Option[String],
+    sort:                    List[String],
+    sortDir:                 List[String],
+    start:                   Int,
+    limit:                   Option[Int],
     intersectionGeometryWkt: Option[String],
-    withCount: Boolean = false,
-    explode: Boolean = false)
+    withCount:               Boolean                = false,
+    explode:                 Boolean                = false
+  )
 
   case class DistinctRequest(
-    bbox: Option[String],
-    query: Option[BooleanExpr],
+    bbox:                    Option[String],
+    query:                   Option[BooleanExpr],
     intersectionGeometryWkt: Option[String],
-    simpleProjection: SimpleProjection)
+    simpleProjection:        SimpleProjection
+  )
 
   def query(db: String, collection: String) = withRepository { implicit request =>
     {
@@ -117,11 +119,12 @@ class QueryController @Inject() (val repository: Repository, val instrumentation
             val result = Ok.chunked(
               FeatureStream(optTotal, features)
                 .asSource(writeable)
-                .log("Query stream")).as(contentType)
+                .log("Query stream")
+            ).as(contentType)
 
             filename match {
               case Some(fn) => result.withHeaders(headers = ("content-disposition", s"attachment; filename=$fn"))
-              case _ => result
+              case _        => result
             }
         }
         _ = instrumentation.incrementOperation(Operation.QUERY_STREAM, db, collection)
@@ -139,7 +142,8 @@ class QueryController @Inject() (val repository: Repository, val instrumentation
         _ = instrumentation.incrementOperation(Operation.QUERY_COLLECTION, db, collection)
       } yield res
 
-    } recover commonExceptionHandler(db, collection))
+    } recover commonExceptionHandler(db, collection)
+  )
 
   def distinct(db: String, collection: String) = withRepository(
     implicit request => {
@@ -156,7 +160,8 @@ class QueryController @Inject() (val repository: Repository, val instrumentation
         _ = instrumentation.incrementOperation(Operation.QUERY_DISTINCT, db, collection)
       } yield res
 
-    } recover commonExceptionHandler(db, collection))
+    } recover commonExceptionHandler(db, collection)
+  )
 
   def featuresToResult(db: String, collection: String, featureCollectionRequest: FeatureCollectionRequest)(toResult: ((Option[Long], Source[JsObject, _])) => Result): Future[Result] = {
 
@@ -190,7 +195,7 @@ class QueryController @Inject() (val repository: Repository, val instrumentation
     //TODO -- why is this not a query parameter
     val intersectionGeometryWkt: Option[String] = request.body.asText.flatMap {
       case x if !x.isEmpty => Some(x)
-      case _ => None
+      case _               => None
     }
 
     val bbox = QueryParams.BBOX.value
@@ -222,7 +227,8 @@ class QueryController @Inject() (val repository: Repository, val instrumentation
         toFldSortSpecList(request.sort, request.sortDir),
         smd,
         request.withCount,
-        request.explode)
+        request.explode
+      )
       result <- repository.query(db, collection, spatialQuery, Some(request.start), request.limit)
       _ = instrumentation.updateSpatialQueryMetrics(db, collection, spatialQuery)
     } yield result
@@ -237,7 +243,8 @@ class QueryController @Inject() (val repository: Repository, val instrumentation
       request.query,
       None,
       Nil,
-      smd)
+      smd
+    )
 
     for {
       result <- repository.distinct(db, collection, spatialQuery, request.simpleProjection)
@@ -249,9 +256,9 @@ class QueryController @Inject() (val repository: Repository, val instrumentation
   private def selectorMerge(viewQuery: Option[String], exprOpt: Option[BooleanExpr]): Option[BooleanExpr] = {
     val res = (viewQuery, exprOpt) match {
       case (Some(str), Some(e)) => parseQueryExpr(str).map(expr => BooleanAnd(expr, e))
-      case (None, s @ Some(_)) => s
-      case (Some(str), _) => parseQueryExpr(str)
-      case _ => None
+      case (None, s @ Some(_))  => s
+      case (Some(str), _)       => parseQueryExpr(str)
+      case _                    => None
     }
     Logger.debug(s"Merging optional selectors of view and query to: $res")
     res
@@ -266,9 +273,9 @@ class QueryController @Inject() (val repository: Repository, val instrumentation
     } yield ppl
     (viewPPL, qProj) match {
       case (Some(p1), Some(p2)) => Some(p1 ++ p2)
-      case (_, Some(p)) => Some(p)
-      case (Some(p), _) => Some(p)
-      case _ => None
+      case (_, Some(p))         => Some(p)
+      case (Some(p), _)         => Some(p)
+      case _                    => None
     }
   }
 
@@ -277,7 +284,7 @@ class QueryController @Inject() (val repository: Repository, val instrumentation
     //we are guaranteed that fldDirs is in length shorter or equal to sortFldList
     val fldDirs = fldDirStrings.map {
       case Direction(dir) => dir
-      case _ => ASC
+      case _              => ASC
     }
     sortFldList
       .zipAll(fldDirs, "", ASC)

@@ -36,7 +36,7 @@ class TxController @Inject() (val repository: Repository, val instrumentation: I
 
   private def parse(js: JsValue): Try[BooleanExpr] = js match {
     case JsString(s) => QueryParser.parse(s)
-    case _ => Failure(new RuntimeException("Query expression is not a string"))
+    case _           => Failure(new RuntimeException("Query expression is not a string"))
   }
 
   def remove(db: String, col: String) = withRepository {
@@ -79,7 +79,7 @@ class TxController @Inject() (val repository: Repository, val instrumentation: I
         js => (js \ key).getOrElse(JsNull)
       } match {
         case Some(v: T) => v
-        case _ => throw new InvalidParamsException(s"Request body $in isn't a Json with an  $key property of correct type")
+        case _          => throw new InvalidParamsException(s"Request body $in isn't a Json with an  $key property of correct type")
       }
     }
 

@@ -29,10 +29,11 @@ import scala.util.Try
 
 @Singleton
 class PostgresqlRepository @Inject() (
-  configuration: Configuration,
+  configuration:        Configuration,
   applicationLifecycle: ApplicationLifecycle,
-  metrics: Metrics,
-  implicit val mat: Materializer)
+  metrics:              Metrics,
+  implicit val mat:     Materializer
+)
   extends Repository with RepoHealth {
 
   import AppExecutionContexts.streamContext
@@ -58,7 +59,8 @@ class PostgresqlRepository @Inject() (
   applicationLifecycle.addStopHook(
     () => Utils.withInfo("Closing database") {
       Future.successful(database.close)
-    })
+    }
+  )
 
   case class Row(id: String, geometry: String, json: JsObject)
 
@@ -85,7 +87,7 @@ class PostgresqlRepository @Inject() (
     val jsEnv = json(r.nextString())
     val env = Json.fromJson[Envelope](jsEnv) match {
       case JsSuccess(value, _) => value
-      case _ => throw new RuntimeException(s"Invalid envelope JSON format. $jsEnv")
+      case _                   => throw new RuntimeException(s"Invalid envelope JSON format. $jsEnv")
     }
     val indexLevel = r.nextInt
     val id_type = r.nextString
@@ -144,7 +146,8 @@ class PostgresqlRepository @Inject() (
     withInfo(s"Starting with Registration of $db / $collection ") {
 
       def reg(db: String, meta: Metadata): Future[Boolean] = runOnDb("register-collection")(
-        Sql.INSERT_METADATA_REGISTERED(db, collection, meta)).map(_ => true)
+        Sql.INSERT_METADATA_REGISTERED(db, collection, meta)
+      ).map(_ => true)
 
       for {
         _ <- existsCollection(db, collection) flatMap { b =>
@@ -175,7 +178,7 @@ class PostgresqlRepository @Inject() (
   def metadataFromDb(db: String, collection: String): Future[Metadata] =
     runOnDb("get-metadata")(Sql.SELECT_METADATA(db, collection)) map {
       case Some(v) => v
-      case None => throw CollectionNotFoundException(s"Collection $db/$collection not found.")
+      case None    => throw CollectionNotFoundException(s"Collection $db/$collection not found.")
     } recover {
       case MappableException(dbe) => throw dbe
     }
@@ -226,7 +229,7 @@ class PostgresqlRepository @Inject() (
     } yield transformed).getOrElse(base)
 
   override def query(db: String, collection: String, spatialQuery: SpatialQuery, start: Option[Int] = None,
-    limit: Option[Int] = None): Future[CountedQueryResult] = {
+                     limit: Option[Int] = None): Future[CountedQueryResult] = {
 
     val startMillis = System.currentTimeMillis()
     val projectingReads: Option[Reads[JsObject]] =
@@ -255,7 +258,7 @@ class PostgresqlRepository @Inject() (
 
     //get the data
     def project(js: JsObject): Option[JsObject] = projectingReads match {
-      case None => Some(js)
+      case None              => Some(js)
       case Some(projections) => js.asOpt(projections)
     }
 
@@ -295,7 +298,7 @@ class PostgresqlRepository @Inject() (
     (json \ "id").getOrElse(JsNull) match {
       case JsString(v) => v
       case JsNumber(i) => i.toString()
-      case _ => throw new IllegalArgumentException("No ID property of type String or Number")
+      case _           => throw new IllegalArgumentException("No ID property of type String or Number")
     }
 
   def batchInsert(db: String, collection: String, jsons: Seq[(JsObject, Geometry)]): Future[Int] = {
@@ -303,7 +306,8 @@ class PostgresqlRepository @Inject() (
       case (json, geom) => (
         extractIdString(json),
         unescapeJson(stripGeometry(json)),
-        org.geolatte.geom.codec.Wkb.toWkb(geom).toString)
+        org.geolatte.geom.codec.Wkb.toWkb(geom).toString
+      )
     }
     val dbio = DBIO.sequence(paramValues.map { case (id, json, geom) => Sql.INSERT_DATA(db, collection, id, json, geom) }).map(_.sum)
     runOnDb("batch-insert")(dbio)
@@ -325,7 +329,8 @@ class PostgresqlRepository @Inject() (
       case (json, geom) => (
         extractIdString(json),
         unescapeJson(stripGeometry(json)),
-        org.geolatte.geom.codec.Wkb.toWkb(geom).toString)
+        org.geolatte.geom.codec.Wkb.toWkb(geom).toString
+      )
     }
     val dbio = DBIO.sequence(paramValues.map { case (id, json, geom) => Sql.UPSERT_DATA(db, collection, id, json, geom) }).map(_.sum)
     runOnDb("batch-upsert")(dbio)
@@ -344,7 +349,7 @@ class PostgresqlRepository @Inject() (
 
     getViewOpt(db, collection, viewName).flatMap {
       case Some(_) => dropView(db, collection, viewName)
-      case _ => Future.successful(false)
+      case _       => Future.successful(false)
     } flatMap { isOverWrite =>
       runOnDb("save-view")(Sql.INSERT_VIEW(db, collection, viewName, viewDef)) map {
         _ => isOverWrite
@@ -369,7 +374,7 @@ class PostgresqlRepository @Inject() (
       if (exists) {
         runOnDb("get-view")(Sql.GET_VIEW(db, collection, id)) map {
           case Some(view) => view.asOpt[JsObject](Formats.ViewDefOut(db, collection))
-          case _ => None
+          case _          => None
         }
       } else throw CollectionNotFoundException()
     }
@@ -384,9 +389,11 @@ class PostgresqlRepository @Inject() (
 
   override def createIndex(dbName: String, colName: String, indexDef: IndexDef): Future[Boolean] = {
     val fRes = if (indexDef.regex) runOnDb("create-index")(
-      Sql.CREATE_INDEX_WITH_TRGM(dbName, colName, indexDef.name, indexDef.path, indexDef.cast))
+      Sql.CREATE_INDEX_WITH_TRGM(dbName, colName, indexDef.name, indexDef.path, indexDef.cast)
+    )
     else runOnDb("create-index")(
-      Sql.CREATE_INDEX(dbName, colName, indexDef.name, indexDef.path, indexDef.cast))
+      Sql.CREATE_INDEX(dbName, colName, indexDef.name, indexDef.path, indexDef.cast)
+    )
 
     fRes map { _ => true } recover {
       case MappableException(dbe) => throw dbe
@@ -405,7 +412,7 @@ class PostgresqlRepository @Inject() (
     val cast = castRegex.findFirstMatchIn(defText).map { m => m group 1 } match {
       case Some("boolean") => "bool"
       case Some("numeric") => "decimal"
-      case _ => "text"
+      case _               => "text"
     }
 
     val path = (for (m <- pathElRegex.findAllMatchIn(defText)) yield m group 1) mkString "."
@@ -432,7 +439,7 @@ class PostgresqlRepository @Inject() (
     getInternalIndices(dbName, colName).map { listIdx =>
       listIdx.find(q => q.name == indexName) match {
         case Some(idf) => idf
-        case None => throw IndexNotFoundException(s"Index $indexName on $dbName/$colName not found.")
+        case None      => throw IndexNotFoundException(s"Index $indexName on $dbName/$colName not found.")
       }
     }
 
@@ -473,7 +480,7 @@ class PostgresqlRepository @Inject() (
       toPKeyData
     } map {
       case Some(pk) => pk
-      case None => throw InvalidPrimaryKeyException(s"Can't determine pkey configuration")
+      case None     => throw InvalidPrimaryKeyException(s"Can't determine pkey configuration")
     }
   }
 
@@ -494,7 +501,7 @@ class PostgresqlRepository @Inject() (
   private def stripGeometry(js: JsObject): JsObject = {
     js.transform(tr) match {
       case JsSuccess(pruned, _) => pruned
-      case _ => js
+      case _                    => js
     }
   }
 
@@ -502,15 +509,15 @@ class PostgresqlRepository @Inject() (
 
   private def schemaIsExcluded(collName: String): Boolean = excludedSchemas match {
     case Some(col) => col.contains(collName)
-    case _ => false
+    case _         => false
   }
 
   private def withExcludeSchemas(clause: String, prop: String) = {
     def quoted(coll: Seq[String]) = coll.map(single_quote) mkString ","
     (clause, excludedSchemas) match {
       case (c, Some(coll)) if c.isEmpty => s" $prop not in ( ${quoted(coll)} )"
-      case (c, Some(coll)) => s" $c AND $prop not in ( ${quoted(coll)} )"
-      case _ => clause
+      case (c, Some(coll))              => s" $c AND $prop not in ( ${quoted(coll)} )"
+      case _                            => clause
     }
   }
 
@@ -581,12 +588,12 @@ class PostgresqlRepository @Inject() (
 
       val limitClause = limit match {
         case Some(lim) => s"\nLIMIT $lim"
-        case _ => ""
+        case _         => ""
       }
 
       val offsetClause = start match {
         case Some(s) => s"\nOFFSET $s"
-        case _ => ""
+        case _       => ""
       }
 
       val projection =
@@ -612,7 +619,8 @@ class PostgresqlRepository @Inject() (
         PropertyExpr(
           projection.path.path.collect {
             case KeyPathNode(key) => key
-          }.mkString("."))
+          }.mkString(".")
+        )
 
       val renderedPropertyExpr =
         if (query.metadata.jsonTable) {
@@ -808,7 +816,8 @@ class PostgresqlRepository @Inject() (
 
     def CREATE_INDEX(dbName: String, colName: String, indexName: String, path: String, cast: String) = {
       val pathExp = path.split("\\.").map(
-        el => single_quote(el)).mkString(",")
+        el => single_quote(el)
+      ).mkString(",")
       sqlu"""CREATE INDEX #${quote(indexName)}
              ON #${quote(dbName)}.#${quote(colName)} ( (json_extract_path_text(json, #$pathExp)::#$cast) )
       """
@@ -816,7 +825,8 @@ class PostgresqlRepository @Inject() (
 
     def CREATE_INDEX_WITH_TRGM(dbName: String, colName: String, indexName: String, path: String, cast: String) = {
       val pathExp = path.split("\\.").map(
-        el => single_quote(el)).mkString(",")
+        el => single_quote(el)
+      ).mkString(",")
       sqlu"""CREATE INDEX #${quote(indexName)}
              ON #${quote(dbName)}.#${quote(colName)} using gist
              ( (json_extract_path_text(json, #$pathExp)::#$cast) gist_trgm_ops)

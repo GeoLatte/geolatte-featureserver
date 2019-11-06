@@ -34,8 +34,8 @@ object JsonHelper {
     def flattenAcc(jsObject: JsObject, buffer: ListBuffer[(String, JsValue)]): ListBuffer[(String, JsValue)] = {
       jsObject.fields.foreach {
         case (k, v: JsObject) => buffer.appendAll(flattenAcc(v, ListBuffer()).map(prependPath(k, _)))
-        case (k, v: JsArray) => Unit
-        case (k, v: JsValue) => buffer.append((k, v))
+        case (k, v: JsArray)  => Unit
+        case (k, v: JsValue)  => buffer.append((k, v))
       }
       buffer
     }

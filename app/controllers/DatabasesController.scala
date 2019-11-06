@@ -64,7 +64,8 @@ class DatabasesController @Inject() (val repository: Repository, val instrumenta
           case JsNull => Left(Json.obj("error" -> "Received empty request body (null json)."))
           case js: JsValue => js.validate(Formats.CollectionReadsForJsonTable).fold(
             invalid = errs => Left(JsError.toJson(errs)),
-            valid = v => Right(v))
+            valid = v => Right(v)
+          )
           case _ => Left(Json.obj("error" -> "Received no request body."))
         }
 
@@ -72,15 +73,15 @@ class DatabasesController @Inject() (val repository: Repository, val instrumenta
           repository.createCollection(db, col, metadata).map(_ => Created(s"$db/$col "))
             .andThen { case _ => instrumentation.incrementOperation(Operation.CREATE_TABLE, db, col) }
             .recover {
-              case ex: DatabaseNotFoundException => NotFound(s"No database $db")
+              case ex: DatabaseNotFoundException        => NotFound(s"No database $db")
               case ex: CollectionAlreadyExistsException => Conflict(s"Collection $db/$col already exists.")
-              case ex: Throwable => InternalServerError(s"${Utils.withError(s"$ex") { ex.getMessage }}")
+              case ex: Throwable                        => InternalServerError(s"${Utils.withError(s"$ex") { ex.getMessage }}")
             }
         }
 
         parse(request.body) match {
           case Right(spatialSpecOpt) => doCreate(spatialSpecOpt)
-          case Left(errs) => Future.successful(BadRequest("Invalid JSON format: " + errs))
+          case Left(errs)            => Future.successful(BadRequest("Invalid JSON format: " + errs))
         }
 
       }
@@ -96,10 +97,10 @@ class DatabasesController @Inject() (val repository: Repository, val instrumenta
           metadata <- js.validate(Formats.CollectionReadsForRegisteredTable).future
           _ <- repository.registerCollection(db, metadata.name, metadata)
         } yield Created(s"db/${metadata.name}")).recover {
-          case t: InvalidRequestException => BadRequest(s"${t.msg}")
-          case ex: DatabaseNotFoundException => NotFound(s"No database $db")
+          case t: InvalidRequestException           => BadRequest(s"${t.msg}")
+          case ex: DatabaseNotFoundException        => NotFound(s"No database $db")
           case ex: CollectionAlreadyExistsException => Conflict(s"Collection already exists in $db.")
-          case ex: Throwable => InternalServerError(s"${ex.getMessage}")
+          case ex: Throwable                        => InternalServerError(s"${ex.getMessage}")
         }
       }
   }

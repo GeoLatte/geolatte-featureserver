@@ -57,13 +57,14 @@ class AccessLogFilter @Inject() (implicit val mat: Materializer, ec: ExecutionCo
    * Hold log info
    */
   case class RequestLogInfo(
-    startTime: LocalDateTime,
-    uri: String,
-    method: String,
-    secure: Boolean,
-    headers: Map[String, Seq[String]],
+    startTime:       LocalDateTime,
+    uri:             String,
+    method:          String,
+    secure:          Boolean,
+    headers:         Map[String, Seq[String]],
     queryParameters: Map[String, Seq[String]],
-    rawQueryString: String) {
+    rawQueryString:  String
+  ) {
 
     override def toString: String = s"$method $uri"
   }
@@ -84,7 +85,8 @@ class AccessLogFilter @Inject() (implicit val mat: Materializer, ec: ExecutionCo
           requestHeader.secure,
           requestHeader.headers.toMap,
           requestHeader.queryString,
-          requestHeader.rawQueryString)
+          requestHeader.rawQueryString
+        )
         //log
         log(loggingData, result)
         // leave unchanged
@@ -108,7 +110,8 @@ class AccessLogFilter @Inject() (implicit val mat: Materializer, ec: ExecutionCo
       "httpRequestHeaders" -> requestHeadersToString(logInfo.headers),
       "httpCode" -> result.header.status,
       "httpResponseHeaders" -> responseHeaderstoString(result.header.headers),
-      "reponseDuration" -> logInfo.startTime.until(endTime, ChronoUnit.MILLIS)).asJava)
+      "reponseDuration" -> logInfo.startTime.until(endTime, ChronoUnit.MILLIS)
+    ).asJava)
 
     logger.info(markers, logInfo.toString)
   }

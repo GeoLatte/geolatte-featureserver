@@ -51,14 +51,15 @@ abstract class InCollectionSpecification extends FeatureServerSpecification {
     step(makeDatabase(testDbName)) ^
       step(makeCollection(testDbName, testColName)) ^
       fs ^
-      step(dropDatabase(testDbName)))
+      step(dropDatabase(testDbName))
+  )
 
   def pruneSpecialProperties(js: JsValue): JsValue = {
     val tr: Reads[JsObject] = (__ \ "_id").json.prune andThen (__ \ "_mc").json.prune andThen (__ \ "_bbox").json.prune
     js match {
       case js: JsObject => js.transform(tr).asOpt.getOrElse(JsNull)
-      case js: JsArray => JsArray(js.value.map(el => pruneSpecialProperties(el)))
-      case _ => sys.error(s"Can't prune value which isn't JSON object or array: ${Json.stringify(js)}")
+      case js: JsArray  => JsArray(js.value.map(el => pruneSpecialProperties(el)))
+      case _            => sys.error(s"Can't prune value which isn't JSON object or array: ${Json.stringify(js)}")
     }
   }
 
@@ -66,25 +67,28 @@ abstract class InCollectionSpecification extends FeatureServerSpecification {
     (js: JsValue) => {
       val receivedFeatureArray = (js \ "features").as[JsValue]
       (receivedFeatureArray must beFeatures(expected)).isSuccess
-    }, s"Featurecollection Json doesn't contain expected features (${Json.stringify(expected)})")
+    }, s"Featurecollection Json doesn't contain expected features (${Json.stringify(expected)})"
+  )
 
   def matchFeaturesInCsv(expectedColumnHeader: String): Matcher[Seq[String]] = (
     (received: Seq[String]) => {
       val lines = received.flatMap(l => received(0).split("\n")).map(_.trim)
       val header = lines(0)
       header == expectedColumnHeader
-    }, "Featurecollection CSV doesn't contain expected columns")
+    }, "Featurecollection CSV doesn't contain expected columns"
+  )
 
   def matchTotalInJson(expectedTotal: Int): Matcher[JsValue] = (
     (recJs: JsValue) => {
       val optTotalReceived = (recJs \ "total").asOpt[Int]
       (optTotalReceived must beSome(expectedTotal)).isSuccess
-    }, s"FeatureCollection Json doesn't have expected value for total field ($expectedTotal).")
+    }, s"FeatureCollection Json doesn't have expected value for total field ($expectedTotal)."
+  )
 
   def filterCoordinates(in: JsValue): JsValue = {
     in.transform(coordinateFilter) match {
       case JsSuccess(tr, _) => tr
-      case _ => in
+      case _                => in
     }
   }
 
@@ -127,7 +131,8 @@ abstract class InCollectionSpecification extends FeatureServerSpecification {
         succ,
         msg,
         msg,
-        r)
+        r
+      )
     }
   }
 
@@ -142,7 +147,8 @@ abstract class InCollectionSpecification extends FeatureServerSpecification {
         succ,
         "received Some(<features>) with features matching expected",
         msg,
-        r)
+        r
+      )
     }
   }
 

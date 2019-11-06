@@ -14,14 +14,14 @@ import play.api.libs.json._
 import scala.concurrent.Future
 
 case class Metadata(
-  name: String,
-  envelope: Envelope,
-  level: Int,
-  idType: String,
-  count: Long = 0,
-  geometryColumn: String = "GEOMETRY",
-  pkey: String = "id",
-  jsonTable: Boolean = true // is table defined by persistence Server? or registered
+  name:           String,
+  envelope:       Envelope,
+  level:          Int,
+  idType:         String,
+  count:          Long     = 0,
+  geometryColumn: String   = "GEOMETRY",
+  pkey:           String   = "id",
+  jsonTable:      Boolean  = true // is table defined by persistence Server? or registered
 )
 
 object MetadataIdentifiers {
@@ -50,7 +50,8 @@ object Metadata {
     (__ \ CollectionField).read[String] and
     (__ \ ExtentField).read[Envelope](EnvelopeFormats) and
     (__ \ IndexLevelField).read[Int] and
-    (__ \ IdTypeField).read[String](Reads.filter[String](JsonValidationError("Requires 'text' or 'decimal"))(tpe => tpe == "text" || tpe == "decimal")))(Metadata.fromReads _)
+    (__ \ IdTypeField).read[String](Reads.filter[String](JsonValidationError("Requires 'text' or 'decimal"))(tpe => tpe == "text" || tpe == "decimal"))
+  )(Metadata.fromReads _)
 }
 
 sealed trait Direction
@@ -73,14 +74,15 @@ object Direction {
 case class FldSortSpec(fld: String, direction: Direction)
 
 case class SpatialQuery(
-  windowOpt: Option[Envelope] = None,
-  intersectionGeometryWktOpt: Option[String] = None,
-  queryOpt: Option[BooleanExpr] = None,
-  projection: Option[ProjectionList] = None,
-  sort: List[FldSortSpec] = List(),
-  metadata: Metadata,
-  withCount: Boolean = false,
-  explode: Boolean = false)
+  windowOpt:                  Option[Envelope]       = None,
+  intersectionGeometryWktOpt: Option[String]         = None,
+  queryOpt:                   Option[BooleanExpr]    = None,
+  projection:                 Option[ProjectionList] = None,
+  sort:                       List[FldSortSpec]      = List(),
+  metadata:                   Metadata,
+  withCount:                  Boolean                = false,
+  explode:                    Boolean                = false
+)
 
 trait FeatureWriter {
 
@@ -90,29 +92,31 @@ trait FeatureWriter {
 }
 
 case class TableStats(
-  schemaName: String,
-  relName: String,
-  numberLiveTup: Long,
-  numberDeadTup: Long,
+  schemaName:            String,
+  relName:               String,
+  numberLiveTup:         Long,
+  numberDeadTup:         Long,
   numberModSinceAnalyse: Long,
-  lastVacuum: Option[Timestamp],
-  lastAutoVacuum: Option[Timestamp],
-  lastAnalyze: Option[Timestamp],
-  lastAutoAnalyze: Option[Timestamp],
-  vacuumCount: Long,
-  autovacuumCount: Long,
-  analyzeCount: Long,
-  autoanalyzeCount: Long)
+  lastVacuum:            Option[Timestamp],
+  lastAutoVacuum:        Option[Timestamp],
+  lastAnalyze:           Option[Timestamp],
+  lastAutoAnalyze:       Option[Timestamp],
+  vacuumCount:           Long,
+  autovacuumCount:       Long,
+  analyzeCount:          Long,
+  autoanalyzeCount:      Long
+)
 
 case class ActivityStats(
-  pid: Long,
-  name: String,
-  xactStart: Option[Timestamp],
-  queryStart: Option[Timestamp],
+  pid:           Long,
+  name:          String,
+  xactStart:     Option[Timestamp],
+  queryStart:    Option[Timestamp],
   waitEventType: Option[String],
-  waitEvent: Option[String],
-  state: Option[String],
-  query: Option[String])
+  waitEvent:     Option[String],
+  state:         Option[String],
+  query:         Option[String]
+)
 
 /**
  * Exposes "Health" information on the Repository
@@ -159,7 +163,7 @@ trait Repository {
   def deleteCollection(dbName: String, colName: String): Future[Boolean]
 
   def query(database: String, collection: String, spatialQuery: SpatialQuery, start: Option[Int] = None,
-    limit: Option[Int] = None): Future[CountedQueryResult]
+            limit: Option[Int] = None): Future[CountedQueryResult]
 
   def distinct(database: String, collection: String, spatialQuery: SpatialQuery, projection: SimpleProjection): Future[List[String]]
 
