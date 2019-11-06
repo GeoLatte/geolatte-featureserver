@@ -10,7 +10,7 @@ import play.api.mvc._
 
 import scala.concurrent.duration._
 
-class MetricsController @Inject() (val repository: Repository) extends Controller {
+class MetricsController @Inject() (val repository: Repository) extends InjectedController {
 
   val AcceptsTextPlain = Accepting("text/plain")
   val AcceptsProtoBuf = Accepting("application/vnd.google.protobuf")

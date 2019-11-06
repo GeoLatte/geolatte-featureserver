@@ -8,7 +8,7 @@ import org.specs2.mutable.Specification
 import persistence.json.Gen._
 import persistence.{ GeoJsonFormats, Metadata }
 import play.api.libs.json._
-import scala.collection.JavaConversions._
+import scala.collection.JavaConverters._
 
 import scala.language.implicitConversions
 import scala.util.Try
@@ -197,7 +197,7 @@ class GeoJsonFormatSpecs extends Specification {
   }
 
   private def pointsToJsArray(ps: PointSequence): JsArray = {
-    JsArray(ps.toList.map(coordianteToJsArray))
+    JsArray(ps.asScala.toList.map(coordianteToJsArray))
   }
 
   private def matchCoordinates(p: Polygon, json: JsValue) = {

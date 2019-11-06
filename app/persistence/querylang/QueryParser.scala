@@ -67,7 +67,7 @@ class QueryParser(val input: ParserInput) extends Parser
 
   def BooleanFactor = rule { WS ~ ignoreCase("not") ~ WS ~ BooleanPrim ~> BooleanNot | BooleanPrim }
 
-  def BooleanPrim = rule { WS ~ ch('(') ~ WS ~ BooleanExpression ~ WS ~ ch(')') ~ WS | Predicate }
+  def BooleanPrim = rule { WS ~ '(' ~ WS ~ BooleanExpression ~ WS ~ ')' ~ WS | Predicate }
 
   def Predicate = rule { spatialRelPred | BetweenAndPred | ComparisonPred | ILikePred | InPred | LikePred | RegexPred | LiteralBool | isNullPred | JsonContainsPred }
 
@@ -116,20 +116,20 @@ class QueryParser(val input: ParserInput) extends Parser
   val printableChar = (CharPredicate.Printable -- "'")
 
   //a Literal String is quoted using single quotes. To use singe quotes in the string, simply repeat the quote twice (with no whitespace).
-  def LiteralStr = rule { ch(''') ~ clearSB() ~ zeroOrMore((printableChar | "''") ~ appendSB()) ~ ch(''') ~ push(LiteralString(sb.toString)) }
+  def LiteralStr = rule { '\'' ~ clearSB() ~ zeroOrMore((printableChar | "''") ~ appendSB()) ~ '\'' ~ push(LiteralString(sb.toString)) }
 
-  def Regex = rule { ch('/') ~ clearSB() ~ zeroOrMore((noneOf("/") ~ appendSB())) ~ ch('/') ~ push(RegexExpr(sb.toString)) }
+  def Regex = rule { '/' ~ clearSB() ~ zeroOrMore((noneOf("/") ~ appendSB())) ~ '/' ~ push(RegexExpr(sb.toString)) }
 
-  def Like = rule { ch(''') ~ clearSB() ~ zeroOrMore((printableChar | "\'\'") ~ appendSB()) ~ ch(''') ~ push(LikeExpr(sb.toString)) }
+  def Like = rule { '\'' ~ clearSB() ~ zeroOrMore((printableChar | "\'\'") ~ appendSB()) ~ '\'' ~ push(LikeExpr(sb.toString)) }
 
   def Property = rule { capture(NameString) ~> PropertyExpr ~ WS }
 
   //basic tokens
-  def NameString = rule { !(ch(''') | ch('"')) ~ FirstNameChar ~ zeroOrMore(nonFirstNameChar) }
+  def NameString = rule { !(ch('\'') | '"') ~ FirstNameChar ~ zeroOrMore(nonFirstNameChar) }
 
-  def FirstNameChar = rule { CharPredicate.Alpha | ch('_') }
+  def FirstNameChar = rule { CharPredicate.Alpha | '_' }
 
-  def nonFirstNameChar = rule { CharPredicate.AlphaNum | ch('_') | ch('-') | ch('.') }
+  def nonFirstNameChar = rule { CharPredicate.AlphaNum | ch('_') | '-' | '.' }
 
   def Number = rule { optional('-') ~ WS ~ Digits ~ optional('.' ~ optional(Digits)) ~ optional('E' ~ optional('-') ~ Digits) }
 

@@ -21,7 +21,10 @@ import scala.util.{ Failure, Success, Try }
  * @author Karel Maesen, Geovise BVBA
  *         creation-date: 7/25/13
  */
-class TxController @Inject() (val repository: Repository, val instrumentation: Instrumentation) extends FeatureServerController {
+class TxController @Inject() (val repository: Repository, val instrumentation: Instrumentation, val parsers: PlayBodyParsers)
+  extends InjectedController
+  with RepositoryAction
+  with ExceptionHandlers {
 
   import AppExecutionContexts.streamContext
 
@@ -36,7 +39,7 @@ class TxController @Inject() (val repository: Repository, val instrumentation: I
     case _ => Failure(new RuntimeException("Query expression is not a string"))
   }
 
-  def remove(db: String, col: String) = RepositoryAction {
+  def remove(db: String, col: String) = withRepository {
     implicit request =>
       {
         extract[JsString](request.body.asJson, "query") flatMap (parse(_)) match {
@@ -48,7 +51,7 @@ class TxController @Inject() (val repository: Repository, val instrumentation: I
       }
   }
 
-  def update(db: String, col: String) = RepositoryAction {
+  def update(db: String, col: String) = withRepository {
     implicit request =>
       {
         val tq = extract[JsString](request.body.asJson, "query").flatMap(parse(_))
@@ -85,7 +88,6 @@ class TxController @Inject() (val repository: Repository, val instrumentation: I
    * writes them to the specified database and collection.
    *
    * @param db the database to write features to
-   * @param col the collection to write features to
    * @return a new BodyParser
    */
   private def bodyParser(db: String, writer: Seq[JsObject] => Future[Int], sep: String): BodyParser[Result] =

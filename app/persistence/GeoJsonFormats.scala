@@ -7,7 +7,7 @@ import play.api.data.validation.ValidationError
 import play.api.libs.functional.syntax._
 import play.api.libs.json.{ Json, _ }
 
-import scala.collection.JavaConversions._
+import scala.collection.JavaConverters._
 import scala.util.Try
 
 /**
@@ -286,7 +286,7 @@ object GeoJsonFormats {
     baseGeoJsonToWrites and
     (__ \ "geometries").write[Array[JsValue]])((g: GeometryCollection) => {
       val crs = g.getCrsId
-      val geometries = g.iterator().toList
+      val geometries = g.iterator().asScala.toList
       ("GeometryCollection", crs, bbox(g), geometries.map(geometryWrites.writes).toArray[JsValue])
     })
 

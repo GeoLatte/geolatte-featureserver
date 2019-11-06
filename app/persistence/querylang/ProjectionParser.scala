@@ -75,22 +75,24 @@ class ProjectionParser(val input: ParserInput) extends Parser
 
   def InputLine = rule { ProjectionExpressionList ~ EOI }
 
-  def ProjectionExpressionList: Rule1[ProjectionList] = rule { (ProjectionExpression ~> ProjectionList.fromPropertyExpr _) ~ zeroOrMore(ch(',') ~ WS ~ ProjectionExpression ~> ProjectionList.addPropertyExpr _) }
+  def ProjectionExpressionList: Rule1[ProjectionList] = rule { (ProjectionExpression ~> ProjectionList.fromPropertyExpr _) ~ zeroOrMore(',' ~ WS ~ ProjectionExpression ~> ProjectionList.addPropertyExpr _) }
 
   def ProjectionExpression = rule { TraversableExpr | SimpleExpr }
 
-  def TraversableExpr = rule { SimpleExpr ~ ch('[') ~ ProjectionExpressionList ~ ch(']') ~> TraversableProjection.apply _ }
+  def TraversableExpr = rule { SimpleExpr ~ '[' ~ ProjectionExpressionList ~ ']' ~> TraversableProjection.apply _ }
 
   def SimpleExpr: Rule1[SimpleProjection] = rule { WS ~ PropertyEl ~ zeroOrMore(ch('.') ~ WS ~ PropertyEl ~> SimpleProjection.combine _) }
 
   def PropertyEl = rule { capture(NameString) ~> SimpleProjection.fromString _ ~ WS }
 
+  def singleOrDoubleQuote = rule { ch('"') | '\'' }
+
   //basic tokens
-  def NameString = rule { !(ch(''') | ch('"')) ~ FirstNameChar ~ zeroOrMore(nonFirstNameChar) }
+  def NameString = rule { !singleOrDoubleQuote ~ FirstNameChar ~ zeroOrMore(nonFirstNameChar) }
 
-  def FirstNameChar = rule { CharPredicate.Alpha | ch('_') }
+  def FirstNameChar = rule { CharPredicate.Alpha | '_' }
 
-  def nonFirstNameChar = rule { CharPredicate.AlphaNum | ch('_') | ch('-') }
+  def nonFirstNameChar = rule { CharPredicate.AlphaNum | '_' | '-' }
 
   def WS = rule { zeroOrMore(" " | "\n" | "\t") }
 

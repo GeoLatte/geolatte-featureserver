@@ -19,7 +19,10 @@ import scala.concurrent.Future
 import scala.language.{ implicitConversions, reflectiveCalls }
 import scala.util.{ Failure, Success }
 
-class QueryController @Inject() (val repository: Repository, val instrumentation: Instrumentation, actorSystem: ActorSystem) extends FeatureServerController {
+class QueryController @Inject() (val repository: Repository, val instrumentation: Instrumentation, actorSystem: ActorSystem, val parsers: PlayBodyParsers)
+  extends InjectedController
+  with RepositoryAction
+  with ExceptionHandlers {
 
   import AppExecutionContexts.streamContext
   import config.Constants._
@@ -101,7 +104,7 @@ class QueryController @Inject() (val repository: Repository, val instrumentation
     intersectionGeometryWkt: Option[String],
     simpleProjection: SimpleProjection)
 
-  def query(db: String, collection: String) = RepositoryAction { implicit request =>
+  def query(db: String, collection: String) = withRepository { implicit request =>
     {
       implicit val format = QueryParams.FMT.value
       implicit val filename = QueryParams.FILENAME.value
@@ -126,7 +129,7 @@ class QueryController @Inject() (val repository: Repository, val instrumentation
     } recover commonExceptionHandler(db, collection)
   }
 
-  def list(db: String, collection: String) = RepositoryAction(
+  def list(db: String, collection: String) = withRepository(
     implicit request => {
       for {
         fcr <- extractFeatureCollectionRequest(request).map(_.copy(withCount = true))
@@ -138,7 +141,7 @@ class QueryController @Inject() (val repository: Repository, val instrumentation
 
     } recover commonExceptionHandler(db, collection))
 
-  def distinct(db: String, collection: String) = RepositoryAction(
+  def distinct(db: String, collection: String) = withRepository(
     implicit request => {
       for {
         fcr <- extractFeatureCollectionRequest(request)

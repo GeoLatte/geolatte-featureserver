@@ -1,23 +1,25 @@
 package controllers
 
 import javax.inject.Inject
-
 import config.AppExecutionContexts
 import controllers.Formats._
 import metrics.Instrumentation
 import persistence.Repository
 import play.api.Logger
 import play.api.libs.json.{ JsError, JsSuccess }
-import play.api.mvc.{ BodyParsers, Result }
+import play.api.mvc.{ InjectedController, PlayBodyParsers, Result }
 
 import scala.concurrent.Future
 
-class IndexController @Inject() (val repository: Repository, val instrumentation: Instrumentation) extends FeatureServerController {
+class IndexController @Inject() (val repository: Repository, val instrumentation: Instrumentation, val parsers: PlayBodyParsers)
+  extends InjectedController
+  with RepositoryAction
+  with ExceptionHandlers {
 
   import AppExecutionContexts._
   import ResourceWriteables._
 
-  def put(db: String, collection: String, indexName: String) = RepositoryAction(BodyParsers.parse.tolerantJson) {
+  def put(db: String, collection: String, indexName: String) = withRepository(parsers.tolerantJson) {
     implicit req =>
       {
         req.body.validate[IndexDef] match {
@@ -34,7 +36,7 @@ class IndexController @Inject() (val repository: Repository, val instrumentation
       }
   }
 
-  def list(db: String, collection: String) = RepositoryAction {
+  def list(db: String, collection: String) = withRepository {
     implicit req =>
       {
         repository.getIndices(db, collection)
@@ -43,7 +45,7 @@ class IndexController @Inject() (val repository: Repository, val instrumentation
       }.recover(commonExceptionHandler(db, collection))
   }
 
-  def get(db: String, collection: String, index: String) = RepositoryAction {
+  def get(db: String, collection: String, index: String) = withRepository {
     implicit req =>
       repository.getIndex(db, collection, index)
         .map { IndexDefResource(db, collection, _) }
@@ -52,7 +54,7 @@ class IndexController @Inject() (val repository: Repository, val instrumentation
 
   }
 
-  def delete(db: String, collection: String, index: String) = RepositoryAction {
+  def delete(db: String, collection: String, index: String) = withRepository {
     implicit req =>
       repository.dropIndex(db, collection, index)
         .map[Result] { _ => Ok }

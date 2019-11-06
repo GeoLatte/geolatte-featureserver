@@ -1,7 +1,6 @@
 package controllers
 
 import javax.inject.Inject
-
 import Exceptions._
 import metrics.Instrumentation
 import persistence._
@@ -11,24 +10,24 @@ import play.api.mvc._
 import scala.concurrent.Future
 import scala.language.{ implicitConversions, reflectiveCalls }
 
-case class RepositoryAction[T](req: Request[T])
+trait RepositoryAction {
 
-object RepositoryAction {
-  def apply[T](bp: BodyParser[T])(action: Request[T] => Future[Result]) =
+  this: BaseController =>
+  def parsers: PlayBodyParsers
+
+  def withRepository[T](bp: BodyParser[T])(action: Request[T] => Future[Result]) =
     Action.async(bp) {
       request => action(request)
     }
 
-  def apply(action: Request[AnyContent] => Future[Result]): Action[AnyContent] =
-    RepositoryAction(BodyParsers.parse.anyContent)(action)
+  def withRepository(action: Request[AnyContent] => Future[Result]): Action[AnyContent] =
+    withRepository(parsers.anyContent)(action)
 
 }
 
-abstract class FeatureServerController extends Controller {
+trait ExceptionHandlers {
 
-  def repository: Repository
-
-  def instrumentation: Instrumentation
+  import Results._
 
   def commonExceptionHandler(db: String, col: String = ""): PartialFunction[Throwable, Result] = {
 

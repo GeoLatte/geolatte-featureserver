@@ -1,19 +1,21 @@
 package controllers
 
 import javax.inject.Inject
-
 import config.AppExecutionContexts
 import config.Constants.Format
 import metrics.Instrumentation
 import persistence.Repository
 import play.api.Logger
 import play.api.libs.json._
-import play.api.mvc.{ BodyParsers, Result }
+import play.api.mvc.{ BodyParsers, InjectedController, PlayBodyParsers, Result }
 import utilities.JsonHelper
 
 import scala.concurrent.Future
 
-class ViewController @Inject() (val repository: Repository, val instrumentation: Instrumentation) extends FeatureServerController {
+class ViewController @Inject() (val repository: Repository, val instrumentation: Instrumentation, val parsers: PlayBodyParsers)
+  extends InjectedController
+  with RepositoryAction
+  with ExceptionHandlers {
 
   import AppExecutionContexts.streamContext
   import Formats._
@@ -22,7 +24,7 @@ class ViewController @Inject() (val repository: Repository, val instrumentation:
     val NAME = QueryParam("name", (s) => Some(s))
   }
 
-  def put(db: String, collection: String, viewName: String) = RepositoryAction(BodyParsers.parse.tolerantJson) {
+  def put(db: String, collection: String, viewName: String) = withRepository(parsers.tolerantJson) {
     implicit req =>
       {
         req.body.validate(ViewDefIn) match {
@@ -39,7 +41,7 @@ class ViewController @Inject() (val repository: Repository, val instrumentation:
       }
   }
 
-  def list(db: String, collection: String) = RepositoryAction {
+  def list(db: String, collection: String) = withRepository {
     implicit req =>
       {
         QueryParams.NAME.value.map(name =>
@@ -53,7 +55,7 @@ class ViewController @Inject() (val repository: Repository, val instrumentation:
       }
   }
 
-  def get(db: String, collection: String, id: String) = RepositoryAction {
+  def get(db: String, collection: String, id: String) = withRepository {
     implicit req =>
       {
         repository.getView(db, collection, id)
@@ -62,7 +64,7 @@ class ViewController @Inject() (val repository: Repository, val instrumentation:
       }
   }
 
-  def delete(db: String, collection: String, view: String) = RepositoryAction {
+  def delete(db: String, collection: String, view: String) = withRepository {
     implicit req =>
       {
         repository.dropView(db, collection, view).map(v => {
