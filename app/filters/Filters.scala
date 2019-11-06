@@ -15,7 +15,7 @@ import play.api.mvc._
 import play.filters.gzip.GzipFilter
 
 import scala.concurrent.{ ExecutionContext, Future }
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 
 class MetricsFilter @Inject() (implicit val metrics: Metrics, val mat: Materializer, ec: ExecutionContext) extends Filter {
 

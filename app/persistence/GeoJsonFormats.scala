@@ -7,7 +7,7 @@ import play.api.data.validation.ValidationError
 import play.api.libs.functional.syntax._
 import play.api.libs.json.{ Json, _ }
 
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 import scala.util.Try
 
 /**
@@ -155,7 +155,7 @@ object GeoJsonFormats {
    * @return
    */
   val geoJsonGeometryReads: Reads[Geometry] = {
-    (__ \ 'geometry).json.pick[JsObject] andThen geometryReads
+    (__ \ "geometry").json.pick[JsObject] andThen geometryReads
   }
 
   def toPolygon(envelope: Envelope): Polygon = {
@@ -253,14 +253,12 @@ object GeoJsonFormats {
   }
 
   private def coordinates(l: LineString): Array[Array[Double]] = {
-    import scala.collection.JavaConverters._
     val points = l.getPoints.iterator().asScala.map(p =>
       coordinates(p))
     points.toArray
   }
 
   private def coordinates(l: Polygon): Array[Array[Array[Double]]] = {
-    import scala.collection.JavaConverters._
     val points = l.iterator().asScala.map(p =>
       coordinates(p))
     points.toArray

@@ -4,6 +4,7 @@ import java.sql.Timestamp
 import java.time.OffsetDateTime
 import java.time.format.DateTimeFormatter
 
+import scala.collection.Seq
 import Exceptions.UnsupportedMediaException
 import akka.stream.scaladsl.Source
 import akka.util.ByteString
@@ -143,14 +144,14 @@ object ResourceWriteables {
 
 }
 
-case class DatabasesResource(dbNames: Traversable[String]) extends Resource {
+case class DatabasesResource(dbNames: Iterable[String]) extends Resource {
   lazy val json: JsValue = Json.toJson(
     dbNames map (name => Map("name" -> name, "url" -> routes.DatabasesController.getDb(name).url))
   )
 
 }
 
-case class DatabaseResource(db: String, collections: Traversable[String]) extends Resource {
+case class DatabaseResource(db: String, collections: Iterable[String]) extends Resource {
   lazy val intermediate = collections map (name => Map(
     "name" -> name,
     "url" -> routes.DatabasesController.getCollection(db, name)
@@ -189,7 +190,7 @@ case class FeatureStream(totalOpt: Option[Long], features: Source[JsObject, _])
 
 case class IndexDef(name: String, path: String, cast: String, regex: Boolean)
 
-case class IndexDefsResource(dbName: String, colName: String, indexNames: Traversable[String]) extends Resource {
+case class IndexDefsResource(dbName: String, colName: String, indexNames: Iterable[String]) extends Resource {
   lazy val intermediate = indexNames map (name => Map("name" -> name, "url" -> routes.IndexController.get(
     dbName,
     colName,
@@ -236,8 +237,8 @@ object Formats {
   )(unlift(Metadata.unapply))
   val projection: Reads[JsArray] = (__ \ "projection").readNullable[JsArray].map(js => js.getOrElse(Json.arr()))
   val ViewDefIn = (
-    (__ \ 'query).json.pickBranch(of[JsString]) and
-    (__ \ 'projection).json.copyFrom(projection)
+    (__ \ "query").json.pickBranch(of[JsString]) and
+    (__ \ "projection").json.copyFrom(projection)
   ).reduce
   val ViewDefExtract = (
     (__ \ "query").readNullable[String] and
@@ -251,29 +252,29 @@ object Formats {
     Metadata(collection, extent, 0, "decimal", 0, geometryCol, "", jsonTable = false)
 
   def ViewDefOut(db: String, col: String) = (
-    (__ \ 'name).json.pickBranch(of[JsString]) and
-    (__ \ 'query).json.pickBranch(of[JsString]) and
-    (__ \ 'projection).json.pickBranch(of[JsArray]) and
-    (__ \ 'url).json.copyFrom((__ \ 'name).json.pick.map(name => JsString(controllers.routes.ViewController
+    (__ \ "name").json.pickBranch(of[JsString]) and
+    (__ \ "query").json.pickBranch(of[JsString]) and
+    (__ \ "projection").json.pickBranch(of[JsArray]) and
+    (__ \ "url").json.copyFrom((__ \ "name").json.pick.map(name => JsString(controllers.routes.ViewController
       .get(db, col, name.as[String]).url)))
   ).reduce
 
   implicit val IndexDefReads: Reads[IndexDef] = (
-    (__ \ 'name).readNullable[String].map {
+    (__ \ "name").readNullable[String].map {
       _.getOrElse("")
     } and
-    (__ \ 'path).read[String] and
-    (__ \ 'type).read[String](filter[String](JsonValidationError("Type must be either 'text', 'bool' or 'decimal'"))(
+    (__ \ "path").read[String] and
+    (__ \ "type").read[String](filter[String](JsonValidationError("Type must be either 'text', 'bool' or 'decimal'"))(
       s => List("text", "bool", "decimal").contains(s)
     )) and
-    (__ \ 'regex).readNullable[Boolean].map(_.getOrElse(false))
+    (__ \ "regex").readNullable[Boolean].map(_.getOrElse(false))
   )(IndexDef)
 
   implicit val IndexDefWrites: Writes[IndexDef] = (
-    (__ \ 'name).write[String] and
-    (__ \ 'path).write[String] and
-    (__ \ 'type).write[String] and
-    (__ \ 'regex).write[Boolean]
+    (__ \ "name").write[String] and
+    (__ \ "path").write[String] and
+    (__ \ "type").write[String] and
+    (__ \ "regex").write[Boolean]
   )(unlift(IndexDef.unapply))
 
   implicit val IndexDefFormat: Format[IndexDef] = Format(IndexDefReads, IndexDefWrites)

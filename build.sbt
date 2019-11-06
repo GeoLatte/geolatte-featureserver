@@ -1,7 +1,7 @@
 import sbt.Keys.name
 
 
-scalaVersion := "2.12.8"
+scalaVersion := "2.13.1"
 
 val appName = "geolatte-featureserver"
 val appVersion = "2.0-SNAPSHOT"
@@ -30,9 +30,11 @@ lazy val coreDependencies = Seq(
   guice
   )
 
+lazy val slickVersion = "3.3.2"
+
 lazy val psqlDependencies = Seq(
-  "com.typesafe.slick" %% "slick" % "3.2.3",
-  "com.typesafe.slick" %% "slick-hikaricp" % "3.2.3",
+  "com.typesafe.slick" %% "slick" % slickVersion,
+  "com.typesafe.slick" %% "slick-hikaricp" % slickVersion,
   "org.postgresql" % "postgresql" % "42.1.1"
   )
 
@@ -77,19 +79,17 @@ lazy val defaultSettings =
     Seq(
       libraryDependencies ++= dependencies,
       Keys.fork in run := true,
-      javaOptions in(Test, run) += "-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=5005",
-      javacOptions ++= Seq( "-source", "1.8", "-target", "1.8" )
+      javaOptions in(Test, run) += "-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=5005"
+//      , javacOptions ++= Seq( "-source", "1.8", "-target", "1.8" )
       )
 
 //Options for running tests
 val testSettings = Seq(
-  Keys.fork in Test := false, //Fork a new JVM for running tests
+  Keys.fork in Test := true, //Fork a new JVM for running tests
   testOptions in Test := Seq( Tests.Filter( unitFilter ) ),
   parallelExecution in ItTest := false,
   testOptions in ItTest := Seq( Tests.Argument( "sequential" ), Tests.Filter( itFilter ) )
   )
-
-ThisBuild / classLoaderLayeringStrategy := ClassLoaderLayeringStrategy.ScalaLibrary
 
 val main = (project in file("."))
   .settings(

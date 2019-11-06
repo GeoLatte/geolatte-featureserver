@@ -8,7 +8,7 @@ import org.specs2.mutable.Specification
 import persistence.json.Gen._
 import persistence.{ GeoJsonFormats, Metadata }
 import play.api.libs.json._
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 
 import scala.language.implicitConversions
 import scala.util.Try

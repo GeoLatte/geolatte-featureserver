@@ -2,6 +2,7 @@ package integration
 
 import play.api.libs.json._
 import play.api.mvc.AnyContentAsEmpty
+import scala.collection.Seq
 
 /**
  * @author Karel Maesen, Geovise BVBA

@@ -106,7 +106,7 @@ class TxController @Inject() (val repository: Repository, val instrumentation: I
       Accumulator(flow).map { r =>
         Right(Ok(s"Written $r features"))
       }.recover {
-        commonExceptionHandler(db).andThen(Left.apply)
+        commonExceptionHandler(db).andThen(Left.apply(_))
       }
     }
 

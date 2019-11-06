@@ -375,7 +375,7 @@ object UtilityMethods extends PlayRunners
     val buffer = ListBuffer[T]()
 
     val body = Await.result(result, timeout.duration).body.dataStream
-    val sink: Sink[ByteString, Future[Seq[T]]] = Sink.fold[ListBuffer[T], ByteString](buffer) { (buf, bytes) =>
+    val sink: Sink[ByteString, Future[scala.collection.Seq[T]]] = Sink.fold[ListBuffer[T], ByteString](buffer) { (buf, bytes) =>
       {
         val text = extractSizeAndData(bytes)
         try {
@@ -387,7 +387,7 @@ object UtilityMethods extends PlayRunners
     }
 
     val f = body.runWith(sink)
-    Await.result(f, timeout.duration)
+    Await.result(f, timeout.duration).toSeq
   }
 
   def isTransferEncoded(fresult: Future[Result])(implicit timeout: Timeout): Boolean = {

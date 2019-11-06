@@ -5,8 +5,7 @@ import persistence.json.Gen._
 import play.api.libs.json._
 import org.geolatte.geom.Envelope
 import java.net.URLEncoder._
-
-import utilities.Utils
+import scala.collection.Seq
 
 /**
  * @author Karel Maesen, Geovise BVBA
@@ -205,7 +204,7 @@ class QueryAPISpec extends InCollectionSpecification {
     (bbox: String, featuresIn01: JsArray) =>
       {
         val picksFoo = (__ \ "properties" \ "foo").json.pick
-        val distinctFoo = featuresIn01.value.flatMap(jsv => jsv.asOpt(picksFoo)).map(_.as[String]).distinct
+        val distinctFoo = featuresIn01.value.flatMap(jsv => jsv.asOpt(picksFoo)).map(_.as[String]).distinct.toSeq
 
         getDistinct(testDbName, testColName, Map("bbox" -> bbox, "projection" -> "properties.foo"))(contentAsJsonStream) applyMatcher { res =>
           val strings = res.responseBody.map(_.value.flatMap(_.as[List[String]])).getOrElse(Nil)

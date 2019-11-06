@@ -3,8 +3,8 @@ package utilities
 import play.api.libs.functional.syntax._
 import play.api.libs.json.Reads._
 import play.api.libs.json._
-
 import scala.collection.mutable.ListBuffer
+import scala.collection.Seq
 
 /**
  * Helpers for working the Json lib
@@ -34,7 +34,7 @@ object JsonHelper {
     def flattenAcc(jsObject: JsObject, buffer: ListBuffer[(String, JsValue)]): ListBuffer[(String, JsValue)] = {
       jsObject.fields.foreach {
         case (k, v: JsObject) => buffer.appendAll(flattenAcc(v, ListBuffer()).map(prependPath(k, _)))
-        case (k, v: JsArray)  => Unit
+        case (k, v: JsArray)  => ()
         case (k, v: JsValue)  => buffer.append((k, v))
       }
       buffer
@@ -50,7 +50,7 @@ object JsonHelper {
    */
   implicit def JsValidationErrors2String(errors: Seq[(JsPath, Seq[JsonValidationError])]): String = {
     errors map {
-      case (jspath, valerrors) => jspath + " :" + valerrors.map(ve => ve.message).mkString("; ")
+      case (jspath, valerrors) => jspath.toJsonString + " :" + valerrors.map(ve => ve.message).mkString("; ")
     } mkString "\n"
   }
 
