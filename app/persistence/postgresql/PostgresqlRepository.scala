@@ -15,7 +15,8 @@ import persistence._
 import persistence.querylang.{ BooleanExpr, PropertyExpr, SimpleProjection }
 import play.api.inject.ApplicationLifecycle
 import play.api.libs.json._
-import play.api.{ Configuration, Logger }
+import play.api.Configuration
+import utilities.Utils.Logger
 import slick.basic.DatabasePublisher
 import slick.jdbc.PostgresProfile.api._
 import slick.jdbc.hikaricp.HikariCPJdbcDataSource

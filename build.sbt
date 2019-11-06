@@ -89,6 +89,8 @@ val testSettings = Seq(
   testOptions in ItTest := Seq( Tests.Argument( "sequential" ), Tests.Filter( itFilter ) )
   )
 
+ThisBuild / classLoaderLayeringStrategy := ClassLoaderLayeringStrategy.ScalaLibrary
+
 val main = (project in file("."))
   .settings(
     defaultSettings:_*

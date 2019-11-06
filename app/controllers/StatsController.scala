@@ -3,7 +3,7 @@ package controllers
 import javax.inject.Inject
 import metrics.Instrumentation
 import persistence.RepoHealth
-import play.api.mvc.{ Action, Controller, InjectedController }
+import play.api.mvc.InjectedController
 import play.api.libs.json._
 import Formats._
 

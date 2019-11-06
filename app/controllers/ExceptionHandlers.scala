@@ -1,10 +1,7 @@
 package controllers
 
-import javax.inject.Inject
 import Exceptions._
-import metrics.Instrumentation
-import persistence._
-import play.Logger
+import utilities.Utils.Logger
 import play.api.mvc._
 
 import scala.concurrent.Future

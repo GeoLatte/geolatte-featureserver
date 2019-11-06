@@ -3,7 +3,7 @@ package controllers
 import javax.inject.Inject
 import Exceptions._
 import akka.actor.ActorSystem
-import akka.event.{ Logging, LoggingAdapter }
+import akka.event.Logging
 import akka.stream.scaladsl.Source
 import config.AppExecutionContexts
 import metrics.{ Instrumentation, Operation }
@@ -11,7 +11,7 @@ import org.geolatte.geom.Envelope
 import org.geolatte.geom.crs.CrsId
 import persistence._
 import persistence.querylang._
-import play.api.Logger
+import utilities.Utils.Logger
 import play.api.libs.json.{ JsString, _ }
 import play.api.mvc._
 

@@ -7,7 +7,6 @@ import play.api.mvc._
 import play.api.libs.json._
 
 import scala.concurrent.Future
-import play.Logger
 import Exceptions._
 import metrics.Instrumentation
 import utilities.Utils

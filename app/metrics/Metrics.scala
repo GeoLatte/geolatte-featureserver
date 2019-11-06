@@ -6,7 +6,7 @@ import com.codahale.metrics.{ MetricRegistry => DropWizardRegistry }
 import io.prometheus.client.CollectorRegistry
 import io.prometheus.client.dropwizard.DropwizardExports
 import io.prometheus.client.hotspot.DefaultExports
-import play.api.Logger
+import utilities.Utils.Logger
 import play.api.inject.ApplicationLifecycle
 
 import scala.concurrent.Future

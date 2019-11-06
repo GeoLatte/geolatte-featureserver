@@ -8,15 +8,12 @@ import Exceptions.UnsupportedMediaException
 import akka.stream.scaladsl.Source
 import akka.util.ByteString
 import config.Constants
-import org.apache.commons.codec.binary.Base64
-import org.geolatte.geom.crs.CrsId
 import org.geolatte.geom.{ Envelope, Geometry, Point }
 import org.supercsv.encoder.DefaultCsvEncoder
 import org.supercsv.prefs.CsvPreference
 import org.supercsv.util.CsvContext
 import persistence.GeoJsonFormats._
 import persistence._
-import play.api.data.validation.ValidationError
 import play.api.http.{ MediaType, Writeable }
 import play.api.libs.functional.syntax._
 import play.api.libs.json.Json._
@@ -246,8 +243,6 @@ object Formats {
     (__ \ "query").readNullable[String] and
     (__ \ "projection").readNullable[JsArray]
   ).tupled
-
-  def toByteArray(implicit r: Reads[String]): Reads[Array[Byte]] = r.map(str => Base64.decodeBase64(str))
 
   def newCollectionMetadata(extent: Envelope, level: Int, idtype: String) =
     Metadata.fromReads("", extent, level, idtype)

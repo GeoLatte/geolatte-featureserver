@@ -1,4 +1,4 @@
-import play.api.{ Logger, UnexpectedException, UsefulException }
+import play.api.{ UnexpectedException, UsefulException }
 import play.api.http.{ HttpErrorHandler, Status => StatusCodes }
 import play.api.mvc.Results._
 import play.api.mvc.{ RequestHeader, Result }
@@ -34,7 +34,7 @@ class ErrorHandler extends HttpErrorHandler {
       case e: UsefulException => e
       case _                  => UnexpectedException(unexpected = Some(exception))
     }
-    Logger.error(s"Error on request $request", useful)
+    Utils.Logger.error(s"Error on request $request", useful)
     Future.successful { InternalServerError(s"A server error occured: $useful") }
   }
 }

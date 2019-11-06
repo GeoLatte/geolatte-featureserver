@@ -19,6 +19,8 @@ object Utils {
   def boolean(v: Any): Boolean = v.asInstanceOf[Boolean]
   def json(v: Any): JsValue = Json.parse(v.asInstanceOf[String])
 
+  val Logger = play.api.Logger("application")
+
   def withWarning[T](msg: String)(t: => T) = {
     Logger.warn(msg)
     t

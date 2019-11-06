@@ -7,7 +7,7 @@ import akka.stream.scaladsl.{ JsonFraming, Keep, Sink }
 import config.AppExecutionContexts
 import metrics.Instrumentation
 import persistence.querylang.{ BooleanExpr, QueryParser }
-import persistence.{ FeatureWriter, Repository }
+import persistence.Repository
 import play.api.libs.json._
 import play.api.libs.streams.Accumulator
 import play.api.mvc._

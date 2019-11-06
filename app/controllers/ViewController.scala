@@ -5,9 +5,9 @@ import config.AppExecutionContexts
 import config.Constants.Format
 import metrics.Instrumentation
 import persistence.Repository
-import play.api.Logger
+import utilities.Utils.Logger
 import play.api.libs.json._
-import play.api.mvc.{ BodyParsers, InjectedController, PlayBodyParsers, Result }
+import play.api.mvc.{ InjectedController, PlayBodyParsers, Result }
 import utilities.JsonHelper
 
 import scala.concurrent.Future

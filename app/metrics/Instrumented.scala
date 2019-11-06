@@ -3,7 +3,7 @@ package metrics
 import javax.inject.Inject
 
 import persistence.SpatialQuery
-import play.Logger
+import utilities.Utils.Logger
 
 /**
  * Created by Karel Maesen, Geovise BVBA on 31/05/17.

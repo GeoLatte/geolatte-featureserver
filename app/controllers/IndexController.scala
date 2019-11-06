@@ -5,7 +5,7 @@ import config.AppExecutionContexts
 import controllers.Formats._
 import metrics.Instrumentation
 import persistence.Repository
-import play.api.Logger
+import utilities.Utils.Logger
 import play.api.libs.json.{ JsError, JsSuccess }
 import play.api.mvc.{ InjectedController, PlayBodyParsers, Result }
 

@@ -3,7 +3,7 @@ package persistence.postgresql
 import Exceptions.InvalidParamsException
 import org.geolatte.geom.Geometry
 import persistence.{ FeatureWriter, GeoJsonFormats, Metadata }
-import play.api.Logger
+import utilities.Utils.Logger
 import play.api.libs.json.{ JsObject, Reads }
 
 import scala.concurrent.Future

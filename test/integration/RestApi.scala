@@ -111,6 +111,7 @@ trait RestApiDriver {
 
   import API._
   import UtilityMethods._
+  import utilities.Utils.Logger
 
   import scala.reflect.runtime.universe._
 

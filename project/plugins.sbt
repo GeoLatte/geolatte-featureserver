@@ -4,7 +4,7 @@ logLevel := Level.Warn
 
 
 // Use the Play sbt plugin for Play project
-addSbtPlugin("com.typesafe.play" % "sbt-plugin" % "2.6.9")
+addSbtPlugin("com.typesafe.play" % "sbt-plugin" % "2.7.2")
 
 //Scalariform plugin
 addSbtPlugin("org.scalariform" % "sbt-scalariform" % "1.8.3")
