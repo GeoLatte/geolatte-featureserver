@@ -35,7 +35,9 @@ class PostgresqlRepository @Inject() (
   metrics:              Metrics,
   implicit val mat:     Materializer
 )
-  extends Repository with RepoHealth {
+  extends Repository
+  with PGExpression
+  with RepoHealth {
 
   import AppExecutionContexts.streamContext
   import utilities.Utils._
@@ -534,12 +536,6 @@ class PostgresqlRepository @Inject() (
            where #${withExcludeSchemas("schema_owner = current_user", "schema_name")}
          """.as[String]
 
-    private def fldSortSpecToSortExpr(spec: FldSortSpec): String = {
-      //we use the #>> operator for 9.3 support, which extracts to text
-      // if we move to 9.4  or later with jsonb then we can use the #> operator because jsonb are ordered
-      s" json #>> '{${spec.fld.split("\\.") mkString ","}}' ${spec.direction.toString}"
-    }
-
     def sort(query: SpatialQuery): String = query.metadata.jsonTable match {
       case true =>
         if (query.sort.isEmpty) "ID"
@@ -597,9 +593,9 @@ class PostgresqlRepository @Inject() (
         case _       => ""
       }
 
-      val sortClause = (limit, start) match {
-        case (None, None) => ""
-        case _            => s"ORDER BY ${sort(query)}"
+      val sortClause = (query.sort, limit, start) match {
+        case (Nil, None, None) => ""
+        case _                 => s"ORDER BY ${sort(query)}"
       }
 
       val projection =
@@ -821,21 +817,17 @@ class PostgresqlRepository @Inject() (
     //     """.stripMargin
 
     def CREATE_INDEX(dbName: String, colName: String, indexName: String, path: String, cast: String) = {
-      val pathExp = path.split("\\.").map(
-        el => single_quote(el)
-      ).mkString(",")
+      val pathExp = jsonFieldSelector(path)
       sqlu"""CREATE INDEX #${quote(indexName)}
-             ON #${quote(dbName)}.#${quote(colName)} ( (json_extract_path_text(json, #$pathExp)::#$cast) )
+             ON #${quote(dbName)}.#${quote(colName)} ( (#$pathExp) )
       """
     }
 
     def CREATE_INDEX_WITH_TRGM(dbName: String, colName: String, indexName: String, path: String, cast: String) = {
-      val pathExp = path.split("\\.").map(
-        el => single_quote(el)
-      ).mkString(",")
+      val pathExp = jsonFieldSelector(path)
       sqlu"""CREATE INDEX #${quote(indexName)}
              ON #${quote(dbName)}.#${quote(colName)} using gist
-             ( (json_extract_path_text(json, #$pathExp)::#$cast) gist_trgm_ops)
+             ( (#$pathExp) ) gist_trgm_ops)
       """
     }
 
