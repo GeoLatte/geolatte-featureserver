@@ -92,7 +92,7 @@ class QueryController @Inject() (val repository: Repository, val instrumentation
     withView:                Option[String],
     sort:                    List[String],
     sortDir:                 List[String],
-    start:                   Int,
+    start:                   Option[Int],
     limit:                   Option[Int],
     intersectionGeometryWkt: Option[String],
     withCount:               Boolean                = false,
@@ -206,7 +206,7 @@ class QueryController @Inject() (val repository: Repository, val instrumentation
     val sort = QueryParams.SORT.value.map(_.as[List[String]]).getOrElse(List())
     val sortDir = QueryParams.SORTDIR.value.map(_.as[List[String]]).getOrElse(List())
 
-    val start = QueryParams.START.value.getOrElse(0)
+    val start = QueryParams.START.value
     val limit = QueryParams.LIMIT.value
     val explode = QueryParams.EXPLODE.value.getOrElse(false)
     FeatureCollectionRequest(bbox, query, projection, withView, sort, sortDir, start, limit, intersectionGeometryWkt, false, explode)
@@ -229,7 +229,7 @@ class QueryController @Inject() (val repository: Repository, val instrumentation
         request.withCount,
         request.explode
       )
-      result <- repository.query(db, collection, spatialQuery, Some(request.start), request.limit)
+      result <- repository.query(db, collection, spatialQuery, request.start, request.limit)
       _ = instrumentation.updateSpatialQueryMetrics(db, collection, spatialQuery)
     } yield result
 

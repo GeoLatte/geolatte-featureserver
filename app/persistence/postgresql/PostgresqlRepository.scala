@@ -597,6 +597,11 @@ class PostgresqlRepository @Inject() (
         case _       => ""
       }
 
+      val sortClause = (limit, start) match {
+        case (None, None) => ""
+        case _            => s"ORDER BY ${sort(query)}"
+      }
+
       val projection =
         if (query.metadata.jsonTable) "ID, ST_AsEWKT( geometry) as geom , json"
         else s" ${query.metadata.pkey}, ST_AsEWKT( ${query.metadata.geometryColumn}) as $geoJsonCol, * "
@@ -605,7 +610,7 @@ class PostgresqlRepository @Inject() (
          SELECT #$projection
          FROM #$from
          #${cond.map(c => s"WHERE $c").getOrElse("")}
-         ORDER BY #${sort(query)}
+         #$sortClause
          #$offsetClause
          #$limitClause
      """.as[Row](getRowResultFromTable(query.metadata))
