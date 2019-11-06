@@ -24,7 +24,7 @@ lazy val coreDependencies = Seq(
 //  "commons-codec" % "commons-codec" % "1.8",
   "net.sf.supercsv" % "super-csv" % "2.4.0",
   "org.parboiled" %% "parboiled" % "2.1.8",
-  "com.typesafe.akka" %% "akka-slf4j" % "2.5.26",
+  "com.typesafe.akka" %% "akka-slf4j" % "2.5.23",
   "net.logstash.logback" % "logstash-logback-encoder" % "6.2",
   filters,
   guice
