@@ -113,7 +113,7 @@ class QueryParser(val input: ParserInput) extends Parser
 
   def LiteralNum = rule { capture(Number) ~> toNum }
 
-  val printableChar = (CharPredicate.Printable -- "'")
+  val printableChar = (CharPredicate.All -- "'")
 
   //a Literal String is quoted using single quotes. To use singe quotes in the string, simply repeat the quote twice (with no whitespace).
   def LiteralStr = rule { '\'' ~ clearSB() ~ zeroOrMore((printableChar | "''") ~ appendSB()) ~ '\'' ~ push(LiteralString(sb.toString)) }

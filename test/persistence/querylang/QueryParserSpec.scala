@@ -22,9 +22,15 @@ class QueryParserSpec extends Specification {
       )
     }
 
-    "handle parentesis properly" in {
+    "handle parenthesis properly" in {
       QueryParser.parse("( var =  '123' )") must beSuccessfulTry[BooleanExpr].withValue(
         ComparisonPredicate(PropertyExpr("var"), EQ, LiteralString("123"))
+      )
+    }
+
+    "handle non-ascii characters properly" in {
+      QueryParser.parse("( var =  'categorieën' )") must beSuccessfulTry[BooleanExpr].withValue(
+        ComparisonPredicate(PropertyExpr("var"), EQ, LiteralString("categorieën"))
       )
     }
 
