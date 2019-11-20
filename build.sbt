@@ -91,7 +91,7 @@ val testSettings = Seq(
   testOptions in ItTest := Seq( Tests.Argument( "sequential" ), Tests.Filter( itFilter ) )
   )
 
-val main = (project in file("."))
+val `geolatte-geoserver` = (project in file("."))
   .settings(
     defaultSettings:_*
     ).configs( ItTest )
