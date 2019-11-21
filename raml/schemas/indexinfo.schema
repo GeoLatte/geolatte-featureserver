@@ -8,10 +8,9 @@
           "description": "The name of the index",
            "type" : "string"
          },
-        "path": {
-          "description": "Property path on which the index has been created",
+        "indexDef": {
+          "description": "Index create DML",
           "type": "string"
           }
-        },
-    "required": ["name", "path"]
+        }
 }

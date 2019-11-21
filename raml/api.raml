@@ -274,7 +274,7 @@ mediaType: application/vnd.geolatte-featureserver+json;version=1.0
                 schema: !include schemas/indexdefinition.schema
                 example: |
                   {
-                    "path" : "properties.entity.id",
+                    "paths" : ["properties.entity.id"],
                     "type" : "decimal",
                     "regex" : true
                   }
@@ -290,13 +290,11 @@ mediaType: application/vnd.geolatte-featureserver+json;version=1.0
               200:
                 body:
                   application/vnd.geolatte-featureserver+json;version=1.0 :
-                    schema: !include schemas/indexdefinition.schema
+                    schema: !include schemas/indexinfo.schema
                     example: |
                       {
                         "name": "ididx",
-                        "path": "properties.entity.id",
-                        "type": "decimal",
-                        "regex": false
+                        "indexDef": "CREATE INDEX ...."
                       }
               404:
                 description: if the specified index does not exist (or the collection, or database).
