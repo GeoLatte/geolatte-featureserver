@@ -76,13 +76,12 @@ class PostgresqlRepository @Inject() (
       val md = rs.getMetaData
       val id = rs.getString(meta.pkey)
       val geom = rs.getString(geoJsonCol)
-      println(s"****************Geom value is : $geom")
       val props: Seq[(String, JsValue)] = for {
         idx <- 1 to pr.numColumns
         key = md.getColumnName(idx) if key != meta.geometryColumn && key != geoJsonCol && key != meta.pkey
         value = rs.getObject(idx)
       } yield (key, JsonUtils.toJsValue(value))
-      val jsObj = Json.obj("id" -> id, "geometry" -> Wkt.fromWkt(geom), "properties" -> JsObject(props))
+      val jsObj = Json.obj("id" -> id, "type" -> "Feature", "geometry" -> Wkt.fromWkt(geom), "properties" -> JsObject(props))
       Row(id, geom, jsObj)
     }
 
