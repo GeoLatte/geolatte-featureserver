@@ -28,9 +28,12 @@ trait PGExpression {
     }
   }
 
+  def jsonFieldSelector(paths: Seq[String]): String =
+    paths.map(jsonFieldSelector).mkString(",")
+
   def jsonFieldSelector(path: String): String = {
     val quotedFields = fldSpecToComponents(path).map(quote)
-    s"json->${intersperseOperators(quotedFields, "->", Some("->>"))}"
+    s"( json->${intersperseOperators(quotedFields, "->", Some("->>"))} )"
   }
 
   def fldSortSpecToSortExpr(spec: FldSortSpec): String = {

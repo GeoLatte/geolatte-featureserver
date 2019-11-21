@@ -4,7 +4,6 @@ import java.sql.Timestamp
 import java.time.OffsetDateTime
 import java.time.format.DateTimeFormatter
 
-import scala.collection.Seq
 import Exceptions.UnsupportedMediaException
 import akka.stream.scaladsl.Source
 import akka.util.ByteString
@@ -76,7 +75,7 @@ object ResourceWriteables {
       .replaceAll("\r", " ") + "\""
 
     def expand(v: JsValue): Seq[(String, String)] =
-      utilities.JsonHelper.flatten(v.asInstanceOf[JsObject]) sortBy {
+      utilities.JsonHelper.flatten(v.asInstanceOf[JsObject]).toSeq sortBy { //toSeq necessary due to redefinition of scala.Seq to scala.collection.immutable
         case (k, _) => k
       } map {
         case (k, v: JsString)  => (k, encode(v))
@@ -188,7 +187,9 @@ case class FeatureStream(totalOpt: Option[Long], features: Source[JsObject, _])
 
 }
 
-case class IndexDef(name: String, path: String, cast: String, regex: Boolean)
+case class IndexDef(name: String, path: Seq[String], cast: String, regex: Boolean)
+
+case class IndexDefW(name: String, defText: String)
 
 case class IndexDefsResource(dbName: String, colName: String, indexNames: Iterable[String]) extends Resource {
   lazy val intermediate = indexNames map (name => Map("name" -> name, "url" -> routes.IndexController.get(
@@ -200,9 +201,9 @@ case class IndexDefsResource(dbName: String, colName: String, indexNames: Iterab
   def toJson = Json.toJson(intermediate)
 }
 
-case class IndexDefResource(dbName: String, colName: String, indexDef: IndexDef) extends Resource {
+case class IndexDefResource(dbName: String, colName: String, indexDef: IndexDefW) extends Resource {
 
-  import Formats.IndexDefWrites
+  import Formats.IndexDefWWrites
 
   def toJson = Json.toJson(indexDef)
 }
@@ -263,21 +264,27 @@ object Formats {
     (__ \ "name").readNullable[String].map {
       _.getOrElse("")
     } and
-    (__ \ "path").read[String] and
-    (__ \ "type").read[String](filter[String](JsonValidationError("Type must be either 'text', 'bool' or 'decimal'"))(
-      s => List("text", "bool", "decimal").contains(s)
-    )) and
-    (__ \ "regex").readNullable[Boolean].map(_.getOrElse(false))
+    ((__ \ "path").read[String].map(s => Seq(s)) orElse
+      (__ \ "paths").read[Seq[String]]) and
+      (__ \ "type").read[String](filter[String](JsonValidationError("Type must be either 'text', 'bool' or 'decimal'"))(
+        s => List("text", "bool", "decimal").contains(s)
+      )) and
+      (__ \ "regex").readNullable[Boolean].map(_.getOrElse(false))
   )(IndexDef)
 
   implicit val IndexDefWrites: Writes[IndexDef] = (
     (__ \ "name").write[String] and
-    (__ \ "path").write[String] and
+    (__ \ "paths").write[Seq[String]] and
     (__ \ "type").write[String] and
     (__ \ "regex").write[Boolean]
   )(unlift(IndexDef.unapply))
 
   implicit val IndexDefFormat: Format[IndexDef] = Format(IndexDefReads, IndexDefWrites)
+
+  implicit val IndexDefWWrites: Writes[IndexDefW] = (
+    (__ \ "name").write[String] and
+    (__ \ "defText").write[String]
+  )(unlift(IndexDefW.unapply))
 
   def timestampToString(t: Timestamp): String = t.toLocalDateTime.format(DateTimeFormatter.ISO_DATE_TIME)
 

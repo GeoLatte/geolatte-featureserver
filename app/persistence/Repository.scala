@@ -3,7 +3,7 @@ package persistence
 import java.sql.Timestamp
 
 import akka.stream.scaladsl.Source
-import controllers.IndexDef
+import controllers.{ IndexDef, IndexDefW }
 import org.geolatte.geom.Envelope
 import persistence.GeoJsonFormats._
 import persistence.querylang.{ BooleanExpr, ProjectionList, SimpleProjection }
@@ -193,7 +193,7 @@ trait Repository {
 
   def getIndices(database: String, collection: String): Future[List[String]]
 
-  def getIndex(database: String, collection: String, index: String): Future[IndexDef]
+  def getIndex(database: String, collection: String, index: String): Future[IndexDefW]
 
   def dropIndex(database: String, collection: String, index: String): Future[Boolean]
 

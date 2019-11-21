@@ -27,7 +27,6 @@ class IndexAPISpec extends InCollectionSpecification {
         return 200 to indicate success                                              $e9
           also when executed again (idem-potent)                                    $e9
           and then /indexes/<index-name> should return 404                          $e10
-          and /indexes should return empty list                                     $e11
 
   """
 
@@ -35,6 +34,11 @@ class IndexAPISpec extends InCollectionSpecification {
 
   val indexDef = Json.obj(
     "path" -> "a.b",
+    "type" -> "text"
+  )
+
+  val indexDef2 = Json.obj(
+    "paths" -> Seq("a.b", "c.d"),
     "type" -> "text"
   )
 
@@ -46,31 +50,29 @@ class IndexAPISpec extends InCollectionSpecification {
 
   def e4 = putIndex(testDbName, testColName, "my_idx", indexDef) applyMatcher (_.status must equalTo(CONFLICT))
 
+  def e4b = putIndex(testDbName, testColName, "my_idx2", indexDef2) applyMatcher (_.status must equalTo(CREATED))
+
   def e5 = getIndices(testDbName, "NonexistingCollection") applyMatcher (_.status must equalTo(NOT_FOUND))
 
   def e6 = getIndices(testDbName, testColName) applyMatcher (res =>
     (res.status must equalTo(OK)) and
-      (res.responseBody must beSome(
-        Json.arr(
-          Json.obj("name" -> "my_idx", "url" -> "/api/databases/xfstestdb/xfstestcoll/indexes/my_idx")
-        )
-      )))
+      (res.responseBody must beSome.like {
+        case ja: JsArray =>
+          ja.value.contains(Json.obj(
+            "name" -> "my_idx",
+            "url" -> "/api/databases/xfstestdb/xfstestcoll/indexes/my_idx"
+          ))
+      }))
 
   def e7 = getIndex(testDbName, testColName, "doesntexist") applyMatcher (_.status must equalTo(NOT_FOUND))
 
   def e8 = getIndex(testDbName, testColName, "my_idx") applyMatcher { resp =>
     (resp.status must equalTo(OK)) and
-      (resp.responseBody must beSome(Json.obj("name" -> "my_idx", "path" -> "a.b", "type" -> "text", "regex" -> false)))
+      (resp.responseBody must beSome(Json.obj("name" -> "my_idx", "defText" -> "CREATE INDEX my_idx ON xfstestdb.xfstestcoll USING btree ((((json -> 'a'::text) ->> 'b'::text)))")))
   }
 
   def e9 = deleteIndex(testDbName, testColName, "my_idx") applyMatcher (_.status must equalTo(OK))
 
   def e10 = getIndex(testDbName, testColName, "my_idx") applyMatcher (_.status must equalTo(NOT_FOUND))
-
-  def e11 = getIndices(testDbName, testColName) applyMatcher (res =>
-    (res.status must equalTo(OK)) and
-      (res.responseBody must beSome(
-        Json.arr()
-      )))
 
 }

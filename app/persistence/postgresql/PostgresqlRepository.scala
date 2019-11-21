@@ -6,7 +6,7 @@ import akka.stream._
 import akka.stream.scaladsl._
 import akka.stream.stage.{ GraphStage, GraphStageLogic, InHandler, OutHandler }
 import config.AppExecutionContexts
-import controllers.{ Formats, IndexDef }
+import controllers.{ Formats, IndexDef, IndexDefW }
 import metrics.Metrics
 import org.geolatte.geom.codec.{ Wkb, Wkt }
 import org.geolatte.geom.{ Envelope, Geometry }
@@ -403,41 +403,23 @@ class PostgresqlRepository @Inject() (
 
   }
 
-  private def toIndexDef(name: String, defText: String): Option[IndexDef] = {
-    val pathElRegex = "\\'(\\w+)\\'".r
-    val methodRegex = "USING (\\w+) ".r
-    val castRegex = "::(\\w+)\\)\\)$".r
-
-    val method = methodRegex.findFirstMatchIn(defText).map { m => m group 1 }
-    val isForRegex = method.contains("gist")
-
-    val cast = castRegex.findFirstMatchIn(defText).map { m => m group 1 } match {
-      case Some("boolean") => "bool"
-      case Some("numeric") => "decimal"
-      case _               => "text"
-    }
-
-    val path = (for (m <- pathElRegex.findAllMatchIn(defText)) yield m group 1) mkString "."
-
-    if (path.isEmpty) None //empty path, means not an index on JSON value (maybe spatial, maybe on ID
-    else Some(IndexDef(name, path, cast, isForRegex)) //we can't determine the cast used during definition of index
+  private def toIndexDef(name: String, defText: String): IndexDefW = {
+    IndexDefW(name, defText)
   }
 
-  private def getInternalIndices(dbName: String, colName: String): Future[List[IndexDef]] =
+  private def getInternalIndices(dbName: String, colName: String): Future[List[IndexDefW]] =
     existsCollection(dbName, colName).flatMap { exists =>
       if (exists) runOnDb("get-index")(Sql.SELECT_INDEXES_FOR_TABLE(dbName, colName)) map {
         seq =>
-          seq.map(rd => toIndexDef(rd._1, rd._2)).collect {
-            case Some(d) => d
-          }.toList
+          seq.map(rd => toIndexDef(rd._1, rd._2)).toList
       }
       else throw CollectionNotFoundException()
     }
 
   override def getIndices(dbName: String, colName: String): Future[List[String]] =
-    getInternalIndices(dbName, colName).map(listIdx => listIdx.filter(q => q.path != "id").map(_.name))
+    getInternalIndices(dbName, colName).map(idx => idx.map(_.name))
 
-  override def getIndex(dbName: String, colName: String, indexName: String): Future[IndexDef] =
+  override def getIndex(dbName: String, colName: String, indexName: String): Future[IndexDefW] =
     getInternalIndices(dbName, colName).map { listIdx =>
       listIdx.find(q => q.name == indexName) match {
         case Some(idf) => idf
@@ -815,18 +797,18 @@ class PostgresqlRepository @Inject() (
     //       select true from pg_extension where extname = 'pg_trgm'
     //     """.stripMargin
 
-    def CREATE_INDEX(dbName: String, colName: String, indexName: String, path: String, cast: String) = {
+    def CREATE_INDEX(dbName: String, colName: String, indexName: String, path: Seq[String], cast: String) = {
       val pathExp = jsonFieldSelector(path)
       sqlu"""CREATE INDEX #${quote(indexName)}
-             ON #${quote(dbName)}.#${quote(colName)} ( (#$pathExp) )
+             ON #${quote(dbName)}.#${quote(colName)} ( #$pathExp )
       """
     }
 
-    def CREATE_INDEX_WITH_TRGM(dbName: String, colName: String, indexName: String, path: String, cast: String) = {
+    def CREATE_INDEX_WITH_TRGM(dbName: String, colName: String, indexName: String, path: Seq[String], cast: String) = {
       val pathExp = jsonFieldSelector(path)
       sqlu"""CREATE INDEX #${quote(indexName)}
              ON #${quote(dbName)}.#${quote(colName)} using gist
-             ( (#$pathExp) ) gist_trgm_ops)
+             ( #$pathExp ) gist_trgm_ops)
       """
     }
 
