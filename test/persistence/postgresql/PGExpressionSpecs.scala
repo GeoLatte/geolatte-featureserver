@@ -30,7 +30,7 @@ class PGExpressionSpecs extends Specification with PGExpression {
     }
 
     "render a field expression using -> and ->> " in {
-      fldSortSpecToSortExpr(FldSortSpec("properties.a.b.c", ASC)) === "json->'properties'->'a'->'b'->>'c' ASC"
+      fldSortSpecToSortExpr(FldSortSpec("properties.a.b.c", ASC)) === "( json->'properties'->'a'->'b'->>'c' ) ASC"
     }
   }
 
