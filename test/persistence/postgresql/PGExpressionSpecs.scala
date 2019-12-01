@@ -1,7 +1,7 @@
 package persistence.postgresql
 
 import org.specs2.mutable.Specification
-import persistence.{ ASC, FldSortSpec }
+import persistence.{ ASC, DESC, FldSortSpec }
 
 /**
  * Created by Karel Maesen, Geovise BVBA on 06/11/2019.
@@ -30,7 +30,9 @@ class PGExpressionSpecs extends Specification with PGExpression {
     }
 
     "render a field expression using -> and ->> " in {
-      fldSortSpecToSortExpr(FldSortSpec("properties.a.b.c", ASC)) === "( json->'properties'->'a'->'b'->>'c' ) ASC"
+      fldSortSpecToSortExpr(FldSortSpec("properties.a.b.c", ASC)) === "( json->'properties'->'a'->'b'->>'c' ) ASC" and (
+        fldSortSpecToSortExpr(FldSortSpec("single", DESC)) === "( json->>'single' ) DESC"
+      )
     }
   }
 
