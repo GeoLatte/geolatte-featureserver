@@ -668,7 +668,7 @@ class PostgresqlRepository @Inject() (
          FROM   pg_index i
          JOIN   pg_attribute a ON a.attrelid = i.indrelid
                               AND a.attnum = ANY(i.indkey)
-         WHERE  i.indrelid = ${single_quote(relname)}::regclass
+         WHERE  i.indrelid = ${relname}::regclass
          AND    i.indisprimary;
        """.as[(String, String)].map(_.headOption)
     }
@@ -720,12 +720,12 @@ class PostgresqlRepository @Inject() (
 
     def INSERT_METADATA_REGISTERED(dbname: String, tableName: String, md: Metadata) =
       sqlu"""insert into #${quote(dbname)}.#${quote(MetadataCollection)} values(
-              ${single_quote(Json.stringify(Json.toJson(md.envelope)))}::json,
+              ${Json.stringify(Json.toJson(md.envelope))}::json,
               ${md.level},
-              ${single_quote(md.idType)},
-              ${single_quote(tableName)},
-              ${single_quote(md.geometryColumn)},
-              ${single_quote(md.pkey)}
+              ${md.idType},
+              ${tableName},
+              ${md.geometryColumn},
+              ${md.pkey}
               )
      """
 
