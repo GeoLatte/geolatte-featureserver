@@ -95,7 +95,7 @@ class DatabasesController @Inject() (val repository: Repository, val instrumenta
           js <- request.body.asJson.future(InvalidRequestException(s"Empty or Invalid JsonRequest body"))
           metadata <- js.validate(Formats.CollectionReadsForRegisteredTable).future
           _ <- repository.registerCollection(db, metadata.name, metadata)
-        } yield Created(s"db/${metadata.name}")).recover {
+        } yield Created(s"$db/${metadata.name}")).recover {
           case t: InvalidRequestException           => BadRequest(s"${t.msg}")
           case ex: DatabaseNotFoundException        => NotFound(s"No database $db")
           case ex: CollectionAlreadyExistsException => Conflict(s"Collection already exists in $db.")
