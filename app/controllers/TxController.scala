@@ -1,13 +1,13 @@
 package controllers
 
 import javax.inject.Inject
-
 import Exceptions._
 import akka.stream.scaladsl.{ JsonFraming, Keep, Sink }
 import config.AppExecutionContexts
 import metrics.Instrumentation
 import persistence.querylang.{ BooleanExpr, QueryParser }
 import persistence.Repository
+import play.api.Configuration
 import play.api.libs.json._
 import play.api.libs.streams.Accumulator
 import play.api.mvc._
@@ -21,12 +21,20 @@ import scala.util.{ Failure, Success, Try }
  * @author Karel Maesen, Geovise BVBA
  *         creation-date: 7/25/13
  */
-class TxController @Inject() (val repository: Repository, val instrumentation: Instrumentation, val parsers: PlayBodyParsers)
+class TxController @Inject() (
+  val configuration:   Configuration,
+  val repository:      Repository,
+  val instrumentation: Instrumentation,
+  val parsers:         PlayBodyParsers
+)
   extends InjectedController
   with RepositoryAction
   with ExceptionHandlers {
 
   import AppExecutionContexts.streamContext
+
+  //max size of Json object permitted
+  lazy val MaxObjectSize = configuration.get[Option[Int]]("fs.max_object_size").getOrElse(1024 * 1024)
 
   def insert(db: String, col: String) = {
     val writer = repository.writer(db, col)
@@ -92,9 +100,8 @@ class TxController @Inject() (val repository: Repository, val instrumentation: I
    */
   private def bodyParser(db: String, writer: Seq[JsObject] => Future[Int], sep: String): BodyParser[Result] =
     BodyParser("GeoJSON feature BodyParser") { request =>
-      //TODO -- the "magic" numbers should be documented and configurable.
       //TODO -- Better to refactor FeatureWriter to a Sink, and have factory method for that Sink in the Repository
-      val flow = JsonFraming.objectScanner(1024 * 1024)
+      val flow = JsonFraming.objectScanner(MaxObjectSize)
         .map(_.utf8String)
         .map(s => Utils.withDebug(s"seen: $s") { s })
         .map(Json.parse)
