@@ -210,6 +210,11 @@ case class IndexDefResource(dbName: String, colName: String, indexDef: IndexDefW
 
 object Formats {
 
+  val PostQueryRead: Reads[PostQuery] = (
+    (__ \ "wkt").readNullable[String] and
+    (__ \ "query").readNullable[String]
+  )(PostQuery.apply _)
+
   /**
    * This is the format  for the PUT resource when creating a Json table
    */

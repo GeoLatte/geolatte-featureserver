@@ -54,6 +54,8 @@ object Metadata {
   )(Metadata.fromReads _)
 }
 
+case class PostQuery(wkt: Option[String] = None, query: Option[String] = None)
+
 sealed trait Direction
 
 object ASC extends Direction {
