@@ -192,14 +192,16 @@ class QueryController @Inject() (val repository: Repository, val instrumentation
   private def extractFeatureCollectionRequest(implicit request: Request[AnyContent]) = Future {
 
     implicit val queryString: Map[String, Seq[String]] = request.queryString
-    //TODO -- why is this not a query parameter
-    val intersectionGeometryWkt: Option[String] = request.body.asText.flatMap {
-      case x if !x.isEmpty => Some(x)
-      case _               => None
-    }
 
+    def fallBackWkt = request.body.asText.filter(_.length > 0).map(geom => PostQuery(wkt = Some(geom))).getOrElse(PostQuery())
+
+    val postQuery = request.body.asJson.map(_.validate(Formats.PostQueryRead) match {
+      case JsError(_)              => fallBackWkt
+      case JsSuccess(validJson, _) => validJson
+    }).getOrElse(fallBackWkt)
+
+    val query = postQuery.query.map(parseQueryExpr).getOrElse(QueryParams.QUERY.value)
     val bbox = QueryParams.BBOX.value
-    val query = QueryParams.QUERY.value
     val projection = QueryParams.PROJECTION.value
     val withView = QueryParams.WITH_VIEW.value
 
@@ -209,7 +211,7 @@ class QueryController @Inject() (val repository: Repository, val instrumentation
     val start = QueryParams.START.value
     val limit = QueryParams.LIMIT.value
     val explode = QueryParams.EXPLODE.value.getOrElse(false)
-    FeatureCollectionRequest(bbox, query, projection, withView, sort, sortDir, start, limit, intersectionGeometryWkt, false, explode)
+    FeatureCollectionRequest(bbox, query, projection, withView, sort, sortDir, start, limit, postQuery.wkt, withCount = false, explode = explode)
   }
 
   private def doQuery(db: String, collection: String, smd: Metadata, request: FeatureCollectionRequest): Future[(Option[Long], Source[JsObject, _])] = {
