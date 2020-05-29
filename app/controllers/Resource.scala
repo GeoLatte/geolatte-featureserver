@@ -11,6 +11,7 @@ import config.Constants
 import org.geolatte.geom.{ Envelope, Geometry, Point }
 import org.supercsv.encoder.DefaultCsvEncoder
 import org.supercsv.prefs.CsvPreference
+import org.supercsv.quote.{ AlwaysQuoteMode, QuoteMode }
 import org.supercsv.util.CsvContext
 import persistence.GeoJsonFormats._
 import persistence._
@@ -57,6 +58,9 @@ object ResourceWriteables {
     (fmt, ctype)
   }
 
+  lazy val CsvPrefs = new CsvPreference.Builder(CsvPreference.STANDARD_PREFERENCE).useQuoteMode(new AlwaysQuoteMode()).build
+  val cc = new CsvContext(0, 0, 0)
+
   /**
    * Creates a stateful Writeable for writing CSV
    *
@@ -66,13 +70,11 @@ object ResourceWriteables {
   def mkCsVWriteable(implicit req: RequestHeader, sepOpt: Option[String] = None): Writeable[JsObject] = {
     val encoder = new DefaultCsvEncoder()
     val sep = sepOpt.getOrElse(config.Constants.separator)
-    val cc = new CsvContext(0, 0, 0)
 
-    def encode(v: JsString) = "\"" + encoder.encode(v.value, cc, CsvPreference.STANDARD_PREFERENCE).replaceAll(
-      "\n",
-      " "
-    )
-      .replaceAll("\r", " ") + "\""
+    def encode(v: JsString) = {
+      val cleaned = v.value.replaceAll("[\n\r]", " ")
+      encoder.encode(cleaned, cc, CsvPrefs)
+    }
 
     def expand(v: JsValue): Seq[(String, String)] =
       utilities.JsonHelper.flatten(v.asInstanceOf[JsObject]).toSeq sortBy { //toSeq necessary due to redefinition of scala.Seq to scala.collection.immutable
