@@ -550,7 +550,7 @@ class PostgresqlRepository @Inject() (
       implicit val renderContext = RenderContext(geomCol, bboxGeom) //set RenderContext
       val attOpt = query.queryOpt.map(renderer.render)
 
-      (windowOpt ++ intersectionOpt ++ attOpt).reduceOption((condition1, condition2) => s"$condition1 and $condition2")
+      (windowOpt ++ intersectionOpt ++ attOpt).reduceOption((condition1, condition2) => s"( $condition1 ) AND ( $condition2 )")
     }
 
     def SELECT_TOTAL_IN_QUERY(from: String, query: SpatialQuery): DBIO[Long] =
