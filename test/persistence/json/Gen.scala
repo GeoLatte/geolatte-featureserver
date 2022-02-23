@@ -21,7 +21,7 @@ import scala.util.Random
  * @author Karel Maesen, Geovise BVBA
  *         creation-date: 11/15/13
  */
-trait Gen[T] {
+trait Gen[+T] {
 
   import Gen._
 
@@ -159,7 +159,7 @@ object Gen {
     genListOf.map(g => new GeometryCollection(g.toArray))
   }
 
-  def geoJsonFeature[T: ClassTag, G <: Geometry](id: Gen[T], geom: Gen[G], prop: Gen[JsObject]): Gen[JsObject] =
+  def geoJsonFeature[T: ClassTag](id: Gen[T], geom: Gen[Geometry], prop: Gen[JsObject]): Gen[JsObject] =
     for {
       g <- geom
       p <- prop
@@ -167,7 +167,7 @@ object Gen {
     } yield {
       i match {
         case i: String => Json.obj("type" -> "Feature", "id" -> i, "geometry" -> Json.toJson(g).as[Geometry], "properties" -> p)
-        case i: Int    => Json.obj("type" -> "Feature", "id" -> i, "geometry" -> Json.toJson(g).as[Geometry], "properties" -> p)
+        case i: Int    => Json.obj("type" -> "Feature", "id" -> i.asInstanceOf[Int], "geometry" -> Json.toJson(g).as[Geometry], "properties" -> p)
         case _         => Json.obj("type" -> "Feature", "id" -> i.toString, "geometry" -> Json.toJson(g).as[Geometry], "properties" -> p)
       }
     }

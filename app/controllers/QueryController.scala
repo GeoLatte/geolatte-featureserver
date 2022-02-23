@@ -3,7 +3,6 @@ package controllers
 import javax.inject.Inject
 import Exceptions._
 import akka.actor.ActorSystem
-import akka.event.Logging
 import akka.stream.scaladsl.Source
 import config.AppExecutionContexts
 import metrics.{ Instrumentation, Operation }
@@ -19,17 +18,13 @@ import scala.concurrent.Future
 import scala.language.{ implicitConversions, reflectiveCalls }
 import scala.util.{ Failure, Success }
 
-class QueryController @Inject() (val repository: Repository, val instrumentation: Instrumentation, actorSystem: ActorSystem, val parsers: PlayBodyParsers)
+class QueryController @Inject() (val repository: Repository, val instrumentation: Instrumentation, val parsers: PlayBodyParsers)
   extends InjectedController
   with RepositoryAction
   with ExceptionHandlers {
 
   import AppExecutionContexts.streamContext
   import config.Constants._
-
-  import akka.event.LoggingAdapter
-
-  implicit val akkLogging: LoggingAdapter = Logging.getLogger(actorSystem.eventStream, play.api.Logger.logger.getName)
 
   def parseQueryExpr(s: String): Option[BooleanExpr] = QueryParser.parse(s) match {
     case Success(expr) => Some(expr)
