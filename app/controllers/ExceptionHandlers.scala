@@ -44,6 +44,7 @@ trait ExceptionHandlers {
     case ex: ViewObjectNotFoundException      => NotFound(s"View object does not exist.")
     case ex: InvalidParamsException           => BadRequest(s"Invalid parameters: ${ex.getMessage}")
     case ex: InvalidQueryException            => BadRequest(s"${ex.getMessage}")
+    case ex: QueryTimeoutException            => RequestTimeout("Operation timed out.")
     case ex: Throwable =>
       Logger.error(s"Internal server error with message : ${ex.getMessage}", ex)
       InternalServerError(s"Internal server error ${ex.getClass.getCanonicalName} with message : ${ex.getMessage}")

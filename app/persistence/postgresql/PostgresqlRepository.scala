@@ -22,8 +22,10 @@ import slick.jdbc.hikaricp.HikariCPJdbcDataSource
 import slick.jdbc.{GetResult, PositionedResult}
 import utilities.{JsonUtils, Utils}
 
+import java.sql.Statement
 import javax.inject._
 import scala.concurrent.Future
+import scala.concurrent.duration.Duration
 import scala.util.Try
 
 @Singleton
@@ -229,7 +231,7 @@ class PostgresqlRepository @Inject()(
     } yield transformed).getOrElse(base)
 
   override def query(db: String, collection: String, spatialQuery: SpatialQuery, start: Option[Int] = None,
-                     limit: Option[Int] = None): Future[CountedQueryResult] = {
+                     limit: Option[Int] = None, queryTimeout: Duration = Duration.Inf): Future[CountedQueryResult] = {
 
     val startMillis = System.currentTimeMillis()
     val projectingReads: Option[Reads[JsObject]] =
@@ -267,10 +269,17 @@ class PostgresqlRepository @Inject()(
     val disableAutocommit = SimpleDBIO(_.connection.setAutoCommit(false))
 
     lazy val publisher: DatabasePublisher[JsObject] =
-      database.stream(disableAutocommit
-        andThen dataStmt.withStatementParameters(fetchSize = 256)).mapResult {
-        case Row(_, geom, json) => assemble(project(json).get, geom)
-      }
+      database
+        .stream(
+          disableAutocommit
+            andThen dataStmt.withStatementParameters(
+              fetchSize = 256,
+              statementInit = withQueryTimeout(queryTimeout)
+            )
+        )
+        .mapResult {
+          case Row(_, geom, json) => assemble(project(json).get, geom)
+        }
 
     def validate(spatialQuery: SpatialQuery): Future[Boolean] =
       if (spatialQuery.explode && !spatialQuery.metadata.jsonTable)
@@ -281,14 +290,23 @@ class PostgresqlRepository @Inject()(
     for {
       _ <- validate(spatialQuery)
       cnt <- fCnt
-    } yield (cnt, Source.fromPublisher(publisher).via(new MetricCalculator(startMillis, db, collection)))
+    } yield (
+      cnt,
+      Source
+      .fromPublisher(publisher)
+      .via(new MetricCalculator(startMillis, db, collection))
+      .recover {
+        case MappableException(dbe) => throw dbe
+      }
+    )
 
   }
 
-  override def distinct(db: String, collection: String, spatialQuery: SpatialQuery, projection: SimpleProjection): Future[List[String]] = {
+  override def distinct(db: String, collection: String, spatialQuery: SpatialQuery,
+                        projection: SimpleProjection, queryTimeout: Duration = Duration.Inf): Future[List[String]] = {
     val from = s"${quote(db)}.${quote(collection)}"
 
-    database.run(Sql.SELECT_DISTINCT(from, spatialQuery, projection)).map(_.filter(s => s != null).sorted.toList)
+    runOnDb("distinct", queryTimeout)(Sql.SELECT_DISTINCT(from, spatialQuery, projection)).map(_.filter(s => s != null).sorted.toList)
   }
 
   override def delete(db: String, collection: String, query: BooleanExpr): Future[Boolean] =
@@ -440,12 +458,19 @@ class PostgresqlRepository @Inject()(
   //Private Utility methods
   //************************************************************************
 
-  def runOnDb[R](label: String)(dbio: DBIO[R]): Future[R] = {
+  def runOnDb[R](label: String, queryTimeout: Duration = Duration.Inf)(dbio: DBIO[R]): Future[R] = {
     val startTimeNano = System.nanoTime()
-    database.run(dbio).andThen {
-      case _ =>
-        metrics.prometheusMetrics.dbio.labels(label).observe((System.nanoTime - startTimeNano) / 10E6)
-    }
+    database
+      .run(dbio.withStatementParameters(statementInit = withQueryTimeout(queryTimeout)))
+      .andThen {
+        case _ =>
+          metrics.prometheusMetrics.dbio
+            .labels(label)
+            .observe((System.nanoTime - startTimeNano) / 10E6)
+      }
+      .recover {
+        case MappableException(dbe) => throw dbe
+      }
   }
 
   private def getPrimaryKey(db: String, coll: String): Future[(String, String)] = {
@@ -865,6 +890,8 @@ class PostgresqlRepository @Inject()(
         Some(DatabaseNotFoundException(getMessage(t)))
       case t: PSQLException if getStatus(t).contains("42P01") =>
         Some(CollectionNotFoundException(getMessage(t)))
+      case t: PSQLException if getStatus(t).contains("57014") =>
+        Some(QueryTimeoutException(getMessage(t)))
       case _ => None
     }
   }
@@ -907,4 +934,8 @@ class PostgresqlRepository @Inject()(
 
     }
   }
+
+  def withQueryTimeout(duration: Duration): Statement => Unit = statement =>
+    if (duration.isFinite) statement.setQueryTimeout(duration.toSeconds.toInt) else ()
+
 }

@@ -12,6 +12,7 @@ import play.api.libs.json.JsonValidationError
 import play.api.libs.json._
 
 import scala.concurrent.Future
+import scala.concurrent.duration.Duration
 
 case class Metadata(
   name:           String,
@@ -165,9 +166,10 @@ trait Repository {
   def deleteCollection(dbName: String, colName: String): Future[Boolean]
 
   def query(database: String, collection: String, spatialQuery: SpatialQuery, start: Option[Int] = None,
-            limit: Option[Int] = None): Future[CountedQueryResult]
+            limit: Option[Int] = None, queryTimeout: Duration = Duration.Inf): Future[CountedQueryResult]
 
-  def distinct(database: String, collection: String, spatialQuery: SpatialQuery, projection: SimpleProjection): Future[List[String]]
+  def distinct(database: String, collection: String, spatialQuery: SpatialQuery,
+               projection: SimpleProjection, queryTimeout: Duration = Duration.Inf): Future[List[String]]
 
   def delete(database: String, collection: String, query: BooleanExpr): Future[Boolean]
 
