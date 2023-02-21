@@ -36,4 +36,6 @@ package object Exceptions {
 
   case class InvalidRequestException(msg: String) extends NoSqlException(msg)
 
+  case class QueryTimeoutException(msg: String) extends NoSqlException(msg)
+
 }

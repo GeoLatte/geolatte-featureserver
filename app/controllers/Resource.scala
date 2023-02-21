@@ -3,8 +3,7 @@ package controllers
 import java.sql.Timestamp
 import java.time.OffsetDateTime
 import java.time.format.DateTimeFormatter
-
-import Exceptions.UnsupportedMediaException
+import Exceptions.{ QueryTimeoutException, UnsupportedMediaException }
 import akka.stream.scaladsl.Source
 import akka.util.ByteString
 import config.Constants
@@ -169,11 +168,19 @@ case class FeaturesResource(totalOpt: Option[Long], features: Source[JsObject, _
   extends Resource with AsSource[JsObject] {
   private val end = ByteString.fromString(s"]}")
   private val sep = ByteString.fromString(",")
+  private def toError(msg: String) = ByteString.fromString(Json.stringify(
+    Json.obj("error" -> msg)
+  ))
 
   override def asSource(implicit writeable: Writeable[JsObject]): Source[ByteString, _] = {
     val total: Long = totalOpt.getOrElse(-1L)
     val start = ByteString.fromString(s"""{"total": $total, "features": [""")
-    features.map(writeable.transform).intersperse(start, sep, end)
+    features
+      .map(writeable.transform)
+      .intersperse(start, sep, end)
+      .recover {
+        case ex: QueryTimeoutException => toError("Operation timed out.")
+      }
   }
 }
 
@@ -183,7 +190,14 @@ case class FeatureStream(totalOpt: Option[Long], features: Source[JsObject, _])
   override def asSource(implicit writeable: Writeable[JsObject]): Source[ByteString, _] = {
     val chunkSep = ByteString.fromString(config.Constants.chunkSeparator)
     val finalSeparator = Source.single(chunkSep)
-    val jsons = features.map(writeable.transform).intersperse(chunkSep)
+    def toError(msg: String): JsObject = Json.obj("error" -> msg)
+
+    val jsons = features
+      .recover {
+        case ex: QueryTimeoutException => toError("Operation timed out.")
+      }
+      .map(writeable.transform)
+      .intersperse(chunkSep)
     jsons.concat(finalSeparator)
   }
 

@@ -10,21 +10,25 @@ import org.geolatte.geom.Envelope
 import org.geolatte.geom.crs.CrsId
 import persistence._
 import persistence.querylang._
+import play.api.Configuration
 import utilities.Utils.Logger
 import play.api.libs.json.{ JsString, _ }
 import play.api.mvc._
 
 import scala.concurrent.Future
+import scala.concurrent.duration.Duration
 import scala.language.{ implicitConversions, reflectiveCalls }
 import scala.util.{ Failure, Success }
 
-class QueryController @Inject() (val repository: Repository, val instrumentation: Instrumentation, val parsers: PlayBodyParsers)
+class QueryController @Inject() (val repository: Repository, val instrumentation: Instrumentation, val parsers: PlayBodyParsers, configuration: Configuration)
   extends InjectedController
   with RepositoryAction
   with ExceptionHandlers {
 
   import AppExecutionContexts.streamContext
   import config.Constants._
+
+  val queryTimeout: Duration = configuration.getOptional[Duration]("fs.postgresql.queryTimeout").getOrElse(Duration.Inf)
 
   def parseQueryExpr(s: String): Option[BooleanExpr] = QueryParser.parse(s) match {
     case Success(expr) => Some(expr)
@@ -226,7 +230,7 @@ class QueryController @Inject() (val repository: Repository, val instrumentation
         request.withCount,
         request.explode
       )
-      result <- repository.query(db, collection, spatialQuery, request.start, request.limit)
+      result <- repository.query(db, collection, spatialQuery, request.start, request.limit, queryTimeout)
       _ = instrumentation.updateSpatialQueryMetrics(db, collection, spatialQuery)
     } yield result
 
@@ -244,7 +248,7 @@ class QueryController @Inject() (val repository: Repository, val instrumentation
     )
 
     for {
-      result <- repository.distinct(db, collection, spatialQuery, request.simpleProjection)
+      result <- repository.distinct(db, collection, spatialQuery, request.simpleProjection, queryTimeout)
       _ = instrumentation.updateSpatialQueryMetrics(db, collection, spatialQuery)
     } yield result
 
