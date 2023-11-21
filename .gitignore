@@ -13,3 +13,7 @@ RUNNING_PID
 *.log
 .vagrant
 **/testdata
+.metals
+.vscode
+.bloop
+metals.sbt
