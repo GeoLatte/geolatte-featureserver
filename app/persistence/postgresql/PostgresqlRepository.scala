@@ -3,24 +3,24 @@ package persistence.postgresql
 import Exceptions._
 import akka.stream._
 import akka.stream.scaladsl._
-import akka.stream.stage.{GraphStage, GraphStageLogic, InHandler, OutHandler}
+import akka.stream.stage.{ GraphStage, GraphStageLogic, InHandler, OutHandler }
 import config.AppExecutionContexts
-import controllers.{Formats, IndexDef, IndexDefW}
+import controllers.{ Formats, IndexDef, IndexDefW }
 import metrics.Metrics
-import org.geolatte.geom.codec.{Wkb, Wkt}
-import org.geolatte.geom.{Envelope, Geometry}
+import org.geolatte.geom.codec.{ Wkb, Wkt }
+import org.geolatte.geom.{ Envelope, Geometry }
 import org.postgresql.util.PSQLException
 import persistence.GeoJsonFormats._
 import persistence._
-import persistence.querylang.{BooleanExpr, PropertyExpr, SimpleProjection}
+import persistence.querylang.{ BooleanExpr, PropertyExpr, SimpleProjection }
 import play.api.Configuration
 import play.api.inject.ApplicationLifecycle
 import play.api.libs.json._
 import slick.basic.DatabasePublisher
 import slick.jdbc.PostgresProfile.api._
 import slick.jdbc.hikaricp.HikariCPJdbcDataSource
-import slick.jdbc.{GetResult, PositionedResult}
-import utilities.{JsonUtils, Utils}
+import slick.jdbc.{ GetResult, PositionedResult }
+import utilities.{ JsonUtils, Utils }
 
 import java.sql.Statement
 import javax.inject._
@@ -29,15 +29,15 @@ import scala.concurrent.duration.Duration
 import scala.util.Try
 
 @Singleton
-class PostgresqlRepository @Inject()(
-                                      configuration: Configuration,
-                                      applicationLifecycle: ApplicationLifecycle,
-                                      metrics: Metrics,
-                                      implicit val mat: Materializer
-                                    )
+class PostgresqlRepository @Inject() (
+  configuration:        Configuration,
+  applicationLifecycle: ApplicationLifecycle,
+  metrics:              Metrics,
+  implicit val mat:     Materializer
+)
   extends Repository
-    with PGExpression
-    with RepoHealth {
+  with PGExpression
+  with RepoHealth {
 
   import AppExecutionContexts.streamContext
   import utilities.Utils._
@@ -89,22 +89,25 @@ class PostgresqlRepository @Inject()(
     val jsEnv = json(r.nextString())
     val env = Json.fromJson[Envelope](jsEnv) match {
       case JsSuccess(value, _) => value
-      case _ => throw new RuntimeException(s"Invalid envelope JSON format. $jsEnv")
+      case _                   => throw new RuntimeException(s"Invalid envelope JSON format. $jsEnv")
     }
     val indexLevel = r.nextInt
     val id_type = r.nextString
     val collection = r.nextString
     val geometryColumn = r.nextString
     val pkey = r.nextString
+    val encodedAsJsonb = Try(r.nextBoolean()).getOrElse(false)
     if (geometryColumn == null)
-      Metadata(collection, env, indexLevel, id_type)
+      Metadata(collection, env, indexLevel, id_type, encodedAsJsonb = encodedAsJsonb)
     else // so this is a registered collection
-      Metadata(collection, env, indexLevel, id_type, 0, geometryColumn, pkey, jsonTable = false)
+      Metadata(collection, env, indexLevel, id_type, 0, geometryColumn, pkey, jsonTable = false, encodedAsJsonb = encodedAsJsonb)
 
   })
 
   override def createDb(dbname: String): Future[Boolean] = {
-    val dbio = Sql.CREATE_SCHEMA(dbname) andThen Sql.CREATE_METADATA_TABLE_IN(dbname) andThen Sql.CREATE_VIEW_TABLE_IN(dbname)
+    val dbio = Sql.CREATE_SCHEMA(dbname) andThen
+      Sql.CREATE_METADATA_TABLE_IN(dbname) andThen
+      Sql.CREATE_VIEW_TABLE_IN(dbname)
     runOnDb("create-db")(dbio.transactionally)
       .map(_ => true)
       .recover {
@@ -132,10 +135,15 @@ class PostgresqlRepository @Inject()(
   }
 
   override def createCollection(dbName: String, colName: String, md: Metadata): Future[Boolean] = {
-    val dbio = Sql.CREATE_COLLECTION_TABLE(dbName, colName) andThen
+    val dbio = Sql.CREATE_COLLECTION_TABLE(dbName, colName, md.encodedAsJsonb) andThen
       Sql.INSERT_METADATA_JSON_COLLECTION(dbName, colName, md) andThen
-      Sql.CREATE_COLLECTION_SPATIAL_INDEX(dbName, colName) andThen
-      Sql.CREATE_COLLECTION_ID_INDEX(dbName, colName, md.idType)
+      Sql.CREATE_COLLECTION_SPATIAL_INDEX(dbName, colName) andThen {
+        if (md.encodedAsJsonb) {
+          Sql.CREATE_COLLECTION_JSONB_PATH_OPS_INDEX(dbName, colName, md.idType)
+        } else {
+          Sql.CREATE_COLLECTION_ID_INDEX(dbName, colName, md.idType)
+        }
+      }
 
     runOnDb("create-collection")(dbio.transactionally)
       .map(_ => true)
@@ -158,7 +166,7 @@ class PostgresqlRepository @Inject()(
         }
         (pkey, idType) <- getPrimaryKey(db, collection)
         cnt <- count(db, collection)
-        finalMd = Metadata(collection, spec.envelope, spec.level, idType, cnt, spec.geometryColumn, pkey, jsonTable = false)
+        finalMd = Metadata(collection, spec.envelope, spec.level, idType, cnt, spec.geometryColumn, pkey, jsonTable = false, encodedAsJsonb = spec.encodedAsJsonb)
         result <- reg(db, finalMd)
       } yield result
     }
@@ -180,7 +188,7 @@ class PostgresqlRepository @Inject()(
   def metadataFromDb(db: String, collection: String): Future[Metadata] =
     runOnDb("get-metadata")(Sql.SELECT_METADATA(db, collection)) map {
       case Some(v) => v
-      case None => throw CollectionNotFoundException(s"Collection $db/$collection not found.")
+      case None    => throw CollectionNotFoundException(s"Collection $db/$collection not found.")
     } recover {
       case MappableException(dbe) => throw dbe
     }
@@ -260,7 +268,7 @@ class PostgresqlRepository @Inject()(
 
     //get the data
     def project(js: JsObject): Option[JsObject] = projectingReads match {
-      case None => Some(js)
+      case None              => Some(js)
       case Some(projections) => js.asOpt(projections)
     }
 
@@ -309,14 +317,20 @@ class PostgresqlRepository @Inject()(
     runOnDb("distinct", queryTimeout)(Sql.SELECT_DISTINCT(from, spatialQuery, projection)).map(_.filter(s => s != null).sorted.toList)
   }
 
-  override def delete(db: String, collection: String, query: BooleanExpr): Future[Boolean] =
-    runOnDb("delete-data")(Sql.DELETE_DATA(db, collection, PGJsonQueryRenderer.render(query)(RenderContext("geometry")))) map { _ => true }
+  override def delete(db: String, collection: String, metadata: Metadata, query: BooleanExpr): Future[Boolean] = {
+    val renderer = if (metadata.encodedAsJsonb) {
+      PGJsonpathQueryRenderer
+    } else {
+      PGJsonQueryRenderer
+    }
+    runOnDb("delete-data")(Sql.DELETE_DATA(db, collection, renderer.render(query)(RenderContext("geometry")))) map { _ => true }
+  }
 
   def extractIdString(json: JsObject): String =
     (json \ "id").getOrElse(JsNull) match {
       case JsString(v) => v
       case JsNumber(i) => i.toString()
-      case _ => throw new IllegalArgumentException("No ID property of type String or Number")
+      case _           => throw new IllegalArgumentException("No ID property of type String or Number")
     }
 
   def batchInsert(db: String, collection: String, jsons: Seq[(JsObject, Geometry)]): Future[Int] = {
@@ -334,16 +348,20 @@ class PostgresqlRepository @Inject()(
       )
     }
 
-
-  def update(db: String, collection: String, query: BooleanExpr, newValue: JsObject, geometry: Geometry): Future[Int] = {
-    val whereExpr = PGJsonQueryRenderer.render(query)(RenderContext("geometry"))
+  def update(db: String, collection: String, metadata: Metadata, query: BooleanExpr, newValue: JsObject, geometry: Geometry): Future[Int] = {
+    val renderer = if (metadata.encodedAsJsonb) {
+      PGJsonpathQueryRenderer
+    } else {
+      PGJsonQueryRenderer
+    }
+    val whereExpr = renderer.render(query)(RenderContext("geometry"))
     val stmt = Sql.UPDATE_DATA(db, collection, whereExpr, Json.stringify(newValue), Wkb.toWkb(geometry).toString)
     runOnDb("update")(stmt)
   }
 
-  override def update(database: String, collection: String, query: BooleanExpr, updateSpec: JsObject): Future[Int] = {
+  override def update(database: String, collection: String, metadata: Metadata, query: BooleanExpr, updateSpec: JsObject): Future[Int] = {
     val newGeometry = updateSpec.as[Geometry](GeoJsonFormats.geoJsonGeometryReads) //extract new geometry
-    update(database, collection, query, updateSpec, newGeometry)
+    update(database, collection, metadata, query, updateSpec, newGeometry)
   }
 
   def upsert(db: String, collection: String, jsons: Seq[(JsObject, Geometry)]): Future[Int] = {
@@ -365,7 +383,7 @@ class PostgresqlRepository @Inject()(
 
     getViewOpt(db, collection, viewName).flatMap {
       case Some(_) => dropView(db, collection, viewName)
-      case _ => Future.successful(false)
+      case _       => Future.successful(false)
     } flatMap { isOverWrite =>
       runOnDb("save-view")(Sql.INSERT_VIEW(db, collection, viewName, viewDef)) map {
         _ => isOverWrite
@@ -390,7 +408,7 @@ class PostgresqlRepository @Inject()(
       if (exists) {
         runOnDb("get-view")(Sql.GET_VIEW(db, collection, id)) map {
           case Some(view) => view.asOpt[JsObject](Formats.ViewDefOut(db, collection))
-          case _ => None
+          case _          => None
         }
       } else throw CollectionNotFoundException()
     }
@@ -437,7 +455,7 @@ class PostgresqlRepository @Inject()(
     getInternalIndices(dbName, colName).map { listIdx =>
       listIdx.find(q => q.name == indexName) match {
         case Some(idf) => idf
-        case None => throw IndexNotFoundException(s"Index $indexName on $dbName/$colName not found.")
+        case None      => throw IndexNotFoundException(s"Index $indexName on $dbName/$colName not found.")
       }
     }
 
@@ -490,7 +508,7 @@ class PostgresqlRepository @Inject()(
       toPKeyData
     } map {
       case Some(pk) => pk
-      case None => throw InvalidPrimaryKeyException(s"Can't determine pkey configuration")
+      case None     => throw InvalidPrimaryKeyException(s"Can't determine pkey configuration")
     }
   }
 
@@ -510,7 +528,7 @@ class PostgresqlRepository @Inject()(
   private def stripGeometry(js: JsObject): JsObject = {
     js.transform(tr) match {
       case JsSuccess(pruned, _) => pruned
-      case _ => js
+      case _                    => js
     }
   }
 
@@ -518,7 +536,7 @@ class PostgresqlRepository @Inject()(
 
   private def schemaIsExcluded(collName: String): Boolean = excludedSchemas match {
     case Some(col) => col.contains(collName)
-    case _ => false
+    case _         => false
   }
 
   private def withExcludeSchemas(clause: String, prop: String) = {
@@ -526,8 +544,8 @@ class PostgresqlRepository @Inject()(
 
     (clause, excludedSchemas) match {
       case (c, Some(coll)) if c.isEmpty => s" $prop not in ( ${quoted(coll)} )"
-      case (c, Some(coll)) => s" $c AND $prop not in ( ${quoted(coll)} )"
-      case _ => clause
+      case (c, Some(coll))              => s" $c AND $prop not in ( ${quoted(coll)} )"
+      case _                            => clause
     }
   }
 
@@ -566,9 +584,22 @@ class PostgresqlRepository @Inject()(
       bboxGeom.map(bboxIntersectionRenderer)
     }
 
+    def renderContextFromSpatialQuery(query: SpatialQuery): RenderContext = {
+      val geomCol = if (query.metadata.jsonTable) "geometry" else query.metadata.geometryColumn
+      val bboxGeom = wktGeometry(query)
+
+      RenderContext(geomCol, bboxGeom)
+    }
+
     def condition(query: SpatialQuery): Option[String] = {
 
-      val renderer = if (query.metadata.jsonTable) PGJsonQueryRenderer else PGRegularQueryRenderer
+      val renderer = if (query.metadata.jsonTable) {
+        if (query.metadata.encodedAsJsonb) {
+          PGJsonpathQueryRenderer
+        } else {
+          PGJsonQueryRenderer
+        }
+      } else PGRegularQueryRenderer
       val geomCol = if (query.metadata.jsonTable) "geometry" else query.metadata.geometryColumn
 
       def geomIntersectionRenderer(wkt: String) = s"ST_Intersects($geomCol, ${single_quote(wkt)}::geometry)"
@@ -595,17 +626,17 @@ class PostgresqlRepository @Inject()(
 
       val limitClause = limit match {
         case Some(lim) => s"\nLIMIT $lim"
-        case _ => ""
+        case _         => ""
       }
 
       val offsetClause = start match {
         case Some(s) => s"\nOFFSET $s"
-        case _ => ""
+        case _       => ""
       }
 
       val sortClause = (query.sort, limit, start) match {
         case (Nil, None, None) => ""
-        case _ => s"ORDER BY ${sort(query)}"
+        case _                 => s"ORDER BY ${sort(query)}"
       }
 
       val projection =
@@ -636,7 +667,11 @@ class PostgresqlRepository @Inject()(
 
       val renderedPropertyExpr =
         if (query.metadata.jsonTable) {
-          PGJsonQueryRenderer.propertyPathAsJsonText(propertyExpr)
+          if (query.metadata.encodedAsJsonb) {
+            PGJsonpathQueryRenderer.propertyPathAsJsonText(propertyExpr)
+          } else {
+            PGJsonQueryRenderer.propertyPathAsJsonText(propertyExpr)
+          }
         } else {
           PGRegularQueryRenderer.renderPropertyExpr(propertyExpr)
         }
@@ -669,7 +704,8 @@ class PostgresqlRepository @Inject()(
               #${toColName(IdTypeField)} VARCHAR(120),
               #${toColName(CollectionField)} VARCHAR(255) PRIMARY KEY,
               geometry_col VARCHAR(255),
-              pkey VARCHAR(255)
+              pkey VARCHAR(255),
+              encoded_as_jsonb BOOLEAN
               );
        """
 
@@ -682,13 +718,15 @@ class PostgresqlRepository @Inject()(
               )
        """
 
-    def CREATE_COLLECTION_TABLE(dbname: String, tableName: String) =
+    def CREATE_COLLECTION_TABLE(dbname: String, tableName: String, encodedAsJsonb: Boolean) = {
+      val typeOfJsonField = if (encodedAsJsonb) "JSONB" else "JSON"
       sqlu"""CREATE TABLE #${quote(dbname)}.#${quote(tableName)} (
               id VARCHAR(255) PRIMARY KEY,
               geometry GEOMETRY,
-              json JSON
+              json #${typeOfJsonField}
               )
        """
+    }
 
     def GET_TABLE_PRIMARY_KEY(dbname: String, tableName: String): DBIO[Option[(String, String)]] = {
       val relname = s"$dbname.$tableName"
@@ -705,6 +743,11 @@ class PostgresqlRepository @Inject()(
     def CREATE_COLLECTION_ID_INDEX(dbname: String, tableName: String, idType: String) =
       sqlu"""CREATE INDEX #${quote("idx_" + tableName + "_id")}
              ON #${quote(dbname)}.#${quote(tableName)} ( (json_extract_path_text(json, 'id')::#$idType) )
+     """
+
+    def CREATE_COLLECTION_JSONB_PATH_OPS_INDEX(dbname: String, tableName: String, idType: String) =
+      sqlu"""CREATE INDEX #${quote("idx_" + tableName + "_jsonb_path")}
+             ON #${quote(dbname)}.#${quote(tableName)} USING gin(json jsonb_path_ops);
      """
 
     def CREATE_COLLECTION_SPATIAL_INDEX(dbname: String, tableName: String) =
@@ -743,7 +786,10 @@ class PostgresqlRepository @Inject()(
               ${Json.stringify(Json.toJson(md.envelope))}::json,
               ${md.level},
               ${md.idType},
-              $tableName
+              $tableName,
+              null,
+              null,
+              ${md.encodedAsJsonb}
               )
      """
 
@@ -754,7 +800,8 @@ class PostgresqlRepository @Inject()(
               ${md.idType},
               ${tableName},
               ${md.geometryColumn},
-              ${md.pkey}
+              ${md.pkey},
+              ${md.encodedAsJsonb},
               )
      """
 

@@ -22,7 +22,8 @@ case class Metadata(
   count:          Long     = 0,
   geometryColumn: String   = "GEOMETRY",
   pkey:           String   = "id",
-  jsonTable:      Boolean  = true // is table defined by persistence Server? or registered
+  jsonTable:      Boolean  = true, // is table defined by persistence Server? or registered
+  encodedAsJsonb: Boolean
 )
 
 object MetadataIdentifiers {
@@ -37,6 +38,7 @@ object MetadataIdentifiers {
   val GeometryColumnField = "geometry-column"
   val PkeyField = "primary-key"
   val IsJsonField = "is-json"
+  val EncodedAsJsonbField = "encoded-as-jsonb"
 }
 
 object Metadata {
@@ -44,14 +46,15 @@ object Metadata {
   import MetadataIdentifiers._
 
   //added so that MetadataReads compiles
-  def fromReads(name: String, envelope: Envelope, level: Int, idType: String): Metadata =
-    this(name, envelope, level, idType)
+  def fromReads(name: String, envelope: Envelope, level: Int, idType: String, encodedAsJsonb: Boolean): Metadata =
+    Metadata(name, envelope, level, idType, encodedAsJsonb = encodedAsJsonb)
 
   implicit val MetadataReads = (
     (__ \ CollectionField).read[String] and
     (__ \ ExtentField).read[Envelope](EnvelopeFormats) and
     (__ \ IndexLevelField).read[Int] and
-    (__ \ IdTypeField).read[String](Reads.filter[String](JsonValidationError("Requires 'text' or 'decimal"))(tpe => tpe == "text" || tpe == "decimal"))
+    (__ \ IdTypeField).read[String](Reads.filter[String](JsonValidationError("Requires 'text' or 'decimal"))(tpe => tpe == "text" || tpe == "decimal")) and
+    (__ \ EncodedAsJsonbField).readNullable[Boolean].map(_.getOrElse(false))
   )(Metadata.fromReads _)
 }
 
@@ -171,9 +174,9 @@ trait Repository {
   def distinct(database: String, collection: String, spatialQuery: SpatialQuery,
                projection: SimpleProjection, queryTimeout: Duration = Duration.Inf): Future[List[String]]
 
-  def delete(database: String, collection: String, query: BooleanExpr): Future[Boolean]
+  def delete(database: String, collection: String, metadata: Metadata, query: BooleanExpr): Future[Boolean]
 
-  def update(database: String, collection: String, query: BooleanExpr, updateSpec: JsObject): Future[Int]
+  def update(database: String, collection: String, metadata: Metadata, query: BooleanExpr, updateSpec: JsObject): Future[Int]
 
   def writer(database: String, collection: String): FeatureWriter
 
