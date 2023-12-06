@@ -51,9 +51,11 @@ class TxController @Inject() (
     implicit request =>
       {
         extract[JsString](request.body.asJson, "query") flatMap (parse(_)) match {
-          case Success(q) => repository.delete(db, col, q)
-            .map(_ => Ok("Objects removed"))
-            .recover(commonExceptionHandler(db))
+          case Success(q) => repository.metadata(db, col).flatMap { md =>
+            repository.delete(db, col, md, q)
+              .map(_ => Ok("Objects removed"))
+              .recover(commonExceptionHandler(db))
+          }
           case Failure(e) => Future.successful(BadRequest(s"Invalid parameters: ${e.getMessage} "))
         }
       }
@@ -66,10 +68,12 @@ class TxController @Inject() (
         val td = extract[JsObject](request.body.asJson, "update")
         (tq, td) match {
           case (Success(q), Success(d)) =>
-            repository
-              .update(db, col, q, d)
-              .map(n => Ok(s"n objects updated."))
-              .recover(commonExceptionHandler(db))
+            repository.metadata(db, col).flatMap { md =>
+              repository
+                .update(db, col, md, q, d)
+                .map(n => Ok(s"n objects updated."))
+                .recover(commonExceptionHandler(db))
+            }
           case _ => Future.successful(BadRequest(s"Invalid Request body"))
         }
       }

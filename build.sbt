@@ -1,7 +1,7 @@
 import sbt.Keys.name
 
 
-scalaVersion := "2.13.1"
+scalaVersion := "2.13.12"
 
 val appName = "geolatte-featureserver"
 val appVersion = "2.0-SNAPSHOT"

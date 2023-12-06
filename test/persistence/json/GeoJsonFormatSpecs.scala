@@ -32,7 +32,7 @@ class GeoJsonFormatSpecs extends Specification {
     val prop = properties("foo" -> Gen.oneOf("bar", "bar2"), "num" -> Gen.oneOf(1, 2, 3))
 
     "validate jsons with numeric ID-properties iff metadata indicates decimal id-type" in {
-      val md = Metadata("col", new Envelope(0, 0, 1000, 1000), 8, "decimal")
+      val md = Metadata("col", new Envelope(0, 0, 1000, 1000), 8, "decimal", encodedAsJsonb = false)
       val validator = GeoJsonFormats.featureValidator(md.idType)
       val pf = geoJsonFeature(Gen.id, Gen(pnt), prop)
       val json = pf.sample.get
@@ -40,7 +40,7 @@ class GeoJsonFormatSpecs extends Specification {
     }
 
     "json.as(featureValidator) returns json if it validates" in {
-      val md = Metadata("col", new Envelope(0, 0, 1000, 1000), 8, "decimal")
+      val md = Metadata("col", new Envelope(0, 0, 1000, 1000), 8, "decimal", encodedAsJsonb = false)
       val validator = GeoJsonFormats.featureValidator(md.idType)
       val pf = geoJsonFeature(Gen.id, Gen(pnt), prop)
       val json = pf.sample.get
@@ -48,7 +48,7 @@ class GeoJsonFormatSpecs extends Specification {
     }
 
     "validate jsons with string ID-properties iff metadata indicates text id-type" in {
-      val md = Metadata("col", new Envelope(0, 0, 1000, 1000), 8, "text")
+      val md = Metadata("col", new Envelope(0, 0, 1000, 1000), 8, "text", encodedAsJsonb = false)
       val validator = GeoJsonFormats.featureValidator(md.idType)
       val pf = geoJsonFeature(Gen.idString, Gen(pnt), prop)
       val json = pf.sample.get
@@ -56,7 +56,7 @@ class GeoJsonFormatSpecs extends Specification {
     }
 
     "not validate jsons with string ID-properties iff metadata indicates decimal-type" in {
-      val md = Metadata("col", new Envelope(0, 0, 1000, 1000), 8, "decimal")
+      val md = Metadata("col", new Envelope(0, 0, 1000, 1000), 8, "decimal", encodedAsJsonb = false)
       val validator = GeoJsonFormats.featureValidator(md.idType)
       val pf = geoJsonFeature(Gen.idString, Gen(pnt), prop)
       val json = pf.sample.get
@@ -64,7 +64,7 @@ class GeoJsonFormatSpecs extends Specification {
     }
 
     "json.as(featureValidator) throw exceptions if it doesn't validates" in {
-      val md = Metadata("col", new Envelope(0, 0, 1000, 1000), 8, "decimal")
+      val md = Metadata("col", new Envelope(0, 0, 1000, 1000), 8, "decimal", encodedAsJsonb = false)
       val validator = GeoJsonFormats.featureValidator(md.idType)
       val pf = geoJsonFeature(Gen.idString, Gen(pnt), prop)
       val json = pf.sample.get
@@ -74,7 +74,7 @@ class GeoJsonFormatSpecs extends Specification {
     }
 
     "not validate jsons with numeric ID-properties iff metadata indicates textl id-type" in {
-      val md = Metadata("col", new Envelope(0, 0, 1000, 1000), 8, "text")
+      val md = Metadata("col", new Envelope(0, 0, 1000, 1000), 8, "text", encodedAsJsonb = false)
       val validator = GeoJsonFormats.featureValidator(md.idType)
       val pf = geoJsonFeature(Gen.id, Gen(pnt), prop)
       val json = pf.sample.get

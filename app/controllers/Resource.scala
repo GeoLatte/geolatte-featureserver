@@ -240,12 +240,14 @@ object Formats {
     (__ \ MetadataIdentifiers.IdTypeField).read[String](
       Reads
         .filter[String](JsonValidationError("Requires 'text' or 'decimal"))(tpe => tpe == "text" || tpe == "decimal")
-    )
+    ) and
+      (__ \ MetadataIdentifiers.EncodedAsJsonbField).readNullable[Boolean]
   )(newCollectionMetadata _)
   val CollectionReadsForRegisteredTable: Reads[Metadata] = (
     (__ \ MetadataIdentifiers.CollectionField).read[String] and
     (__ \ MetadataIdentifiers.ExtentField).read(EnvelopeFormats) and
-    (__ \ MetadataIdentifiers.GeometryColumnField).read[String]
+    (__ \ MetadataIdentifiers.GeometryColumnField).read[String] and
+    (__ \ MetadataIdentifiers.EncodedAsJsonbField).readNullable[Boolean]
   )(registerTableMetadata _)
   val CollectionWrites: Writes[Metadata] = (
     (__ \ MetadataIdentifiers.CollectionField).write[String] and
@@ -255,7 +257,8 @@ object Formats {
     (__ \ MetadataIdentifiers.CountField).write[Long] and
     (__ \ MetadataIdentifiers.GeometryColumnField).write[String] and
     (__ \ MetadataIdentifiers.PkeyField).write[String] and
-    (__ \ MetadataIdentifiers.IsJsonField).write[Boolean]
+    (__ \ MetadataIdentifiers.IsJsonField).write[Boolean] and
+    (__ \ MetadataIdentifiers.EncodedAsJsonbField).write[Boolean]
   )(unlift(Metadata.unapply))
   val projection: Reads[JsArray] = (__ \ "projection").readNullable[JsArray].map(js => js.getOrElse(Json.arr()))
   val ViewDefIn = (
@@ -267,11 +270,11 @@ object Formats {
     (__ \ "projection").readNullable[JsArray]
   ).tupled
 
-  def newCollectionMetadata(extent: Envelope, level: Int, idtype: String) =
-    Metadata.fromReads("", extent, level, idtype)
+  def newCollectionMetadata(extent: Envelope, level: Int, idtype: String, maybeEncodedAsJsonb: Option[Boolean]) =
+    Metadata.fromReads("", extent, level, idtype, maybeEncodedAsJsonb.getOrElse(true))
 
-  def registerTableMetadata(collection: String, extent: Envelope, geometryCol: String) =
-    Metadata(collection, extent, 0, "decimal", 0, geometryCol, "", jsonTable = false)
+  def registerTableMetadata(collection: String, extent: Envelope, geometryCol: String, maybeEncodedAsJsonb: Option[Boolean]) =
+    Metadata(collection, extent, 0, "decimal", 0, geometryCol, "", jsonTable = false, encodedAsJsonb = maybeEncodedAsJsonb.getOrElse(true))
 
   def ViewDefOut(db: String, col: String) = (
     (__ \ "name").json.pickBranch(of[JsString]) and
