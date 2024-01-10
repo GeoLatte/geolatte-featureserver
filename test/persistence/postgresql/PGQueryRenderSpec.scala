@@ -222,7 +222,7 @@ class PGQueryRenderSpec extends Specification {
 
     "properly render JsonContains expression" in {
       val expr = QueryParser.parse(""" properties.test @> '["a", 2]' """).get
-      compressWS(renderer.render(expr)) === """json_extract_path(json, 'properties','test') @> '["a", 2]'::jsonb"""
+      compressWS(renderer.render(expr)) === """jsonb_extract_path(json, 'properties','test') @> '["a", 2]'::jsonb"""
     }
 
     "properly render to_date functions in expression" in {
@@ -232,7 +232,7 @@ class PGQueryRenderSpec extends Specification {
 
     "properly render between .. and operator in expression" in {
       val expr = QueryParser.parse(" to_date(properties.foo, 'YYYY-MM-DD') between '2011-01-01' and '2012-01-01' ").get
-      compressWS(renderer.render(expr)) === """( to_date(jsonb_extract_path_text(json, 'properties','foo'), 'YYYY-MM-DD' ) between '2011-01-01' and '2012-01-01' )"""
+      compressWS(renderer.render(expr)) === """( to_date(jsonb_extract_path_text(json, 'properties','foo'), 'YYYY-MM-DD' ) ::text between '2011-01-01' and '2012-01-01' )"""
     }
   }
 
