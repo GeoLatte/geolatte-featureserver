@@ -182,7 +182,7 @@ class PGQueryRenderSpec extends Specification {
     "property render an IN predicate expression" in {
       val expr1 = QueryParser.parse(" a.b in (1,2,3) ").get
       compressWS(renderer.render(expr1)) ===
-        "jsonb_extract_path_text(json, 'a','b')::decimal in (3,2,1)"
+        "( json->'a'->>'b' )::decimal in (3,2,1)"
     }
 
     "properly render simple regex expression " in {
@@ -192,12 +192,12 @@ class PGQueryRenderSpec extends Specification {
 
     "properly render simple like expression " in {
       val expr = QueryParser.parse("properties.foo like 'a%bcd'").get
-      compressWS(renderer.render(expr)) === "jsonb_extract_path_text(json, 'properties','foo')::text like 'a%bcd'"
+      compressWS(renderer.render(expr)) === "( json->'properties'->>'foo' )::text like 'a%bcd'"
     }
 
     "properly render simple ilike expression " in {
       val expr = QueryParser.parse("properties.foo ilike 'a%bcd'").get
-      compressWS(renderer.render(expr)) === "jsonb_extract_path_text(json, 'properties','foo')::text ilike 'a%bcd'"
+      compressWS(renderer.render(expr)) === "( json->'properties'->>'foo' )::text ilike 'a%bcd'"
     }
 
     "properly render IS NULL expression " in {
@@ -222,7 +222,7 @@ class PGQueryRenderSpec extends Specification {
 
     "properly render JsonContains expression" in {
       val expr = QueryParser.parse(""" properties.test @> '["a", 2]' """).get
-      compressWS(renderer.render(expr)) === """jsonb_extract_path(json, 'properties','test') @> '["a", 2]'::jsonb"""
+      compressWS(renderer.render(expr)) === """( json->'properties'->'test' ) @> '["a", 2]'::jsonb"""
     }
 
     "properly render to_date functions in expression" in {
@@ -232,7 +232,7 @@ class PGQueryRenderSpec extends Specification {
 
     "properly render between .. and operator in expression" in {
       val expr = QueryParser.parse(" to_date(properties.foo, 'YYYY-MM-DD') between '2011-01-01' and '2012-01-01' ").get
-      compressWS(renderer.render(expr)) === """( to_date(jsonb_extract_path_text(json, 'properties','foo'), 'YYYY-MM-DD' ) ::text between '2011-01-01' and '2012-01-01' )"""
+      compressWS(renderer.render(expr)) === """( to_date(( json->'properties'->>'foo' ), 'YYYY-MM-DD' ) ::text between '2011-01-01' and '2012-01-01' )"""
     }
   }
 

@@ -519,7 +519,7 @@ class PostgresqlRepository @Inject() (
 
   //TODO -- should we check for quotes, spaces etc.  in str?
   // alternative is to use escapeSql in the org.apache.commons.lang.StringEscapeUtils
-  private def quote(str: String): String = "\"" + str + "\""
+  override def quote(str: String): String = "\"" + str + "\""
 
   private def single_quote(str: String): String = "'" + str + "'"
 
