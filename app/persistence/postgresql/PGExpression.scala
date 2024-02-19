@@ -10,7 +10,7 @@ trait PGExpression {
   //TODO -- change parameter flds to Field Type
   def fldSpecToComponents(flds: String): Seq[String] = flds.split("\\.").toIndexedSeq
 
-  private def quote(str: String) = s"'$str'"
+  protected def quote(str: String) = s"'$str'"
 
   def intersperse[A](a: Seq[A], b: Seq[A]): Seq[A] = a match {
     case first +: rest => first +: intersperse(b, rest)

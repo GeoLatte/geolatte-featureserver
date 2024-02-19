@@ -98,16 +98,18 @@ object PGJsonpathQueryRenderer extends BaseQueryRenderer {
 /**
  * This query renderer is used when a query can not be rendered as a jsonpath expression
  */
-object PGJsonbFallbackQueryRenderer extends BaseQueryRenderer {
+object PGJsonbFallbackQueryRenderer extends BaseQueryRenderer with PGExpression {
 
-  def renderPropertyExpr(expr: PropertyExpr) = {
-    val variadicPath = path2VariadicList(expr)
-    s"jsonb_extract_path(json, $variadicPath)"
+  def renderPropertyExpr(expr: PropertyExpr): String = {
+    val quotedFields = fldSpecToComponents(expr.path).map(quote)
+    val flds = "json" +: quotedFields
+    s"( ${intersperseOperators(flds, "->")} )"
   }
 
   def propertyPathAsJsonText(expr: PropertyExpr): String = {
-    val variadicPath = path2VariadicList(expr)
-    s"jsonb_extract_path_text(json, $variadicPath)"
+    val quotedFields = fldSpecToComponents(expr.path).map(quote)
+    val flds = "json" +: quotedFields
+    s"( ${intersperseOperators(flds, "->", Some("->>"))} )"
   }
 
   def renderAtomicPropsAsText(expr: AtomicExpr): String = expr match {
@@ -138,14 +140,6 @@ object PGJsonbFallbackQueryRenderer extends BaseQueryRenderer {
                              date: AtomicExpr,
                              fmt:  AtomicExpr
                            ): String = s" to_date(${renderAtomicPropsAsText(date)}, ${renderAtomicPropsAsText(fmt)}) "
-
-  private def renderPropertyExprwithoutCast(lhs: PropertyExpr): String = {
-    val variadicPath: String = path2VariadicList(lhs)
-    s"jsonb_extract_path_text(json, $variadicPath)"
-  }
-
-  private def path2VariadicList(propertyExpr: PropertyExpr): String =
-    "'" + propertyExpr.path.replaceAll("\\.", "','") + "'"
 
 }
 
