@@ -10,7 +10,7 @@ trait PGExpression {
   //TODO -- change parameter flds to Field Type
   def fldSpecToComponents(flds: String): Seq[String] = flds.split("\\.").toIndexedSeq
 
-  protected def quote(str: String) = s"'$str'"
+  protected def quoteField(str: String) = s"'$str'"
 
   def intersperse[A](a: Seq[A], b: Seq[A]): Seq[A] = a match {
     case first +: rest => first +: intersperse(b, rest)
@@ -32,7 +32,7 @@ trait PGExpression {
     paths.map(jsonFieldSelector).mkString(",")
 
   def jsonFieldSelector(path: String): String = {
-    val quotedFields = fldSpecToComponents(path).map(quote)
+    val quotedFields = fldSpecToComponents(path).map(quoteField)
     val flds = "json" +: quotedFields
     s"( ${intersperseOperators(flds, "->", Some("->>"))} )"
   }
