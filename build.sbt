@@ -35,7 +35,7 @@ lazy val slickVersion = "3.3.2"
 lazy val psqlDependencies = Seq(
   "com.typesafe.slick" %% "slick" % slickVersion,
   "com.typesafe.slick" %% "slick-hikaricp" % slickVersion,
-  "org.postgresql" % "postgresql" % "42.1.1"
+  "org.postgresql" % "postgresql" % "42.7.2"
   )
 
 lazy val prometheusClientVersion = "0.8.0"

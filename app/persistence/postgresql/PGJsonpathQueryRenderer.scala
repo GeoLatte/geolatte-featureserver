@@ -101,13 +101,13 @@ object PGJsonpathQueryRenderer extends BaseQueryRenderer {
 object PGJsonbFallbackQueryRenderer extends BaseQueryRenderer with PGExpression {
 
   def renderPropertyExpr(expr: PropertyExpr): String = {
-    val quotedFields = fldSpecToComponents(expr.path).map(quote)
+    val quotedFields = fldSpecToComponents(expr.path).map(quoteField)
     val flds = "json" +: quotedFields
     s"( ${intersperseOperators(flds, "->")} )"
   }
 
   def propertyPathAsJsonText(expr: PropertyExpr): String = {
-    val quotedFields = fldSpecToComponents(expr.path).map(quote)
+    val quotedFields = fldSpecToComponents(expr.path).map(quoteField)
     val flds = "json" +: quotedFields
     s"( ${intersperseOperators(flds, "->", Some("->>"))} )"
   }
