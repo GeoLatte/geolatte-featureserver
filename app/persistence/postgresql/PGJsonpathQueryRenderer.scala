@@ -32,11 +32,6 @@ object PGJsonpathQueryRenderer extends BaseQueryRenderer {
     s"$$.${expr.path}"
   }
 
-  // FIXME
-  def propertyPathAsJsonText(expr: PropertyExpr): String = {
-    s"$$.${expr.path}"
-  }
-
   override def renderNullTestPredicate(
                                         lhs: AtomicExpr,
                                         is:  Boolean
