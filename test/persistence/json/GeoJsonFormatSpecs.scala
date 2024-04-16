@@ -24,7 +24,7 @@ class GeoJsonFormatSpecs extends Specification {
   val crs = CrsId.valueOf(3000)
   val maxExtent = new Envelope(0, 0, 1000, 1000, crs)
   val indexLevel = 4
-  implicit val mortonCode = new MortonCode(new MortonContext(maxExtent, indexLevel))
+  implicit val mortonCode: MortonCode = new MortonCode(new MortonContext(maxExtent, indexLevel))
 
   "An Feature Validator" should {
 

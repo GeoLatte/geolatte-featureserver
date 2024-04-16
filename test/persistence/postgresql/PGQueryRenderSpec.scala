@@ -8,7 +8,7 @@ import persistence.querylang.{ QueryParser, BooleanExpr }
  */
 class PGQueryRenderSpec extends Specification {
 
-  implicit val renderContext = RenderContext("geometry", Some("SRID=31370;POLYGON((1 1,100 1,100 100,1 100,1 1))"))
+  implicit val renderContext: RenderContext = RenderContext("geometry", Some("SRID=31370;POLYGON((1 1,100 1,100 100,1 100,1 1))"))
 
   "The PGJsonQueryRenderer " should {
 

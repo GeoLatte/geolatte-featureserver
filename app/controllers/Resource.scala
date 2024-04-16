@@ -317,7 +317,7 @@ object Formats {
     new Timestamp(oft.toEpochSecond)
   }
 
-  implicit val timestampFormat = new Format[Timestamp] {
+  implicit val timestampFormat: Format[Timestamp] = new Format[Timestamp] {
 
     def writes(t: Timestamp): JsValue = toJson(timestampToString(t))
 

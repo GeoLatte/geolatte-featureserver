@@ -70,7 +70,7 @@ class PostgresqlRepository @Inject() (
   def getRowResultFromTable(md: Metadata) = GetResult(tableRecordToRow(md))
 
   def tableRecordToRow(meta: Metadata) = (pr: PositionedResult) =>
-    if (meta.jsonTable) Row(pr.nextString, pr.nextString(), Json.parse(pr.nextString()).asInstanceOf[JsObject])
+    if (meta.jsonTable) Row(pr.nextString(), pr.nextString(), Json.parse(pr.nextString()).asInstanceOf[JsObject])
     else {
       val rs = pr.rs
       val md = rs.getMetaData
@@ -85,17 +85,17 @@ class PostgresqlRepository @Inject() (
       Row(id, geom, jsObj)
     }
 
-  implicit val getMetadataResult = GetResult(r => {
+  implicit val getMetadataResult: GetResult[Metadata] = GetResult(r => {
     val jsEnv = json(r.nextString())
     val env = Json.fromJson[Envelope](jsEnv) match {
       case JsSuccess(value, _) => value
       case _                   => throw new RuntimeException(s"Invalid envelope JSON format. $jsEnv")
     }
-    val indexLevel = r.nextInt
-    val id_type = r.nextString
-    val collection = r.nextString
-    val geometryColumn = r.nextString
-    val pkey = r.nextString
+    val indexLevel = r.nextInt()
+    val id_type = r.nextString()
+    val collection = r.nextString()
+    val geometryColumn = r.nextString()
+    val pkey = r.nextString()
     val encodedAsJsonb = Try(r.nextBoolean()).getOrElse(false)
     if (geometryColumn == null)
       Metadata(collection, env, indexLevel, id_type, encodedAsJsonb = encodedAsJsonb)
@@ -849,7 +849,7 @@ class PostgresqlRepository @Inject() (
          WHERE COLLECTION = $tableName and VIEW_NAME = $viewName
      """
 
-    implicit val getJson = GetResult(r => Json.parse(r.nextString()).asInstanceOf[JsObject])
+    implicit val getJson: GetResult[JsObject] = GetResult(r => Json.parse(r.nextString()).asInstanceOf[JsObject])
 
     def GET_VIEW(dbname: String, coll: String, viewName: String) =
       sql"""
@@ -900,10 +900,10 @@ class PostgresqlRepository @Inject() (
          DROP INDEX IF EXISTS #${quote(db)}.#${quote(indexName)}
      """
 
-    implicit val getTableStatsResult = GetResult(r => TableStats(r.<<, r.<<, r.<<, r.<<, r.<<, r.<<, r.<<, r.<<, r.<<,
+    implicit val getTableStatsResult: GetResult[TableStats] = GetResult(r => TableStats(r.<<, r.<<, r.<<, r.<<, r.<<, r.<<, r.<<, r.<<, r.<<,
       r.<<, r.<<, r.<<, r.<<))
 
-    implicit val getResultActivityStats = GetResult(r => ActivityStats(r.<<, r.<<, r.<<, r.<<, r.<<, r.<<, r.<<, r.<<))
+    implicit val getResultActivityStats: GetResult[ActivityStats] = GetResult(r => ActivityStats(r.<<, r.<<, r.<<, r.<<, r.<<, r.<<, r.<<, r.<<))
 
     val SELECT_PG_STATS =
       sql"""
@@ -960,7 +960,7 @@ class PostgresqlRepository @Inject() (
           if (started) ()
           else {
             started = true
-            metrics.prometheusMetrics.dbioStreamStart.labels(db, coll).observe(time)
+            metrics.prometheusMetrics.dbioStreamStart.labels(db, coll).observe(time.toDouble)
           }
           pull(in)
         }
@@ -973,7 +973,7 @@ class PostgresqlRepository @Inject() (
         }
 
         override def onUpstreamFinish(): Unit = {
-          metrics.prometheusMetrics.dbioStreamComplete.labels(db, coll).observe(time)
+          metrics.prometheusMetrics.dbioStreamComplete.labels(db, coll).observe(time.toDouble)
           metrics.prometheusMetrics.numObjectsRetrieved.labels(db, coll).observe(cnt)
           completeStage()
         }

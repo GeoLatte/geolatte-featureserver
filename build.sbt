@@ -1,7 +1,4 @@
-import sbt.Keys.name
-
-
-scalaVersion := "2.13.12"
+scalaVersion := "2.13.13"
 
 val appName = "geolatte-featureserver"
 val appVersion = "2.0-SNAPSHOT"
@@ -23,8 +20,8 @@ lazy val coreDependencies = Seq(
   "org.geolatte" % "geolatte-geom" % "0.14",
 //  "commons-codec" % "commons-codec" % "1.8",
   "net.sf.supercsv" % "super-csv" % "2.4.0",
-  "org.parboiled" %% "parboiled" % "2.1.8",
-  "com.typesafe.akka" %% "akka-slf4j" % "2.5.23",
+  "org.parboiled" %% "parboiled" % "2.5.1",
+  "com.typesafe.akka" %% "akka-slf4j" % "2.6.21",
   "net.logstash.logback" % "logstash-logback-encoder" % "6.2",
   filters,
   guice
@@ -78,24 +75,22 @@ lazy val defaultSettings =
   commonBuildSettings ++
     Seq(
       libraryDependencies ++= dependencies,
-      Keys.fork in run := true,
-      javaOptions in(Test, run) += "-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=5005"
-//      , javacOptions ++= Seq( "-source", "1.8", "-target", "1.8" )
+      run / fork := true
       )
 
 //Options for running tests
 val testSettings = Seq(
-  Keys.fork in Test := true, //Fork a new JVM for running tests
-  testOptions in Test := Seq( Tests.Filter( unitFilter ) ),
-  parallelExecution in ItTest := false,
-  testOptions in ItTest := Seq( Tests.Argument( "sequential" ), Tests.Filter( itFilter ) )
+  Test / fork := true, //Fork a new JVM for running tests
+  Test / testOptions := Seq( Tests.Filter( unitFilter ) ),
+  ItTest / parallelExecution := false,
+  ItTest / testOptions := Seq( Tests.Argument( "sequential" ), Tests.Filter( itFilter ) )
   )
 
 val `geolatte-geoserver` = (project in file("."))
   .settings(
-    defaultSettings:_*
+    defaultSettings *
     ).configs( ItTest )
   .settings( inConfig( ItTest )( Defaults.testTasks ): _* )
-  .settings( (defaultSettings ++ testSettings): _* )
+  .settings( (defaultSettings ++ testSettings) * )
   //    .settings(routesGenerator := InjectedRoutesGenerator)
   .enablePlugins(PlayScala)
