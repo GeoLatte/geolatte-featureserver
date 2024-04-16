@@ -49,7 +49,7 @@ object Metadata {
   def fromReads(name: String, envelope: Envelope, level: Int, idType: String, encodedAsJsonb: Boolean): Metadata =
     Metadata(name, envelope, level, idType, encodedAsJsonb = encodedAsJsonb)
 
-  implicit val MetadataReads = (
+  implicit val MetadataReads: Reads[Metadata] = (
     (__ \ CollectionField).read[String] and
     (__ \ ExtentField).read[Envelope](EnvelopeFormats) and
     (__ \ IndexLevelField).read[Int] and

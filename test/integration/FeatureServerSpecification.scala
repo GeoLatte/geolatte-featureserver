@@ -1,10 +1,12 @@
 package integration
 
+import akka.stream.Materializer
 import org.specs2._
 import org.specs2.matcher.{ Expectable, Matcher }
 import org.specs2.specification.core.{ Env, Fragments, SpecStructure }
+import play.api.Application
 import play.api.inject.guice.GuiceApplicationBuilder
-import play.api.libs.json.{ JsArray, JsObject, Json, _ }
+import play.api.libs.json._
 
 /**
  * @author Karel Maesen, Geovise BVBA
@@ -16,8 +18,8 @@ abstract class FeatureServerSpecification extends Specification
   val testDbName = "xfstestdb"
   val testColName = "xfstestcoll"
 
-  implicit val currentApp = GuiceApplicationBuilder().build()
-  implicit val currentMat = currentApp.materializer
+  implicit val currentApp: Application = GuiceApplicationBuilder().build()
+  implicit val currentMat: Materializer = currentApp.materializer
 
   //override decorate so we can inject 'include' en 'sequential' arguments
   override def decorate(is: SpecStructure, env: Env) = {

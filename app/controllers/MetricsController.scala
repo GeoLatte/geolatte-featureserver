@@ -20,12 +20,12 @@ class MetricsController @Inject() (val repository: Repository) extends InjectedC
 
   implicit val timeout: akka.util.Timeout = 5.seconds
 
-  def get() = Action { implicit req =>
+  def get = Action { implicit req =>
     val prometheusMetrics = getPrometheusSamples
     Ok(prometheusMetrics).withHeaders("Content-type" -> PrometheusTextFormat.CONTENT_TYPE_004)
   }
 
-  private def getPrometheusSamples(): String = {
+  private def getPrometheusSamples: String = {
     val out = new ByteArrayOutputStream
     val samples = CollectorRegistry.defaultRegistry.metricFamilySamples()
     val writer = new BufferedWriter(new OutputStreamWriter(out, "UTF-8"))

@@ -43,7 +43,7 @@ case class FakeRequestResult[B, T, R](
   val app: Application
 ) {
 
-  implicit val mat = app.materializer
+  implicit val mat: Materializer = app.materializer
 
   import UtilityMethods._
 
@@ -318,14 +318,14 @@ object UtilityMethods extends PlayRunners
   //with WsTestClient
   with FutureAwaits {
 
-  override implicit def defaultAwaitTimeout = 60.seconds
+  override implicit def defaultAwaitTimeout: Timeout = 60.seconds
 
   //  implicit val actorSys = ActorSystem()
   //  implicit val mat = ActorMaterializer()
 
   val defaultIndexLevel = 4
-  implicit val defaultExtent = new Envelope(0, 0, 90, 90, CrsId.valueOf(4326))
-  implicit val defaultMortonCode = new MortonCode(new MortonContext(defaultExtent, defaultIndexLevel))
+  implicit val defaultExtent: Envelope = new Envelope(0, 0, 90, 90, CrsId.valueOf(4326))
+  implicit val defaultMortonCode: MortonCode = new MortonCode(new MortonContext(defaultExtent, defaultIndexLevel))
 
   val defaultCollectionMetadata = Json.obj(
     "extent" -> Json.obj("crs" -> defaultExtent.getCrsId.getCode, "envelope" ->
