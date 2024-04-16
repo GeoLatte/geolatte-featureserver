@@ -668,7 +668,7 @@ class PostgresqlRepository @Inject() (
       val renderedPropertyExpr =
         if (query.metadata.jsonTable) {
           if (query.metadata.encodedAsJsonb) {
-            PGJsonpathQueryRenderer.propertyPathAsJsonText(propertyExpr)
+            PGJsonbFallbackQueryRenderer.propertyPathAsJsonText(propertyExpr)
           } else {
             PGJsonQueryRenderer.propertyPathAsJsonText(propertyExpr)
           }
