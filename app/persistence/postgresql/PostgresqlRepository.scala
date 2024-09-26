@@ -568,7 +568,7 @@ class PostgresqlRepository @Inject() (
       case _ =>
         def colName(s: String): String = if (s.trim.startsWith("properties.")) s.trim.substring(11) else s.trim
 
-        if (query.sort.isEmpty) query.metadata.pkey else query.sort.map(f => s"${colName(f.fld)} ${f.direction} ") mkString ","
+        if (query.sort.isEmpty) query.metadata.pkey else query.sort.map(f => s""" "${colName(f.fld)}" ${f.direction} """) mkString ","
     }
 
     def wktGeometry(query: SpatialQuery): Option[String] = {
