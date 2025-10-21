@@ -1,9 +1,9 @@
 package persistence.postgresql
 
 import Exceptions._
-import akka.stream._
-import akka.stream.scaladsl._
-import akka.stream.stage.{ GraphStage, GraphStageLogic, InHandler, OutHandler }
+import org.apache.pekko.stream._
+import org.apache.pekko.stream.scaladsl._
+import org.apache.pekko.stream.stage.{ GraphStage, GraphStageLogic, InHandler, OutHandler }
 import config.AppExecutionContexts
 import controllers.{ Formats, IndexDef, IndexDefW }
 import metrics.Metrics

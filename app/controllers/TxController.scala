@@ -2,7 +2,7 @@ package controllers
 
 import javax.inject.Inject
 import Exceptions._
-import akka.stream.scaladsl.{ JsonFraming, Keep, Sink }
+import org.apache.pekko.stream.scaladsl.{ JsonFraming, Keep, Sink }
 import config.AppExecutionContexts
 import metrics.Instrumentation
 import persistence.querylang.{ BooleanExpr, QueryParser }

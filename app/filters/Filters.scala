@@ -5,7 +5,7 @@ import java.time.format.DateTimeFormatter
 import java.time.temporal.ChronoUnit
 import javax.inject.Inject
 
-import akka.stream.Materializer
+import org.apache.pekko.stream.Materializer
 import metrics.Metrics
 import net.logstash.logback.marker.LogstashMarker
 import net.logstash.logback.marker.Markers.appendEntries

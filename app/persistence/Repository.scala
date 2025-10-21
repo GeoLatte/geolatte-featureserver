@@ -2,7 +2,7 @@ package persistence
 
 import java.sql.Timestamp
 
-import akka.stream.scaladsl.Source
+import org.apache.pekko.stream.scaladsl.Source
 import controllers.{ IndexDef, IndexDefW }
 import org.geolatte.geom.Envelope
 import persistence.GeoJsonFormats._

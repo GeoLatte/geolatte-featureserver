@@ -4,8 +4,8 @@ import java.sql.Timestamp
 import java.time.OffsetDateTime
 import java.time.format.DateTimeFormatter
 import Exceptions.{ QueryTimeoutException, UnsupportedMediaException }
-import akka.stream.scaladsl.Source
-import akka.util.ByteString
+import org.apache.pekko.stream.scaladsl.Source
+import org.apache.pekko.util.ByteString
 import config.Constants
 import org.geolatte.geom.{ Envelope, Geometry, Point }
 import org.supercsv.encoder.DefaultCsvEncoder

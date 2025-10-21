@@ -2,4 +2,5 @@
 logLevel := Level.Warn
 
 // Use the Play sbt plugin for Play project
-addSbtPlugin("com.typesafe.play" % "sbt-plugin" % "2.9.1")
+addSbtPlugin("org.playframework" % "sbt-plugin"              % "3.0.9")
+addSbtPlugin("nl.gn0s1s"         % "sbt-pekko-version-check" % "0.0.8")
