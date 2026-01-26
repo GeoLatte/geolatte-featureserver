@@ -2,6 +2,7 @@ package controllers
 
 import javax.inject.Inject
 
+import controllers.auth.{ AuthController, Rights }
 import persistence.{ Metadata, Repository }
 import play.api.mvc._
 import play.api.libs.json._
@@ -17,36 +18,37 @@ import utilities.Utils
  */
 class DatabasesController @Inject() (val repository: Repository, val instrumentation: Instrumentation, val parsers: PlayBodyParsers)
   extends InjectedController
-  with RepositoryAction
-  with ExceptionHandlers {
+  with ExceptionHandlers
+  with AuthController {
 
   import config.AppExecutionContexts.streamContext
 
   import ResourceWriteables._
 
-  def list() = withRepository {
+  def list() = ifHasRights(Rights.Read).async {
     implicit request =>
       repository.listDatabases map DatabasesResource map (Ok(_)) recover commonExceptionHandler
   }
 
-  def getDb(db: String) = withRepository {
+  def getDb(db: String) = ifHasRights(Rights.Read).async {
     implicit request =>
       repository.listCollections(db) map (DatabaseResource(db, _)) map (Ok(_)) recover commonExceptionHandler(db)
   }
 
-  def putDb(db: String) = withRepository {
+  def putDb(db: String) = ifHasRights(Rights.Admin).async {
     implicit request =>
       repository.createDb(db).map(_ => Created(s"database $db created")).recover {
         commonExceptionHandler(db)
       }
   }
 
-  def deleteDb(db: String) = withRepository(implicit request =>
+  def deleteDb(db: String) = ifHasRights(Rights.Admin).async { implicit request =>
     repository.dropDb(db).map(_ => Ok(s"database $db dropped"))
       .recover { case DatabaseNotFoundException(_) => Ok(s"database $db doesn't exist") }
-      .recover(commonExceptionHandler(db)))
+      .recover(commonExceptionHandler(db))
+  }
 
-  def getCollection(db: String, collection: String) = withRepository {
+  def getCollection(db: String, collection: String) = ifHasRights(Rights.Read).async {
     implicit request =>
       repository.metadata(db, collection, withCount = true)
         .map(CollectionResource)
@@ -54,7 +56,7 @@ class DatabasesController @Inject() (val repository: Repository, val instrumenta
         .recover(commonExceptionHandler(db, collection))
   }
 
-  def createCollection(db: String, col: String) = Action.async(parsers.tolerantJson) {
+  def createCollection(db: String, col: String) = ifHasRights(Rights.Admin).async(parsers.tolerantJson) {
     implicit request =>
       {
         import metrics.Operation
@@ -86,7 +88,7 @@ class DatabasesController @Inject() (val repository: Repository, val instrumenta
       }
   }
 
-  def registerCollection(db: String) = withRepository {
+  def registerCollection(db: String) = ifHasRights(Rights.Admin).async {
 
     implicit request =>
       {
@@ -104,9 +106,10 @@ class DatabasesController @Inject() (val repository: Repository, val instrumenta
       }
   }
 
-  def deleteCollection(db: String, col: String) = withRepository(implicit request =>
+  def deleteCollection(db: String, col: String) = ifHasRights(Rights.Admin).async { implicit request =>
     repository.deleteCollection(db, col).map(_ => Ok(s"Collection $db/$col deleted."))
       .recover { case CollectionNotFoundException(_) => Ok(s"Collection $col doesn't exist") }
-      .recover(commonExceptionHandler(db, col)))
+      .recover(commonExceptionHandler(db, col))
+  }
 
 }

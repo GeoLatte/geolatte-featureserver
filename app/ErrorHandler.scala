@@ -1,3 +1,4 @@
+import Exceptions._
 import play.api.{ UnexpectedException, UsefulException }
 import play.api.http.{ HttpErrorHandler, Status => StatusCodes }
 import play.api.mvc.Results._
@@ -29,12 +30,18 @@ class ErrorHandler extends HttpErrorHandler {
   }
 
   override def onServerError(request: RequestHeader, exception: Throwable): Future[Result] = {
-
-    val useful = exception match {
-      case e: UsefulException => e
-      case _                  => UnexpectedException(unexpected = Some(exception))
+    exception match {
+      case ex: ForbiddenException =>
+        Future.successful(Forbidden(ex.getMessage))
+      case ex: UnauthorizedException =>
+        Future.successful(Unauthorized(ex.getMessage))
+      case _ =>
+        val useful = exception match {
+          case e: UsefulException => e
+          case _ => UnexpectedException(unexpected = Some(exception))
+        }
+        Utils.Logger.error(s"Error on request $request", useful)
+        Future.successful(InternalServerError(s"A server error occured: $useful"))
     }
-    Utils.Logger.error(s"Error on request $request", useful)
-    Future.successful { InternalServerError(s"A server error occured: $useful") }
   }
 }

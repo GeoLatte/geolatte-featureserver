@@ -1,6 +1,7 @@
 package controllers
 
 import javax.inject.Inject
+import controllers.auth.{ AuthController, Rights }
 import Exceptions._
 import org.apache.pekko.actor.ActorSystem
 import org.apache.pekko.stream.scaladsl.Source
@@ -22,8 +23,8 @@ import scala.util.{ Failure, Success }
 
 class QueryController @Inject() (val repository: Repository, val instrumentation: Instrumentation, val parsers: PlayBodyParsers, configuration: Configuration)
   extends InjectedController
-  with RepositoryAction
-  with ExceptionHandlers {
+  with ExceptionHandlers
+  with AuthController {
 
   import AppExecutionContexts.streamContext
   import config.Constants._
@@ -105,7 +106,7 @@ class QueryController @Inject() (val repository: Repository, val instrumentation
     simpleProjection:        SimpleProjection
   )
 
-  def query(db: String, collection: String) = withRepository { implicit request =>
+  def query(db: String, collection: String) = ifHasRights(Rights.Read).async { implicit request =>
     {
       implicit val format = QueryParams.FMT.value
       implicit val filename = QueryParams.FILENAME.value
@@ -131,7 +132,7 @@ class QueryController @Inject() (val repository: Repository, val instrumentation
     } recover commonExceptionHandler(db, collection)
   }
 
-  def list(db: String, collection: String) = withRepository(
+  def list(db: String, collection: String) = ifHasRights(Rights.Read).async {
     implicit request => {
       for {
         fcr <- extractFeatureCollectionRequest(request).map(_.copy(withCount = true))
@@ -142,9 +143,9 @@ class QueryController @Inject() (val repository: Repository, val instrumentation
       } yield res
 
     } recover commonExceptionHandler(db, collection)
-  )
+  }
 
-  def distinct(db: String, collection: String) = withRepository(
+  def distinct(db: String, collection: String) = ifHasRights(Rights.Read).async {
     implicit request => {
       for {
         fcr <- extractFeatureCollectionRequest(request)
@@ -160,7 +161,7 @@ class QueryController @Inject() (val repository: Repository, val instrumentation
       } yield res
 
     } recover commonExceptionHandler(db, collection)
-  )
+  }
 
   def featuresToResult(db: String, collection: String, featureCollectionRequest: FeatureCollectionRequest)(toResult: ((Option[Long], Source[JsObject, _])) => Result): Future[Result] = {
 

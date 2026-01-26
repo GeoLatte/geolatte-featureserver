@@ -1,6 +1,7 @@
 package controllers
 
 import javax.inject.Inject
+import controllers.auth.{ AuthController, Rights }
 import Exceptions._
 import org.apache.pekko.stream.scaladsl.{ JsonFraming, Keep, Sink }
 import config.AppExecutionContexts
@@ -28,8 +29,8 @@ class TxController @Inject() (
   val parsers:         PlayBodyParsers
 )
   extends InjectedController
-  with RepositoryAction
-  with ExceptionHandlers {
+  with ExceptionHandlers
+  with AuthController {
 
   import AppExecutionContexts.streamContext
 
@@ -39,7 +40,9 @@ class TxController @Inject() (
   def insert(db: String, col: String) = {
     val writer = repository.writer(db, col)
     val parser = bodyParser(db, writer.insert, config.Constants.chunkSeparator)
-    Action(parser)(_.body)
+    ifHasRights(Rights.Write).async(parser) { request =>
+      Future.successful(request.body)
+    }
   }
 
   private def parse(js: JsValue): Try[BooleanExpr] = js match {
@@ -47,7 +50,7 @@ class TxController @Inject() (
     case _           => Failure(new RuntimeException("Query expression is not a string"))
   }
 
-  def remove(db: String, col: String) = withRepository {
+  def remove(db: String, col: String) = ifHasRights(Rights.Write).async {
     implicit request =>
       {
         extract[JsString](request.body.asJson, "query") flatMap (parse(_)) match {
@@ -61,7 +64,7 @@ class TxController @Inject() (
       }
   }
 
-  def update(db: String, col: String) = withRepository {
+  def update(db: String, col: String) = ifHasRights(Rights.Write).async {
     implicit request =>
       {
         val tq = extract[JsString](request.body.asJson, "query").flatMap(parse(_))
@@ -81,8 +84,10 @@ class TxController @Inject() (
 
   def upsert(db: String, col: String) = {
     val writer = repository.writer(db, col)
-    val parser = bodyParser(db, writer.upsert, config.Constants.chunkSeparator).map(f => f)
-    Action(parser)(_.body)
+    val parser = bodyParser(db, writer.upsert, config.Constants.chunkSeparator)
+    ifHasRights(Rights.Write).async(parser) { request =>
+      Future.successful(request.body)
+    }
   }
 
   private def extract[T <: JsValue: ClassTag](in: Option[JsValue], key: String): Try[T] =

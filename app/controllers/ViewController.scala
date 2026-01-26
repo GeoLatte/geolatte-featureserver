@@ -3,6 +3,7 @@ package controllers
 import javax.inject.Inject
 import config.AppExecutionContexts
 import config.Constants.Format
+import controllers.auth.{ AuthController, Rights }
 import metrics.Instrumentation
 import persistence.Repository
 import utilities.Utils.Logger
@@ -14,8 +15,8 @@ import scala.concurrent.Future
 
 class ViewController @Inject() (val repository: Repository, val instrumentation: Instrumentation, val parsers: PlayBodyParsers)
   extends InjectedController
-  with RepositoryAction
-  with ExceptionHandlers {
+  with ExceptionHandlers
+  with AuthController {
 
   import AppExecutionContexts.streamContext
   import Formats._
@@ -24,7 +25,7 @@ class ViewController @Inject() (val repository: Repository, val instrumentation:
     val NAME = QueryParam("name", (s) => Some(s))
   }
 
-  def put(db: String, collection: String, viewName: String) = withRepository(parsers.tolerantJson) {
+  def put(db: String, collection: String, viewName: String) = ifHasRights(Rights.Write).async(parsers.tolerantJson) {
     implicit req =>
       {
         req.body.validate(ViewDefIn) match {
@@ -41,7 +42,7 @@ class ViewController @Inject() (val repository: Repository, val instrumentation:
       }
   }
 
-  def list(db: String, collection: String) = withRepository {
+  def list(db: String, collection: String) = ifHasRights(Rights.Read).async {
     implicit req =>
       {
         QueryParams.NAME.value.map(name =>
@@ -56,7 +57,7 @@ class ViewController @Inject() (val repository: Repository, val instrumentation:
       }
   }
 
-  def get(db: String, collection: String, id: String) = withRepository {
+  def get(db: String, collection: String, id: String) = ifHasRights(Rights.Read).async {
     implicit req =>
       {
         repository.getView(db, collection, id)
@@ -65,7 +66,7 @@ class ViewController @Inject() (val repository: Repository, val instrumentation:
       }
   }
 
-  def delete(db: String, collection: String, view: String) = withRepository {
+  def delete(db: String, collection: String, view: String) = ifHasRights(Rights.Write).async {
     implicit req =>
       {
         repository.dropView(db, collection, view).map(v => {
