@@ -1,6 +1,5 @@
 package config
 
-import play.api.libs.concurrent.Akka
 import scala.concurrent.ExecutionContext
 
 /**

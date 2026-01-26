@@ -1,4 +1,4 @@
-scalaVersion := "2.13.13"
+scalaVersion := "2.13.16"
 
 val appName = "geolatte-featureserver"
 val appVersion = "2.0-SNAPSHOT"
@@ -21,8 +21,8 @@ lazy val coreDependencies = Seq(
 //  "commons-codec" % "commons-codec" % "1.8",
   "net.sf.supercsv" % "super-csv" % "2.4.0",
   "org.parboiled" %% "parboiled" % "2.5.1",
-  "com.typesafe.akka" %% "akka-slf4j" % "2.6.21",
-  "net.logstash.logback" % "logstash-logback-encoder" % "6.2",
+  "org.apache.pekko" %% "pekko-slf4j" % play.core.PlayVersion.pekkoVersion,
+  "net.logstash.logback" % "logstash-logback-encoder" % "7.3",
   filters,
   guice
   )
@@ -32,7 +32,7 @@ lazy val slickVersion = "3.3.2"
 lazy val psqlDependencies = Seq(
   "com.typesafe.slick" %% "slick" % slickVersion,
   "com.typesafe.slick" %% "slick-hikaricp" % slickVersion,
-  "org.postgresql" % "postgresql" % "42.7.2"
+  "org.postgresql" % "postgresql" % "42.7.8"
   )
 
 lazy val prometheusClientVersion = "0.8.0"
@@ -86,11 +86,13 @@ val testSettings = Seq(
   ItTest / testOptions := Seq( Tests.Argument( "sequential" ), Tests.Filter( itFilter ) )
   )
 
-val `geolatte-geoserver` = (project in file("."))
+val `geolatte-geoserver` = project
+  .in(file("."))
   .settings(
-    defaultSettings *
-    ).configs( ItTest )
+    defaultSettings:_*
+  )
+  .configs( ItTest )
   .settings( inConfig( ItTest )( Defaults.testTasks ): _* )
-  .settings( (defaultSettings ++ testSettings) * )
+  .settings( defaultSettings ++ testSettings:_* )
   //    .settings(routesGenerator := InjectedRoutesGenerator)
   .enablePlugins(PlayScala)

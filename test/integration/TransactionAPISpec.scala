@@ -1,6 +1,6 @@
 package integration
 
-import akka.util.ByteString
+import org.apache.pekko.util.ByteString
 import config.Constants
 import persistence.json.Gen
 import org.specs2.matcher.MatchResult

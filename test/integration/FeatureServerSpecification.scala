@@ -1,6 +1,6 @@
 package integration
 
-import akka.stream.Materializer
+import org.apache.pekko.stream.Materializer
 import org.specs2._
 import org.specs2.matcher.{ Expectable, Matcher }
 import org.specs2.specification.core.{ Env, Fragments, SpecStructure }

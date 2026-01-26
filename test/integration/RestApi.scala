@@ -1,9 +1,9 @@
 package integration
 
-import akka.actor.ActorSystem
-import akka.stream.scaladsl.Sink
-import akka.stream.{ ActorMaterializer, Materializer }
-import akka.util.{ ByteString, Timeout }
+import org.apache.pekko.actor.ActorSystem
+import org.apache.pekko.stream.scaladsl.Sink
+import org.apache.pekko.stream.{ ActorMaterializer, Materializer }
+import org.apache.pekko.util.{ ByteString, Timeout }
 import config.Constants
 import controllers.SupportedMediaTypes
 import org.geolatte.geom._

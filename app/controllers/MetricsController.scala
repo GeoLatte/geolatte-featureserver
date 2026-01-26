@@ -18,7 +18,7 @@ class MetricsController @Inject() (val repository: Repository) extends InjectedC
   val textContentType = "text/plain; version=0.0.4"
   val protoBufContentType = "application/vnd.google.protobuf; proto=io.prometheus.client.MetricFamily; encoding=delimited"
 
-  implicit val timeout: akka.util.Timeout = 5.seconds
+  implicit val timeout: org.apache.pekko.util.Timeout = 5.seconds
 
   def get = Action { implicit req =>
     val prometheusMetrics = getPrometheusSamples

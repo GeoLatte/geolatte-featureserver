@@ -6,7 +6,7 @@ import play.api.libs.json._
 import play.api.http.Status._
 import org.geolatte.geom.Envelope
 import play.api.test.Helpers
-import akka.util.Timeout
+import org.apache.pekko.util.Timeout
 
 /**
  * @author Karel Maesen, Geovise BVBA

@@ -2,8 +2,8 @@ package controllers
 
 import javax.inject.Inject
 import Exceptions._
-import akka.actor.ActorSystem
-import akka.stream.scaladsl.Source
+import org.apache.pekko.actor.ActorSystem
+import org.apache.pekko.stream.scaladsl.Source
 import config.AppExecutionContexts
 import metrics.{ Instrumentation, Operation }
 import org.geolatte.geom.Envelope
