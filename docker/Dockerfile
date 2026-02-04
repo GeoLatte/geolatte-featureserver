@@ -1,2 +1,3 @@
-FROM mdillon/postgis:9.6
+FROM postgis/postgis:17-master
 ENV POSTGRES_USER=fserver
+ENV POSTGRES_PASSWORD=fserver

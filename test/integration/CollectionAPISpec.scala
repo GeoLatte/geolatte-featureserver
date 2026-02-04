@@ -72,7 +72,8 @@ class CollectionAPISpec extends InDatabaseSpecification {
         ("count" -> JsNumber(0)) +
         ("geometry-column" -> JsString("GEOMETRY")) +
         ("primary-key" -> JsString("id")) +
-        ("is-json" -> JsBoolean(true))
+        ("is-json" -> JsBoolean(true)) +
+        ("encoded-as-jsonb" -> JsBoolean(true))
 
   val outArray = Json.arr(
     Json.obj("name" -> "xfstestcoll", "url" -> "/api/databases/xfstestdb/xfstestcoll")
