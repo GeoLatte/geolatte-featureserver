@@ -38,4 +38,8 @@ package object Exceptions {
 
   case class QueryTimeoutException(msg: String) extends NoSqlException(msg)
 
+  case class UnauthorizedException(msg: String) extends NoSqlException(msg)
+
+  case class ForbiddenException(msg: String) extends NoSqlException(msg)
+
 }

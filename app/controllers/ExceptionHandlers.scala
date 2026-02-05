@@ -4,23 +4,7 @@ import Exceptions._
 import utilities.Utils.Logger
 import play.api.mvc._
 
-import scala.concurrent.Future
 import scala.language.{ implicitConversions, reflectiveCalls }
-
-trait RepositoryAction {
-
-  this: BaseController =>
-  def parsers: PlayBodyParsers
-
-  def withRepository[T](bp: BodyParser[T])(action: Request[T] => Future[Result]) =
-    Action.async(bp) {
-      request => action(request)
-    }
-
-  def withRepository(action: Request[AnyContent] => Future[Result]): Action[AnyContent] =
-    withRepository(parsers.anyContent)(action)
-
-}
 
 trait ExceptionHandlers {
 
@@ -37,6 +21,8 @@ trait ExceptionHandlers {
   }
 
   val commonExceptionHandler: PartialFunction[Throwable, Result] = {
+    case ex: UnauthorizedException            => Unauthorized(ex.getMessage)
+    case ex: ForbiddenException               => Forbidden(ex.getMessage)
     case ex: DatabaseAlreadyExistsException   => Conflict(ex.getMessage)
     case ex: UnsupportedMediaException        => UnsupportedMediaType(s"Media object does not exist.")
     case ex: IndexNotFoundException           => NotFound(ex.getMessage)
