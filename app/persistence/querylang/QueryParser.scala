@@ -54,7 +54,7 @@ sealed trait Arg
 case class PropertyArg(propery: PropertyExpr) extends Arg
 case class ValueArg(value: AtomicExpr) extends Arg
 
-class QueryParserException(message: String = null) extends RuntimeException(message)
+class QueryParserException(message: String = "") extends RuntimeException(message)
 
 class QueryParser(val input: ParserInput) extends Parser
   with StringBuilding {

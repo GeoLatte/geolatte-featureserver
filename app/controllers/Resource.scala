@@ -104,11 +104,10 @@ object ResourceWriteables {
       case _      => "None"
     }, _ => "geometry-wkt").mkString(sep)
 
-    var i: Int = 0
+    val isFirst = new java.util.concurrent.atomic.AtomicBoolean(true)
 
     val toCsv: JsValue => ByteString = (js: JsValue) => {
-      i = i + 1
-      if (i == 1) {
+      if (isFirst.getAndSet(false)) {
         ByteString.fromString(toCsvHeader(js) + "\n" + toCsvRecord(js))
       } else {
         ByteString.fromString(toCsvRecord(js))
@@ -219,17 +218,12 @@ case class IndexDefsResource(dbName: String, colName: String, indexNames: Iterab
 
 case class IndexDefResource(dbName: String, colName: String, indexDef: IndexDefW) extends Resource {
 
-  import Formats.IndexDefWWrites
+  import Formats.IndexDefWFormat
 
   def toJson = Json.toJson(indexDef)
 }
 
 object Formats {
-
-  val PostQueryRead: Reads[PostQuery] = (
-    (__ \ "wkt").readNullable[String] and
-    (__ \ "query").readNullable[String]
-  )(PostQuery.apply _)
 
   /**
    * This is the format  for the PUT resource when creating a Json table
@@ -305,10 +299,7 @@ object Formats {
 
   implicit val IndexDefFormat: Format[IndexDef] = Format(IndexDefReads, IndexDefWrites)
 
-  implicit val IndexDefWWrites: Writes[IndexDefW] = (
-    (__ \ "name").write[String] and
-    (__ \ "defText").write[String]
-  )(unlift(IndexDefW.unapply))
+  implicit val IndexDefWFormat: Format[IndexDefW] = Json.format[IndexDefW]
 
   def timestampToString(t: Timestamp): String = t.toLocalDateTime.format(DateTimeFormatter.ISO_DATE_TIME)
 

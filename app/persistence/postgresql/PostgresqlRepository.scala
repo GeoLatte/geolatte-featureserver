@@ -70,7 +70,7 @@ class PostgresqlRepository @Inject() (
   def getRowResultFromTable(md: Metadata) = GetResult(tableRecordToRow(md))
 
   def tableRecordToRow(meta: Metadata) = (pr: PositionedResult) =>
-    if (meta.jsonTable) Row(pr.nextString(), pr.nextString(), Json.parse(pr.nextString()).asInstanceOf[JsObject])
+    if (meta.jsonTable) Row(pr.nextString(), pr.nextString(), Json.parse(pr.nextString()).as[JsObject])
     else {
       val rs = pr.rs
       val md = rs.getMetaData
@@ -849,7 +849,7 @@ class PostgresqlRepository @Inject() (
          WHERE COLLECTION = $tableName and VIEW_NAME = $viewName
      """
 
-    implicit val getJson: GetResult[JsObject] = GetResult(r => Json.parse(r.nextString()).asInstanceOf[JsObject])
+    implicit val getJson: GetResult[JsObject] = GetResult(r => Json.parse(r.nextString()).as[JsObject])
 
     def GET_VIEW(dbname: String, coll: String, viewName: String) =
       sql"""

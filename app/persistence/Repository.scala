@@ -60,6 +60,10 @@ object Metadata {
 
 case class PostQuery(wkt: Option[String] = None, query: Option[String] = None)
 
+object PostQuery {
+  implicit val format: Format[PostQuery] = Json.format[PostQuery]
+}
+
 sealed trait Direction
 
 object ASC extends Direction {

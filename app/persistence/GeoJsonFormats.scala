@@ -125,6 +125,7 @@ object GeoJsonFormats {
     (__ \ "coordinates").read[Array[Array[Array[Array[Double]]]]]
       .map(coordinates => new MultiPolygon(coordinates.map(sequence => createPolygon(sequence))))
 
+  // .get calls below are safe: any JsResultException thrown propagates as a JsError through the enclosing Reads
   implicit def geometryCollectionReads(implicit crsId: CrsId): Reads[GeometryCollection] =
     (__ \ "geometries").read[Array[JsValue]]
       .map(geometries => new GeometryCollection(geometries.map(geometry => mkGeometryReads(crsId).reads(geometry).get)))
