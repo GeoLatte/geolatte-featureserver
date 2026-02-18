@@ -6,14 +6,8 @@ val appVersion = "2.0-SNAPSHOT"
 //Resolvers
 lazy val commonResolvers = Seq(
   "Local Maven Repository" at Path.userHome.asFile.toURI.toURL + "/.m2/repository",
-  Resolver.typesafeRepo("releases"),
   "Sonatype Repo" at "https://oss.sonatype.org/content/repositories/releases/",
-  "Sonatype Snapshots" at "https://oss.sonatype.org/content/repositories/snapshots/",
-  Resolver.jcenterRepo,
-  Resolver.url( "artifactory", url( "https://scalasbt.artifactoryonline.com/scalasbt/sbt-plugin-releases" ) )(
-    Resolver
-      .ivyStylePatterns
-    )
+  "Sonatype Snapshots" at "https://oss.sonatype.org/content/repositories/snapshots/"
   )
 
 lazy val coreDependencies = Seq(
@@ -66,7 +60,7 @@ lazy val commonBuildSettings = Seq(
 
 lazy val ItTest = config( "integration" ) extend Test
 
-def itFilter(name: String): Boolean = name startsWith "integration"
+def itFilter(name: String): Boolean = name.startsWith("integration")
 
 def unitFilter(name: String): Boolean = !itFilter( name )
 
@@ -88,11 +82,8 @@ val testSettings = Seq(
 
 val `geolatte-geoserver` = project
   .in(file("."))
-  .settings(
-    defaultSettings:_*
-  )
+  .settings(defaultSettings)
   .configs( ItTest )
-  .settings( inConfig( ItTest )( Defaults.testTasks ): _* )
-  .settings( defaultSettings ++ testSettings:_* )
-  //    .settings(routesGenerator := InjectedRoutesGenerator)
+  .settings(inConfig( ItTest )( Defaults.testTasks ))
+  .settings(defaultSettings ++ testSettings)
   .enablePlugins(PlayScala)

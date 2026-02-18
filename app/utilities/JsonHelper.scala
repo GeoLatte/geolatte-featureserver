@@ -1,10 +1,6 @@
 package utilities
 
-import play.api.libs.functional.syntax._
-import play.api.libs.json.Reads._
 import play.api.libs.json._
-import scala.collection.mutable.ListBuffer
-import scala.collection.Seq
 
 /**
  * Helpers for working the Json lib
@@ -24,23 +20,18 @@ object JsonHelper {
    */
   def flatten(jsObject: JsObject): Seq[(String, JsValue)] = {
 
-    def join(path: String, key: String): String =
-      new StringBuilder(path).append(".").append(key).toString()
-
     def prependPath(path: String, kv: (String, JsValue)): (String, JsValue) = kv match {
-      case (k, v) => (join(path, k), v)
+      case (k, v) => (s"$path.$k", v)
     }
 
-    def flattenAcc(jsObject: JsObject, buffer: ListBuffer[(String, JsValue)]): ListBuffer[(String, JsValue)] = {
-      jsObject.fields.foreach {
-        case (k, v: JsObject) => buffer.appendAll(flattenAcc(v, ListBuffer()).map(prependPath(k, _)))
-        case (k, v: JsArray)  => ()
-        case (k, v: JsValue)  => buffer.append((k, v))
+    def flattenRec(jsObject: JsObject): Seq[(String, JsValue)] =
+      jsObject.fields.toSeq.flatMap {
+        case (k, v: JsObject) => flattenRec(v).map(prependPath(k, _))
+        case (_, _: JsArray)  => Seq.empty
+        case (k, v)           => Seq((k, v))
       }
-      buffer
-    }
 
-    flattenAcc(jsObject, ListBuffer()).toSeq
+    flattenRec(jsObject)
   }
 
   /**
@@ -48,10 +39,10 @@ object JsonHelper {
    * @param errors JsonValidation errors
    * @return
    */
-  implicit def JsValidationErrors2String(errors: Seq[(JsPath, Seq[JsonValidationError])]): String = {
-    errors map {
+  def JsValidationErrors2String(errors: collection.Seq[(JsPath, collection.Seq[JsonValidationError])]): String = {
+    errors.map {
       case (jspath, valerrors) => jspath.toJsonString + " :" + valerrors.map(ve => ve.message).mkString("; ")
-    } mkString "\n"
+    }.mkString("\n")
   }
 
 }

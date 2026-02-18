@@ -195,7 +195,7 @@ class QueryController @Inject() (val repository: Repository, val instrumentation
 
     def fallBackWkt = request.body.asText.filter(_.length > 0).map(geom => PostQuery(wkt = Some(geom))).getOrElse(PostQuery())
 
-    val postQuery = request.body.asJson.map(_.validate(Formats.PostQueryRead) match {
+    val postQuery = request.body.asJson.map(_.validate[PostQuery] match {
       case JsError(_)              => fallBackWkt
       case JsSuccess(validJson, _) => validJson
     }).getOrElse(fallBackWkt)

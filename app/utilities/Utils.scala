@@ -11,12 +11,6 @@ import scala.concurrent.Future
  */
 object Utils {
 
-  import scala.concurrent.ExecutionContext.Implicits.global
-
-  def int(v: Any): Int = v.asInstanceOf[Int]
-  def string(v: Any): String = v.asInstanceOf[String]
-  def double(v: Any): Double = v.asInstanceOf[Double]
-  def boolean(v: Any): Boolean = v.asInstanceOf[Boolean]
   def json(v: Any): JsValue = Json.parse(v.asInstanceOf[String])
 
   val Logger = play.api.Logger("application")
@@ -55,21 +49,6 @@ object Utils {
     println("DEBUG: " + t.toString)
     t
   }
-
-  //TODO -- should no longer be necessary after cleanup of Migrations and DatabaseController
-  trait Foldable[B] {
-    //by name argument in second position is vital to have proper "serializing" behavior
-    def combine(b1: B, b2: => B): B
-    def unit: B
-  }
-
-  implicit object BooleanFutureFoldable extends Foldable[Future[Boolean]] {
-    override def combine(b1: Future[Boolean], b2: => Future[Boolean]): Future[Boolean] = b1.flatMap(bb1 => b2.map(_ && bb1))
-    override def unit: Future[Boolean] = Future.successful(true)
-  }
-
-  def sequence[M, B](items: List[M])(f: M => B)(implicit ev: Foldable[B]): B =
-    items.foldLeft(ev.unit) { (res, m) => ev.combine(res, f(m)) }
 
   def toFuture[T](opt: Option[T], failure: Throwable): Future[T] = opt match {
     case Some(t) => Future.successful(t)

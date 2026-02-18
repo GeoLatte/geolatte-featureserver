@@ -11,7 +11,7 @@ import play.api.{ Configuration, Environment }
  */
 class RepoModule(environment: Environment, configuration: Configuration) extends AbstractModule {
 
-  override def configure() = {
+  override def configure(): Unit = {
     bind(classOf[Repository]).to(classOf[PostgresqlRepository]).asEagerSingleton()
     //TODO -- verify that PostgresqlRepository is still a singleton
     bind(classOf[RepoHealth]).to(classOf[PostgresqlRepository]).asEagerSingleton()
@@ -21,7 +21,7 @@ class RepoModule(environment: Environment, configuration: Configuration) extends
 
 class MetricsModule(environment: Environment, configuration: Configuration) extends AbstractModule {
 
-  override def configure() = {
+  override def configure(): Unit = {
     bind(classOf[Metrics]).to(classOf[FeatureServerMetrics]).asEagerSingleton()
     bind(classOf[Instrumentation]).to(classOf[StdInstrumentation]).asEagerSingleton()
   }

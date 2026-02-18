@@ -68,7 +68,7 @@ class IndexAPISpec extends InCollectionSpecification {
 
   def e8 = getIndex(testDbName, testColName, "my_idx") applyMatcher { resp =>
     (resp.status must equalTo(OK)) and
-      (resp.responseBody must beSome(Json.obj("name" -> "my_idx", "defText" -> "CREATE INDEX my_idx ON xfstestdb.xfstestcoll USING btree ((((json -> 'a'::text) ->> 'b'::text)))")))
+      (resp.responseBody must beSome(Json.obj("name" -> "my_idx", "defText" -> "CREATE INDEX my_idx ON xfstestdb.xfstestcoll USING btree ((((\"json\" -> 'a'::text) ->> 'b'::text)))")))
   }
 
   def e9 = deleteIndex(testDbName, testColName, "my_idx") applyMatcher (_.status must equalTo(OK))

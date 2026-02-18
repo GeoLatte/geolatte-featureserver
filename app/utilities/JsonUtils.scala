@@ -20,22 +20,6 @@ object JsonUtils {
     )
   }
 
-  def toGeoJson(idColumn: String, geomCol: String, propertyMap: Map[String, Any]): JsObject = {
-    val props = for {
-      (key, value) <- propertyMap if key != idColumn && key != geomCol && key != "__geojson"
-    } yield key -> toJsValue(value)
-
-    val flds: Seq[(String, JsValue)] = Seq(
-      "id" -> toJsValue(propertyMap(idColumn)),
-      "geometry" -> Try {
-        Json.parse(Utils.string(propertyMap("__geojson")))
-      }.getOrElse(Utils.withWarning(s"Failed to parse ${Utils.string(propertyMap("__geojson"))}")(JsNull)),
-      "type" -> JsString("Feature"),
-      "properties" -> JsObject(props.toSeq)
-    )
-    JsObject(flds)
-  }
-
   def toJson(text: String)(implicit reads: Reads[JsObject]): Option[JsObject] =
     Json
       .parse(text)
