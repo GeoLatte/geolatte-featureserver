@@ -97,6 +97,9 @@ object FakeRequestResult {
   def POSTRaw(url: String, body: ByteString, format: Future[Result] => JsValue)(implicit app: Application) =
     FakeRequestResult(url = url, format = Some(format), requestBody = Some(body), mkRequest = makePostRequestRaw)
 
+  def POSTText(url: String, body: String, format: Future[Result] => JsValue)(implicit app: Application) =
+    FakeRequestResult(url = url, format = Some(format), requestBody = Some(body), mkRequest = makePostRequestText)
+
 }
 
 //This is for pattern match
@@ -176,6 +179,12 @@ trait RestApiDriver {
     Logger.info("Start /list on collection")
     val url = DATABASES / dbName / colName / FEATURECOLLECTION ? queryStr
     FakeRequestResult.GET(url, contentAsJsonStringStream)
+  }
+
+  def getListBody(dbName: String, colName: String, queryStr: String, reqBody: String) = {
+    Logger.info("Start /list on collection")
+    val url = DATABASES / dbName / colName / FEATURECOLLECTION ? queryStr
+    FakeRequestResult.POSTText(url, reqBody, contentAsJson)
   }
 
   def postUpsert(dbName: String, colName: String, reqBody: JsObject) = {
@@ -350,6 +359,10 @@ object UtilityMethods extends PlayRunners
   def makePostRequestRaw(url: String, body: Option[ByteString]) = FakeRequest(POST, url)
     .withHeaders("Accept" -> "application/json")
     .withRawBody(body.getOrElse(ByteString.empty))
+
+  def makePostRequestText(url: String, body: Option[String]) = FakeRequest(POST, url)
+    .withHeaders("Accept" -> "application/json")
+    .withTextBody(body.getOrElse(""))
 
   def makeDeleteRequest(url: String, body: Option[JsValue] = None) = FakeRequest(DELETE, url)
 

@@ -1,6 +1,7 @@
 package persistence.postgresql
 
 import persistence.FldSortSpec
+import PGSqlUtils._
 
 /**
  * Created by Karel Maesen, Geovise BVBA on 06/11/2019.
@@ -10,7 +11,7 @@ trait PGExpression {
   //TODO -- change parameter flds to Field Type
   def fldSpecToComponents(flds: String): Seq[String] = flds.split("\\.").toIndexedSeq
 
-  protected def quoteField(str: String) = s"'$str'"
+  protected def quoteField(str: String) = safeLiteralString(str)
 
   def intersperse[A](a: Seq[A], b: Seq[A]): Seq[A] = a match {
     case first +: rest => first +: intersperse(b, rest)

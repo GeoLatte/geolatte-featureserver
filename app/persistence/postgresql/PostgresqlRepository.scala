@@ -20,6 +20,7 @@ import slick.basic.DatabasePublisher
 import slick.jdbc.PostgresProfile.api._
 import slick.jdbc.hikaricp.HikariCPJdbcDataSource
 import slick.jdbc.{ GetResult, PositionedResult }
+import PGSqlUtils._
 import utilities.{ JsonUtils, Utils }
 
 import java.sql.Statement
@@ -251,11 +252,11 @@ class PostgresqlRepository @Inject() (
 
     val from =
       if (!spatialQuery.explode)
-        s"${quote(db)}.${quote(collection)}"
+        s"${safeIdentifier(db)}.${safeIdentifier(collection)}"
       else {
         val wq = Sql.windowFilterExpr(spatialQuery)
           .map(q => s" where $q").getOrElse("")
-        s"(select id, (st_dump(geometry)).geom as geometry, json from ${quote(db)}.${quote(collection)} $wq ) xx"
+        s"(select id, (st_dump(geometry)).geom as geometry, json from ${safeIdentifier(db)}.${safeIdentifier(collection)} $wq ) xx"
       }
 
     //get the count
@@ -312,7 +313,7 @@ class PostgresqlRepository @Inject() (
 
   override def distinct(db: String, collection: String, spatialQuery: SpatialQuery,
                         projection: SimpleProjection, queryTimeout: Duration = Duration.Inf): Future[List[String]] = {
-    val from = s"${quote(db)}.${quote(collection)}"
+    val from = s"${safeIdentifier(db)}.${safeIdentifier(collection)}"
 
     runOnDb("distinct", queryTimeout)(Sql.SELECT_DISTINCT(from, spatialQuery, projection)).map(_.filter(s => s != null).sorted.toList)
   }
@@ -517,10 +518,6 @@ class PostgresqlRepository @Inject() (
   //
   //    Note that we cannot use prepared statements for DDL's
 
-  //TODO -- should we check for quotes, spaces etc.  in str?
-  // alternative is to use escapeSql in the org.apache.commons.lang.StringEscapeUtils
-  private def quote(str: String): String = "\"" + str + "\""
-
   private def single_quote(str: String): String = "'" + str + "'"
 
   private val tr = (__ \ "geometry").json.prune
@@ -568,7 +565,7 @@ class PostgresqlRepository @Inject() (
       case _ =>
         def colName(s: String): String = if (s.trim.startsWith("properties.")) s.trim.substring(11) else s.trim
 
-        if (query.sort.isEmpty) query.metadata.pkey else query.sort.map(f => s""" "${colName(f.fld)}" ${f.direction} """) mkString ","
+        if (query.sort.isEmpty) query.metadata.pkey else query.sort.map(f => s"${safeIdentifier(colName(f.fld))} ${f.direction}") mkString ","
     }
 
     def wktGeometry(query: SpatialQuery): Option[String] = {
@@ -578,7 +575,7 @@ class PostgresqlRepository @Inject() (
     def windowFilterExpr(query: SpatialQuery): Option[String] = {
       val geomCol = if (query.metadata.jsonTable) "geometry" else query.metadata.geometryColumn
 
-      def bboxIntersectionRenderer(wkt: String) = s"$geomCol && ${single_quote(wkt)}::geometry"
+      def bboxIntersectionRenderer(wkt: String) = s"$geomCol && ${safeLiteralString(wkt)}::geometry"
 
       val bboxGeom = wktGeometry(query)
       bboxGeom.map(bboxIntersectionRenderer)
@@ -602,7 +599,7 @@ class PostgresqlRepository @Inject() (
       } else PGRegularQueryRenderer
       val geomCol = if (query.metadata.jsonTable) "geometry" else query.metadata.geometryColumn
 
-      def geomIntersectionRenderer(wkt: String) = s"ST_Intersects($geomCol, ${single_quote(wkt)}::geometry)"
+      def geomIntersectionRenderer(wkt: String) = s"ST_Intersects($geomCol, ${safeWkt(wkt)}::geometry)"
 
       val windowOpt = windowFilterExpr(query)
       val bboxGeom = wktGeometry(query: SpatialQuery)
@@ -687,18 +684,18 @@ class PostgresqlRepository @Inject() (
     }
 
     def UPDATE_DATA(db: String, col: String, where: String, json: String, geom: String) = {
-      sqlu"""UPDATE #${quote(db)}.#${quote(col)}
+      sqlu"""UPDATE #${safeIdentifier(db)}.#${safeIdentifier(col)}
           SET json = $json::json, geometry = $geom::geometry
           WHERE #$where
        """
     }
 
-    def CREATE_SCHEMA(dbname: String) = sqlu"create schema #${quote(dbname)}"
+    def CREATE_SCHEMA(dbname: String) = sqlu"create schema #${safeIdentifier(dbname)}"
 
-    def DROP_SCHEMA(dbname: String) = sqlu"drop schema #${quote(dbname)} CASCADE"
+    def DROP_SCHEMA(dbname: String) = sqlu"drop schema #${safeIdentifier(dbname)} CASCADE"
 
     def CREATE_METADATA_TABLE_IN(dbname: String) =
-      sqlu"""CREATE TABLE #${quote(dbname)}.#${quote(MetadataCollection)} (
+      sqlu"""CREATE TABLE #${safeIdentifier(dbname)}.#${safeIdentifier(MetadataCollection)} (
               #${toColName(ExtentField)} JSON,
               #${toColName(IndexLevelField)} INT,
               #${toColName(IdTypeField)} VARCHAR(120),
@@ -710,7 +707,7 @@ class PostgresqlRepository @Inject() (
        """
 
     def CREATE_VIEW_TABLE_IN(dbname: String) =
-      sqlu"""CREATE TABLE #${quote(dbname)}.#${quote(ViewCollection)} (
+      sqlu"""CREATE TABLE #${safeIdentifier(dbname)}.#${safeIdentifier(ViewCollection)} (
               COLLECTION VARCHAR,
               VIEW_NAME VARCHAR,
               VIEW_DEF JSON,
@@ -720,7 +717,7 @@ class PostgresqlRepository @Inject() (
 
     def CREATE_COLLECTION_TABLE(dbname: String, tableName: String, encodedAsJsonb: Boolean) = {
       val typeOfJsonField = if (encodedAsJsonb) "JSONB" else "JSON"
-      sqlu"""CREATE TABLE #${quote(dbname)}.#${quote(tableName)} (
+      sqlu"""CREATE TABLE #${safeIdentifier(dbname)}.#${safeIdentifier(tableName)} (
               id VARCHAR(255) PRIMARY KEY,
               geometry GEOMETRY,
               json #${typeOfJsonField}
@@ -741,34 +738,34 @@ class PostgresqlRepository @Inject() (
     }
 
     def CREATE_COLLECTION_ID_INDEX(dbname: String, tableName: String, idType: String) =
-      sqlu"""CREATE INDEX #${quote("idx_" + tableName + "_id")}
-             ON #${quote(dbname)}.#${quote(tableName)} ( (json_extract_path_text(json, 'id')::#$idType) )
+      sqlu"""CREATE INDEX #${safeIdentifier("idx_" + tableName + "_id")}
+             ON #${safeIdentifier(dbname)}.#${safeIdentifier(tableName)} ( (json_extract_path_text(json, 'id')::#$idType) )
      """
 
     def CREATE_COLLECTION_JSONB_PATH_OPS_INDEX(dbname: String, tableName: String, idType: String) =
-      sqlu"""CREATE INDEX #${quote("idx_" + tableName + "_jsonb_path")}
-             ON #${quote(dbname)}.#${quote(tableName)} USING gin(json jsonb_path_ops);
+      sqlu"""CREATE INDEX #${safeIdentifier("idx_" + tableName + "_jsonb_path")}
+             ON #${safeIdentifier(dbname)}.#${safeIdentifier(tableName)} USING gin(json jsonb_path_ops);
      """
 
     def CREATE_COLLECTION_SPATIAL_INDEX(dbname: String, tableName: String) =
-      sqlu"""CREATE INDEX #${quote(tableName + "_spatial_index")}
-              ON #${quote(dbname)}.#${quote(tableName)} USING GIST ( geometry )
+      sqlu"""CREATE INDEX #${safeIdentifier(tableName + "_spatial_index")}
+              ON #${safeIdentifier(dbname)}.#${safeIdentifier(tableName)} USING GIST ( geometry )
 
      """
 
     def INSERT_DATA(dbname: String, tableName: String, id: String, json: String, geometry: String) =
-      sqlu"""INSERT INTO #${quote(dbname)}.#${quote(tableName)}  (id, json, geometry)
+      sqlu"""INSERT INTO #${safeIdentifier(dbname)}.#${safeIdentifier(tableName)}  (id, json, geometry)
              VALUES ($id, $json::json, $geometry::geometry)
        """
 
     def UPSERT_DATA(dbname: String, tableName: String, id: String, json: String, geometry: String) =
-      sqlu"""INSERT INTO #${quote(dbname)}.#${quote(tableName)}  (id, json, geometry)
+      sqlu"""INSERT INTO #${safeIdentifier(dbname)}.#${safeIdentifier(tableName)}  (id, json, geometry)
              VALUES ($id, $json::json, $geometry::geometry)
              ON CONFLICT (id) DO UPDATE SET json = EXCLUDED.json, geometry = EXCLUDED.geometry;
        """
 
     def DELETE_DATA(dbname: String, tableName: String, where: String) =
-      sqlu"""DELETE FROM #${quote(dbname)}.#${quote(tableName)}
+      sqlu"""DELETE FROM #${safeIdentifier(dbname)}.#${safeIdentifier(tableName)}
         WHERE #$where
      """
 
@@ -777,12 +774,12 @@ class PostgresqlRepository @Inject() (
               where
               table_schema = ${single_quote(dbname)}
               and table_type = 'BASE TABLE'
-              and table_name != ${quote(MetadataCollection)}
+              and table_name != ${safeIdentifier(MetadataCollection)}
        """
     }
 
     def INSERT_METADATA_JSON_COLLECTION(dbname: String, tableName: String, md: Metadata) =
-      sqlu"""insert into #${quote(dbname)}.#${quote(MetadataCollection)} values(
+      sqlu"""insert into #${safeIdentifier(dbname)}.#${safeIdentifier(MetadataCollection)} values(
               ${Json.stringify(Json.toJson(md.envelope))}::json,
               ${md.level},
               ${md.idType},
@@ -794,49 +791,49 @@ class PostgresqlRepository @Inject() (
      """
 
     def INSERT_METADATA_REGISTERED(dbname: String, tableName: String, md: Metadata) =
-      sqlu"""insert into #${quote(dbname)}.#${quote(MetadataCollection)} values(
+      sqlu"""insert into #${safeIdentifier(dbname)}.#${safeIdentifier(MetadataCollection)} values(
               ${Json.stringify(Json.toJson(md.envelope))}::json,
               ${md.level},
               ${md.idType},
               ${tableName},
               ${md.geometryColumn},
               ${md.pkey},
-              ${md.encodedAsJsonb},
+              ${md.encodedAsJsonb}
               )
      """
 
     def SELECT_COLLECTION_NAMES(dbname: String): DBIO[Seq[String]] =
       sql"""select #$CollectionField
-        from  #${quote(dbname)}.#${quote(MetadataCollection)}
+        from  #${safeIdentifier(dbname)}.#${safeIdentifier(MetadataCollection)}
      """.as[String]
 
     def SELECT_COUNT(dbname: String, tablename: String): DBIO[Long] =
-      sql"select count(*) from #${quote(dbname)}.#${quote(tablename)}".as[Long].map(_.head)
+      sql"select count(*) from #${safeIdentifier(dbname)}.#${safeIdentifier(tablename)}".as[Long].map(_.head)
 
     def SELECT_METADATA(dbname: String, tablename: String): DBIO[Option[Metadata]] =
       sql"""select *
-            from #${quote(dbname)}.#${quote(MetadataCollection)}
+            from #${safeIdentifier(dbname)}.#${safeIdentifier(MetadataCollection)}
             where #$CollectionField = $tablename
       """.as[Metadata].map(_.headOption)
 
     def DELETE_METADATA(dbname: String, tablename: String) =
       sqlu"""delete
-             from #${quote(dbname)}.#${quote(MetadataCollection)}
+             from #${safeIdentifier(dbname)}.#${safeIdentifier(MetadataCollection)}
              where #$CollectionField = $tablename
      """
 
     def DROP_TABLE(dbname: String, tablename: String) =
-      sqlu"drop table #${quote(dbname)}.#${quote(tablename)}"
+      sqlu"drop table #${safeIdentifier(dbname)}.#${safeIdentifier(tablename)}"
 
     def DELETE_VIEWS_FOR_TABLE(dbname: String, tablename: String) =
       sqlu"""
-         DELETE FROM #${quote(dbname)}.#${quote(ViewCollection)}
+         DELETE FROM #${safeIdentifier(dbname)}.#${safeIdentifier(ViewCollection)}
          WHERE COLLECTION = $tablename
      """
 
     def INSERT_VIEW(dbname: String, tableName: String, viewName: String, json: JsObject) =
       sqlu"""
-         INSERT INTO #${quote(dbname)}.#${quote(ViewCollection)} VALUES (
+         INSERT INTO #${safeIdentifier(dbname)}.#${safeIdentifier(ViewCollection)} VALUES (
            $tableName,
            $viewName,
            ${Json.stringify(json)}::json
@@ -845,7 +842,7 @@ class PostgresqlRepository @Inject() (
 
     def DELETE_VIEW(dbname: String, tableName: String, viewName: String) =
       sqlu"""
-         DELETE FROM #${quote(dbname)}.#${quote(ViewCollection)}
+         DELETE FROM #${safeIdentifier(dbname)}.#${safeIdentifier(ViewCollection)}
          WHERE COLLECTION = $tableName and VIEW_NAME = $viewName
      """
 
@@ -854,7 +851,7 @@ class PostgresqlRepository @Inject() (
     def GET_VIEW(dbname: String, coll: String, viewName: String) =
       sql"""
          SELECT VIEW_DEF
-         FROM #${quote(dbname)}.#${quote(ViewCollection)}
+         FROM #${safeIdentifier(dbname)}.#${safeIdentifier(ViewCollection)}
          WHERE COLLECTION = $coll AND VIEW_NAME = $viewName
      """.as[JsObject].map {
         _.headOption
@@ -863,7 +860,7 @@ class PostgresqlRepository @Inject() (
     def GET_VIEWS(dbname: String, coll: String) = {
       sql"""
          SELECT VIEW_DEF
-         FROM #${quote(dbname)}.#${quote(ViewCollection)}
+         FROM #${safeIdentifier(dbname)}.#${safeIdentifier(ViewCollection)}
          WHERE COLLECTION = $coll
      """.as[JsObject]
     }
@@ -875,15 +872,15 @@ class PostgresqlRepository @Inject() (
 
     def CREATE_INDEX(dbName: String, colName: String, indexName: String, path: Seq[String], cast: String) = {
       val pathExp = jsonFieldSelector(path)
-      sqlu"""CREATE INDEX #${quote(indexName)}
-             ON #${quote(dbName)}.#${quote(colName)} ( #$pathExp )
+      sqlu"""CREATE INDEX #${safeIdentifier(indexName)}
+             ON #${safeIdentifier(dbName)}.#${safeIdentifier(colName)} ( #$pathExp )
       """
     }
 
     def CREATE_INDEX_WITH_TRGM(dbName: String, colName: String, indexName: String, path: Seq[String], cast: String) = {
       val pathExp = jsonFieldSelector(path)
-      sqlu"""CREATE INDEX #${quote(indexName)}
-             ON #${quote(dbName)}.#${quote(colName)} using gist
+      sqlu"""CREATE INDEX #${safeIdentifier(indexName)}
+             ON #${safeIdentifier(dbName)}.#${safeIdentifier(colName)} using gist
              ( #$pathExp ) gist_trgm_ops)
       """
     }
@@ -897,7 +894,7 @@ class PostgresqlRepository @Inject() (
 
     def DROP_INDEX(db: String, col: String, indexName: String) =
       sqlu"""
-         DROP INDEX IF EXISTS #${quote(db)}.#${quote(indexName)}
+         DROP INDEX IF EXISTS #${safeIdentifier(db)}.#${safeIdentifier(indexName)}
      """
 
     implicit val getTableStatsResult: GetResult[TableStats] = GetResult(r => TableStats(r.<<, r.<<, r.<<, r.<<, r.<<, r.<<, r.<<, r.<<, r.<<,
