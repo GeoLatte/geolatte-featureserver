@@ -21,6 +21,7 @@ class QueryAPISpec extends InCollectionSpecification {
 
       The FeatureCollection /list should:
         return the objects contained within the specified bbox as json object      $e3
+        reject sql injection in geometry body parameter                            $e3b
         respond to the START query-param                                           $e4
         respond to the LIMIT query-param                                           $e5
         support the SORT parameter                                                 $e5b
@@ -83,6 +84,12 @@ class QueryAPISpec extends InCollectionSpecification {
       getList(testDbName, testColName, Map("bbox" -> bbox)).applyMatcher(
         res => (res.status must equalTo(OK)) and (res.responseBody must beSome(matchFeaturesInJson(featuresIn01)))
       )
+  }
+
+  def e3b = withTestFeatures(0, 10) {
+    (bbox: String, featuresIn01: JsArray) =>
+      getListBody(testDbName, testColName, "", s"SRID=4326;POINT(10 10)') OR TRUE --").applyMatcher(
+        res => res.status must equalTo(BAD_REQUEST))
   }
 
   def e4 = withTestFeatures(100, 10) {

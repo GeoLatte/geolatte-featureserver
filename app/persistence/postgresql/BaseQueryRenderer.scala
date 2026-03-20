@@ -1,6 +1,7 @@
 package persistence.postgresql
 
 import persistence.querylang.{ GTE, LTE, _ }
+import PGSqlUtils._
 
 case class RenderContext(geometryColumn: String, bbox: Option[String] = None)
 
@@ -15,7 +16,7 @@ trait BaseQueryRenderer extends QueryRenderer[String, RenderContext] {
     case ToDate(date, fmt)   => renderToDate(date, fmt)
     case LiteralBoolean(b)   => if (b) " true " else " false "
     case LiteralNumber(n)    => s" ${n.toString} "
-    case LiteralString(s)    => s" '$s' "
+    case LiteralString(s)    => s" ${safeLiteralString(s)} "
     case p @ PropertyExpr(_) => renderPropertyExpr(p)
   }
 
@@ -51,14 +52,14 @@ trait BaseQueryRenderer extends QueryRenderer[String, RenderContext] {
   def renderRegexPredicate(
     lhs: AtomicExpr,
     rhs: RegexExpr
-  )(implicit ctxt: RenderContext): String = s" ${renderAtomicCasting(lhs, rhs)} ~ '${rhs.pattern}'"
+  )(implicit ctxt: RenderContext): String = s" ${renderAtomicCasting(lhs, rhs)} ~ ${safeLiteralString(rhs.pattern)}"
 
   def renderLikePredicate(
     lhs:           AtomicExpr,
     rhs:           LikeExpr,
     caseSensitive: Boolean    = true
-  )(implicit ctxt: RenderContext): String = if (caseSensitive) s" ${renderAtomicCasting(lhs, rhs)} like '${rhs.pattern}'"
-  else s" ${renderAtomicCasting(lhs, rhs)} ilike '${rhs.pattern}'"
+  )(implicit ctxt: RenderContext): String = if (caseSensitive) s" ${renderAtomicCasting(lhs, rhs)} like ${safeLiteralString(rhs.pattern)}"
+  else s" ${renderAtomicCasting(lhs, rhs)} ilike ${safeLiteralString(rhs.pattern)}"
 
   def renderNullTestPredicate(
     lhs: AtomicExpr,
@@ -74,15 +75,15 @@ trait BaseQueryRenderer extends QueryRenderer[String, RenderContext] {
 
   def renderIntersects(wkt: Option[String], geometryColumn: String, bbox: Option[String]): String = {
     wkt match {
-      case Some(geo) => s""" ST_Intersects( $geometryColumn, '$geo' )"""
-      case _         => s""" ST_Intersects( $geometryColumn, '${bbox.getOrElse("POINT EMPTY")}' )"""
+      case Some(geo) => s""" ST_Intersects( $geometryColumn, ${safeWkt(geo)} )"""
+      case _         => s""" ST_Intersects( $geometryColumn, ${safeLiteralString(bbox.getOrElse("POINT EMPTY"))} )"""
     }
   }
 
   def renderJsonContains(
     lhs: PropertyExpr,
     rhs: LiteralString
-  )(implicit ctxt: RenderContext): String = s"${renderPropertyExpr(lhs)}::jsonb @> '${rhs.value}'::jsonb "
+  )(implicit ctxt: RenderContext): String = s"${renderPropertyExpr(lhs)}::jsonb @> ${safeLiteralString(rhs.value)}::jsonb"
 
   def render(expr: BooleanExpr)(implicit ctxt: RenderContext): String = expr match {
     case BooleanAnd(lhs, rhs)              => renderBooleanAnd(lhs, rhs)

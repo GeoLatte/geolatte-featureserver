@@ -1,6 +1,7 @@
 package persistence.postgresql
 
 import persistence.querylang._
+import PGSqlUtils._
 
 /**
  * Created by Karel Maesen, Geovise BVBA on 23/01/15.
@@ -49,6 +50,6 @@ object PGJsonQueryRenderer extends BaseQueryRenderer {
   }
 
   private def path2VariadicList(propertyExpr: PropertyExpr): String =
-    "'" + propertyExpr.path.replaceAll("\\.", "','") + "'"
+    propertyExpr.path.split("\\.").map(safeLiteralString).mkString(",")
 
 }
