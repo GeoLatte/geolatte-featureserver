@@ -7,8 +7,8 @@ import org.apache.pekko.actor.ActorSystem
 import org.apache.pekko.stream.scaladsl.Source
 import config.AppExecutionContexts
 import metrics.{ Instrumentation, Operation }
-import org.geolatte.geom.Envelope
-import org.geolatte.geom.crs.CrsId
+import org.geolatte.geom.{ Envelope, Position }
+import org.geolatte.geom.crs.{ CoordinateReferenceSystem, CrsId }
 import persistence._
 import persistence.querylang._
 import play.api.Configuration
@@ -216,7 +216,7 @@ class QueryController @Inject() (val repository: Repository, val instrumentation
 
   private def doQuery(db: String, collection: String, smd: Metadata, request: FeatureCollectionRequest): Future[(Option[Long], Source[JsObject, _])] = {
 
-    val window = Bbox(request.bbox.getOrElse(""), smd.envelope.getCrsId)
+    val window = Bbox(request.bbox.getOrElse(""), smd.envelope.getCoordinateReferenceSystem)
 
     for {
       viewDef <- request.withView.map(viewId => repository.getView(db, collection, viewId)).getOrElse(Future.successful(Json.obj()))
@@ -240,7 +240,7 @@ class QueryController @Inject() (val repository: Repository, val instrumentation
   private def doDistinctQuery(db: String, collection: String, smd: Metadata, request: DistinctRequest): Future[List[String]] = {
 
     val spatialQuery = SpatialQuery(
-      Bbox(request.bbox.getOrElse(""), smd.envelope.getCrsId),
+      Bbox(request.bbox.getOrElse(""), smd.envelope.getCoordinateReferenceSystem),
       request.intersectionGeometryWkt,
       request.query,
       None,
@@ -297,11 +297,13 @@ class QueryController @Inject() (val repository: Repository, val instrumentation
 
     private val bbox_pattern = "(-*[\\.\\d]+),(-*[\\.\\d]+),(-*[\\.\\d]+),(-*[\\.\\d]+)".r
 
-    def apply(s: String, crs: CrsId): Option[Envelope] = {
+    def apply(s: String, crs: CoordinateReferenceSystem[_]): Option[Envelope[_]] = {
       s match {
         case bbox_pattern(minx, miny, maxx, maxy) =>
           try {
-            val env = new Envelope(minx.toDouble, miny.toDouble, maxx.toDouble, maxy.toDouble, crs)
+            val env = persistence.GeoJsonFormats.buildEnvelope(
+              crs, minx.toDouble, miny.toDouble, maxx.toDouble, maxy.toDouble
+            )
             if (!env.isEmpty) Some(env)
             else None
           } catch {

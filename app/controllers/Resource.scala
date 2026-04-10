@@ -7,7 +7,8 @@ import Exceptions.{ QueryTimeoutException, UnsupportedMediaException }
 import org.apache.pekko.stream.scaladsl.Source
 import org.apache.pekko.util.ByteString
 import config.Constants
-import org.geolatte.geom.{ Envelope, Geometry, Point }
+import org.geolatte.geom.{ Envelope, Geometries, Geometry }
+import org.geolatte.geom.crs.{ CoordinateReferenceSystems => GeoCrsSystems }
 import org.supercsv.encoder.DefaultCsvEncoder
 import org.supercsv.prefs.CsvPreference
 import org.supercsv.quote.{ AlwaysQuoteMode, QuoteMode }
@@ -85,11 +86,10 @@ object ResourceWriteables {
         case (k, _)            => (k, "")
       }
 
-    def project(js: JsValue)(selector: PartialFunction[(String, String), String], geomToString: Geometry => String): Seq[String] = {
+    def project(js: JsValue)(selector: PartialFunction[(String, String), String], geomToString: Geometry[_] => String): Seq[String] = {
       val jsObj = (js \ "properties").asOpt[JsObject].getOrElse(JsObject(List()))
       val attributes = expand(jsObj).collect(selector)
-      val geom = geomToString((js \ "geometry").asOpt(GeoJsonFormats.geometryReads).getOrElse(Point
-        .createEmpty()))
+      val geom = geomToString((js \ "geometry").asOpt(GeoJsonFormats.geometryReads).getOrElse(Geometries.mkEmptyPoint(GeoCrsSystems.PROJECTED_2D_METER)))
       val id = "id" -> (js \ "id").getOrElse(JsString("<No Id>")).toString
       selector(id) +: geom +: attributes
     }
@@ -97,7 +97,7 @@ object ResourceWriteables {
     val toCsvRecord = (js: JsValue) => project(js)({
       case (k, v) => v
       case _      => "None"
-    }, g => s""""${g.asText}"""").mkString(sep)
+    }, g => s""""${org.geolatte.geom.codec.Wkt.toWkt(g)}"""").mkString(sep)
 
     val toCsvHeader = (js: JsValue) => project(js)({
       case (k, v) => k
@@ -245,7 +245,7 @@ object Formats {
   )(registerTableMetadata _)
   val CollectionWrites: Writes[Metadata] = (
     (__ \ MetadataIdentifiers.CollectionField).write[String] and
-    (__ \ MetadataIdentifiers.ExtentField).write[Envelope] and
+    (__ \ MetadataIdentifiers.ExtentField).write[Envelope[_]] and
     (__ \ MetadataIdentifiers.IndexLevelField).write[Int] and
     (__ \ MetadataIdentifiers.IdTypeField).write[String] and
     (__ \ MetadataIdentifiers.CountField).write[Long] and
@@ -264,10 +264,10 @@ object Formats {
     (__ \ "projection").readNullable[JsArray]
   ).tupled
 
-  def newCollectionMetadata(extent: Envelope, level: Int, idtype: String, maybeEncodedAsJsonb: Option[Boolean]) =
+  def newCollectionMetadata(extent: Envelope[_], level: Int, idtype: String, maybeEncodedAsJsonb: Option[Boolean]) =
     Metadata.fromReads("", extent, level, idtype, maybeEncodedAsJsonb.getOrElse(true))
 
-  def registerTableMetadata(collection: String, extent: Envelope, geometryCol: String, maybeEncodedAsJsonb: Option[Boolean]) =
+  def registerTableMetadata(collection: String, extent: Envelope[_], geometryCol: String, maybeEncodedAsJsonb: Option[Boolean]) =
     Metadata(collection, extent, 0, "decimal", 0, geometryCol, "", jsonTable = false, encodedAsJsonb = maybeEncodedAsJsonb.getOrElse(true))
 
   def ViewDefOut(db: String, col: String) = (

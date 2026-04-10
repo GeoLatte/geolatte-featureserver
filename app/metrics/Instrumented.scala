@@ -43,7 +43,10 @@ class StdInstrumentation @Inject() (implicit metrics: Metrics)
   def updateSpatialQueryMetrics(db: String, coll: String, query: SpatialQuery): Unit =
     try {
       query.windowOpt.foreach { env =>
-        val envDim = Math.hypot(env.getWidth, env.getHeight)
+        // Envelope[_] no longer exposes getWidth/getHeight directly; derive
+        // them from the [xmin, ymin, xmax, ymax] array.
+        val a = env.toArray()
+        val envDim = Math.hypot(a(2) - a(0), a(3) - a(1))
         metrics.prometheusMetrics.bboxHistogram.labels(db, coll).observe(envDim)
       }
     } catch {

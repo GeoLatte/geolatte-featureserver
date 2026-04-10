@@ -82,13 +82,14 @@ class PostgresqlRepository @Inject() (
         key = md.getColumnName(idx) if key != meta.geometryColumn && key != geoJsonCol && key != meta.pkey
         value = rs.getObject(idx)
       } yield (key, JsonUtils.toJsValue(value))
-      val jsObj = Json.obj("id" -> id, "type" -> "Feature", "geometry" -> Wkt.fromWkt(geom), "properties" -> JsObject(props))
+      val parsedGeom: Geometry[_] = Wkt.fromWkt(geom)
+      val jsObj = Json.obj("id" -> id, "type" -> "Feature", "geometry" -> geometryWrites.writes(parsedGeom), "properties" -> JsObject(props))
       Row(id, geom, jsObj)
     }
 
   implicit val getMetadataResult: GetResult[Metadata] = GetResult(r => {
     val jsEnv = json(r.nextString())
-    val env = Json.fromJson[Envelope](jsEnv) match {
+    val env = Json.fromJson[Envelope[_]](jsEnv) match {
       case JsSuccess(value, _) => value
       case _                   => throw new RuntimeException(s"Invalid envelope JSON format. $jsEnv")
     }
@@ -231,8 +232,8 @@ class PostgresqlRepository @Inject() (
   def assemble(base: JsObject, ewkt: String): JsObject =
     (for {
       js <- Try {
-        val geom = Wkt.fromWkt(ewkt)
-        Json.toJson(geom)
+        val geom: Geometry[_] = Wkt.fromWkt(ewkt)
+        geometryWrites.writes(geom)
       }.toOption
       gp = (__ \ "geometry").json.put(js)
       assembler = __.json.update(gp)
@@ -334,13 +335,13 @@ class PostgresqlRepository @Inject() (
       case _           => throw new IllegalArgumentException("No ID property of type String or Number")
     }
 
-  def batchInsert(db: String, collection: String, jsons: Seq[(JsObject, Geometry)]): Future[Int] = {
+  def batchInsert(db: String, collection: String, jsons: Seq[(JsObject, Geometry[_])]): Future[Int] = {
     val paramValues = buildUpdateParameters(jsons)
     val dbio = DBIO.sequence(paramValues.map { case (id, json, geom) => Sql.INSERT_DATA(db, collection, id, json, geom) }).map(_.sum)
     runOnDb("batch-insert")(dbio)
   }
 
-  private def buildUpdateParameters(jsons: Seq[(JsObject, Geometry)]) =
+  private def buildUpdateParameters(jsons: Seq[(JsObject, Geometry[_])]) =
     jsons.map {
       case (json, geom) => (
         extractIdString(json),
@@ -349,7 +350,7 @@ class PostgresqlRepository @Inject() (
       )
     }
 
-  def update(db: String, collection: String, metadata: Metadata, query: BooleanExpr, newValue: JsObject, geometry: Geometry): Future[Int] = {
+  def update(db: String, collection: String, metadata: Metadata, query: BooleanExpr, newValue: JsObject, geometry: Geometry[_]): Future[Int] = {
     val renderer = if (metadata.encodedAsJsonb) {
       PGJsonpathQueryRenderer
     } else {
@@ -361,11 +362,11 @@ class PostgresqlRepository @Inject() (
   }
 
   override def update(database: String, collection: String, metadata: Metadata, query: BooleanExpr, updateSpec: JsObject): Future[Int] = {
-    val newGeometry = updateSpec.as[Geometry](GeoJsonFormats.geoJsonGeometryReads) //extract new geometry
+    val newGeometry = updateSpec.as[Geometry[_]](GeoJsonFormats.geoJsonGeometryReads) //extract new geometry
     update(database, collection, metadata, query, updateSpec, newGeometry)
   }
 
-  def upsert(db: String, collection: String, jsons: Seq[(JsObject, Geometry)]): Future[Int] = {
+  def upsert(db: String, collection: String, jsons: Seq[(JsObject, Geometry[_])]): Future[Int] = {
     val paramValues = buildUpdateParameters(jsons)
     val dbio = DBIO.sequence(paramValues.map { case (id, json, geom) => Sql.UPSERT_DATA(db, collection, id, json, geom) }).map(_.sum)
     runOnDb("batch-upsert")(dbio)
@@ -780,7 +781,7 @@ class PostgresqlRepository @Inject() (
 
     def INSERT_METADATA_JSON_COLLECTION(dbname: String, tableName: String, md: Metadata) =
       sqlu"""insert into #${safeIdentifier(dbname)}.#${safeIdentifier(MetadataCollection)} values(
-              ${Json.stringify(Json.toJson(md.envelope))}::json,
+              ${Json.stringify(EnvelopeFormats.writes(md.envelope))}::json,
               ${md.level},
               ${md.idType},
               $tableName,
@@ -792,7 +793,7 @@ class PostgresqlRepository @Inject() (
 
     def INSERT_METADATA_REGISTERED(dbname: String, tableName: String, md: Metadata) =
       sqlu"""insert into #${safeIdentifier(dbname)}.#${safeIdentifier(MetadataCollection)} values(
-              ${Json.stringify(Json.toJson(md.envelope))}::json,
+              ${Json.stringify(EnvelopeFormats.writes(md.envelope))}::json,
               ${md.level},
               ${md.idType},
               ${tableName},

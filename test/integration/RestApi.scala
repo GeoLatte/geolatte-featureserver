@@ -7,7 +7,7 @@ import org.apache.pekko.util.{ ByteString, Timeout }
 import config.Constants
 import controllers.SupportedMediaTypes
 import org.geolatte.geom._
-import org.geolatte.geom.crs.CrsId
+import org.geolatte.geom.crs.{ CrsRegistry, ProjectedCoordinateReferenceSystem }
 import org.geolatte.geom.curve.{ MortonCode, MortonContext }
 import org.specs2.matcher._
 import play.api.{ Application, Logger }
@@ -333,15 +333,28 @@ object UtilityMethods extends PlayRunners
   //  implicit val mat = ActorMaterializer()
 
   val defaultIndexLevel = 4
-  implicit val defaultExtent: Envelope = new Envelope(0, 0, 90, 90, CrsId.valueOf(4326))
-  implicit val defaultMortonCode: MortonCode = new MortonCode(new MortonContext(defaultExtent, defaultIndexLevel))
+  // MortonCode/MortonContext require P <: C2D in geolatte-geom 1.11, so the
+  // integration extent now uses a projected (Cartesian) CRS instead of WGS84
+  // (geographic). EPSG:31370 is Belgian Lambert 72; the extent below is in
+  // metres and large enough to host arbitrary Morton-coded test fixtures.
+  val defaultProjectedCrs: ProjectedCoordinateReferenceSystem =
+    CrsRegistry.getProjectedCoordinateReferenceSystemForEPSG(31370)
+  implicit val defaultExtent: Envelope[C2D] =
+    new Envelope[C2D](0, 0, 1000000, 1000000, defaultProjectedCrs)
+  implicit val defaultMortonCode: MortonCode[C2D] =
+    new MortonCode[C2D](new MortonContext[C2D](defaultExtent, defaultIndexLevel))
 
-  val defaultCollectionMetadata = Json.obj(
-    "extent" -> Json.obj("crs" -> defaultExtent.getCrsId.getCode, "envelope" ->
-      Json.arr(defaultExtent.getMinX, defaultExtent.getMinY, defaultExtent.getMaxX, defaultExtent.getMaxY)),
-    "index-level" -> defaultIndexLevel,
-    "id-type" -> "decimal"
-  )
+  val defaultCollectionMetadata = {
+    val a = defaultExtent.toArray()
+    Json.obj(
+      "extent" -> Json.obj(
+        "crs" -> defaultExtent.getCoordinateReferenceSystem.getCrsId.getCode,
+        "envelope" -> Json.arr(a(0), a(1), a(2), a(3))
+      ),
+      "index-level" -> defaultIndexLevel,
+      "id-type" -> "decimal"
+    )
+  }
 
   implicit def mapOfQParams2QueryStr[T](params: Map[String, T]): String = params.map { case (k, v) => s"$k=$v" } mkString "&"
 

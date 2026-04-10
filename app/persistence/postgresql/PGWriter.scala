@@ -19,7 +19,7 @@ case class PGWriter(repo: PostgresqlRepository, db: String, collection: String) 
 
   lazy val metadata: Future[Metadata] = repo.metadata(db, collection)
 
-  lazy val reads: Future[(Reads[Geometry], Reads[JsObject])] = metadata.map { md =>
+  lazy val reads: Future[(Reads[Geometry[_]], Reads[JsObject])] = metadata.map { md =>
     (
       GeoJsonFormats.geoJsonGeometryReads,
       GeoJsonFormats.featureValidator(md.idType)
@@ -32,13 +32,13 @@ case class PGWriter(repo: PostgresqlRepository, db: String, collection: String) 
   override def upsert(features: Seq[JsObject]): Future[Int] =
     write(features, repo.upsert)
 
-  private def write(features: Seq[JsObject], writer: (String, String, Seq[(JsObject, Geometry)]) => Future[Int]): Future[Int] =
+  private def write(features: Seq[JsObject], writer: (String, String, Seq[(JsObject, Geometry[_])]) => Future[Int]): Future[Int] =
     if (features.isEmpty) Future.successful(0)
     else {
       reads.flatMap {
         case (geometryReader, validator) =>
-          val docsTry: Try[Seq[(JsObject, Geometry)]] =
-            features.foldLeft(Success(Seq()): Try[Seq[(JsObject, Geometry)]]) {
+          val docsTry: Try[Seq[(JsObject, Geometry[_])]] =
+            features.foldLeft(Success(Seq()): Try[Seq[(JsObject, Geometry[_])]]) {
               case (f @ Failure(_), _) => f // continue with failure
               case (Success(acc), feature) =>
                 for {
@@ -46,7 +46,7 @@ case class PGWriter(repo: PostgresqlRepository, db: String, collection: String) 
                     case _: play.api.libs.json.JsResultException =>
                       throw InvalidParamsException("Invalid Json object")
                   }
-                  featureGeometry <- Try(feature.as[Geometry](geometryReader)).recover {
+                  featureGeometry <- Try(feature.as[Geometry[_]](geometryReader)).recover {
                     case _: play.api.libs.json.JsResultException =>
                       throw InvalidParamsException("Invalid Geometry in Json object")
                   }
