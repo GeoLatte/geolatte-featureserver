@@ -11,7 +11,7 @@ lazy val commonResolvers = Seq(
   )
 
 lazy val coreDependencies = Seq(
-  "org.geolatte" % "geolatte-geom" % "0.14",
+  "org.geolatte" % "geolatte-geom" % "1.11",
 //  "commons-codec" % "commons-codec" % "1.8",
   "net.sf.supercsv" % "super-csv" % "2.4.0",
   "org.parboiled" %% "parboiled" % "2.5.1",

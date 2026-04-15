@@ -16,7 +16,7 @@ import scala.concurrent.duration.Duration
 
 case class Metadata(
   name:           String,
-  envelope:       Envelope,
+  envelope:       Envelope[_],
   level:          Int,
   idType:         String,
   count:          Long     = 0,
@@ -46,12 +46,12 @@ object Metadata {
   import MetadataIdentifiers._
 
   //added so that MetadataReads compiles
-  def fromReads(name: String, envelope: Envelope, level: Int, idType: String, encodedAsJsonb: Boolean): Metadata =
+  def fromReads(name: String, envelope: Envelope[_], level: Int, idType: String, encodedAsJsonb: Boolean): Metadata =
     Metadata(name, envelope, level, idType, encodedAsJsonb = encodedAsJsonb)
 
   implicit val MetadataReads: Reads[Metadata] = (
     (__ \ CollectionField).read[String] and
-    (__ \ ExtentField).read[Envelope](EnvelopeFormats) and
+    (__ \ ExtentField).read[Envelope[_]](EnvelopeFormats) and
     (__ \ IndexLevelField).read[Int] and
     (__ \ IdTypeField).read[String](Reads.filter[String](JsonValidationError("Requires 'text' or 'decimal"))(tpe => tpe == "text" || tpe == "decimal")) and
     (__ \ EncodedAsJsonbField).readNullable[Boolean].map(_.getOrElse(false))
@@ -84,7 +84,7 @@ object Direction {
 case class FldSortSpec(fld: String, direction: Direction)
 
 case class SpatialQuery(
-  windowOpt:                  Option[Envelope]       = None,
+  windowOpt:                  Option[Envelope[_]]    = None,
   intersectionGeometryWktOpt: Option[String]         = None,
   queryOpt:                   Option[BooleanExpr]    = None,
   projection:                 Option[ProjectionList] = None,

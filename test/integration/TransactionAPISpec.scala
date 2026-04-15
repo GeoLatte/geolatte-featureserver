@@ -53,12 +53,17 @@ class TransactionAPISpec extends InCollectionSpecification {
   import Gen._
 
   //metadata for collections with text-based identifiers
-  val metaWithTextIdType = Json.obj(
-    "extent" -> Json.obj("crs" -> defaultExtent.getCrsId.getCode, "envelope" ->
-      Json.arr(defaultExtent.getMinX, defaultExtent.getMinY, defaultExtent.getMaxX, defaultExtent.getMaxY)),
-    "index-level" -> defaultIndexLevel,
-    "id-type" -> "text"
-  )
+  val metaWithTextIdType = {
+    val a = defaultExtent.toArray()
+    Json.obj(
+      "extent" -> Json.obj(
+        "crs" -> defaultExtent.getCoordinateReferenceSystem.getCrsId.getCode,
+        "envelope" -> Json.arr(a(0), a(1), a(2), a(3))
+      ),
+      "index-level" -> defaultIndexLevel,
+      "id-type" -> "text"
+    )
+  }
 
   //Generators for data
   val prop = Gen.properties("foo" -> Gen.oneOf("bar1", "bar2", "bar3"), "num" -> Gen.oneOf(1, 2, 3))

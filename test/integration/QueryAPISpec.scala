@@ -284,8 +284,9 @@ class QueryAPISpec extends InCollectionSpecification {
   def withTestFeatures[T](sizeInsideBbox: Int, sizeOutsideBbox: Int)(block: (String, JsArray) => T) = {
     val (featuresIn01, allFeatures) = gjFeatureArrayGenerator("01", sizeInsideBbox)
       .flatMap(f1 => gjFeatureArrayGenerator("1", sizeOutsideBbox).map(f2 => (f1, f2 ++ f1))).sample.get
-    val env: Envelope = "01"
-    val bbox = s"${env.getMinX},${env.getMinY},${env.getMaxX},${env.getMaxY}"
+    val env: Envelope[_] = "01"
+    val a = env.toArray()
+    val bbox = s"${a(0)},${a(1)},${a(2)},${a(3)}"
     withFeatures(testDbName, testColName, allFeatures) {
       block(bbox, featuresIn01)
     }
