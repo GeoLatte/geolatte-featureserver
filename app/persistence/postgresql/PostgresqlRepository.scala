@@ -812,7 +812,8 @@ class PostgresqlRepository @Inject() (
       sql"select count(*) from #${safeIdentifier(dbname)}.#${safeIdentifier(tablename)}".as[Long].map(_.head)
 
     def SELECT_METADATA(dbname: String, tablename: String): DBIO[Option[Metadata]] =
-      sql"""select *
+      sql"""select #${toColName(ExtentField)}, #${toColName(IndexLevelField)}, #${toColName(IdTypeField)}, #$CollectionField,
+                   geometry_col, pkey, encoded_as_jsonb
             from #${safeIdentifier(dbname)}.#${safeIdentifier(MetadataCollection)}
             where #$CollectionField = $tablename
       """.as[Metadata].map(_.headOption)
