@@ -71,6 +71,33 @@ class QueryParserSpec extends Specification {
 
     }
 
+    // An escaped quote used to be matched by a bare "''" in the rule, which
+    // picked up the implicit whitespace-eating conversion: the apostrophe was
+    // replaced by a space and any run of spaces behind it collapsed to one.
+    "keep an escaped quote that is followed by whitespace" in {
+
+      (
+        QueryParser.parse(" var = 'bla'' bla' ") must beSuccessfulTry[BooleanExpr].withValue(
+          ComparisonPredicate(PropertyExpr("var"), EQ, LiteralString("bla' bla"))
+        )
+      ) and (
+            QueryParser.parse(" var = 'bla''  bla' ") must beSuccessfulTry[BooleanExpr].withValue(
+              ComparisonPredicate(PropertyExpr("var"), EQ, LiteralString("bla'  bla"))
+            )
+          ) and (
+                QueryParser.parse(" var = 'bla''' ") must beSuccessfulTry[BooleanExpr].withValue(
+                  ComparisonPredicate(PropertyExpr("var"), EQ, LiteralString("bla'"))
+                )
+              )
+
+    }
+
+    "keep an escaped quote that is followed by whitespace in a like pattern" in {
+      QueryParser.parse(" var like 'bla'' %' ") must beSuccessfulTry[BooleanExpr].withValue(
+        LikePredicate(PropertyExpr("var"), LikeExpr("bla' %"))
+      )
+    }
+
     "handle negations properly" in {
 
       (

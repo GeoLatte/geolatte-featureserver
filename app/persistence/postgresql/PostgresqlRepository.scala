@@ -519,8 +519,6 @@ class PostgresqlRepository @Inject() (
   //
   //    Note that we cannot use prepared statements for DDL's
 
-  private def single_quote(str: String): String = "'" + str + "'"
-
   private val tr = (__ \ "geometry").json.prune
 
   private def stripGeometry(js: JsObject): JsObject = {
@@ -532,13 +530,30 @@ class PostgresqlRepository @Inject() (
 
   private def toColName(str: String): String = str.replaceAll("-", "_")
 
+  /**
+   * The geometry column of a collection, as a SQL identifier.
+   *
+   * Collections this server creates itself use the fixed `geometry` column.
+   * For a registered table the name arrived over HTTP and is stored as sent,
+   * so it is quoted here: unquoted it is SQL an admin can write from a request
+   * body, run by every query on that collection.
+   *
+   * Lower-casing first leaves the column this resolves to unchanged from when
+   * it was interpolated unquoted — PostgreSQL folds an unquoted identifier, so
+   * a registration of `GEOM` has always addressed the column `geom`.
+   */
+  private def geometryColumnOf(md: Metadata): String =
+    if (md.jsonTable) "geometry" else safeIdentifier(md.geometryColumn.toLowerCase)
+
   private def schemaIsExcluded(collName: String): Boolean = excludedSchemas match {
     case Some(col) => col.contains(collName)
     case _         => false
   }
 
+  // The result is spliced into SQL as text (see LIST_SCHEMA), so the values —
+  // configuration rather than request data — go through `safeLiteralString`.
   private def withExcludeSchemas(clause: String, prop: String) = {
-    def quoted(coll: Seq[String]) = coll.map(single_quote) mkString ","
+    def quoted(coll: Seq[String]) = coll.map(safeLiteralString) mkString ","
 
     (clause, excludedSchemas) match {
       case (c, Some(coll)) if c.isEmpty => s" $prop not in ( ${quoted(coll)} )"
@@ -566,7 +581,7 @@ class PostgresqlRepository @Inject() (
       case _ =>
         def colName(s: String): String = if (s.trim.startsWith("properties.")) s.trim.substring(11) else s.trim
 
-        if (query.sort.isEmpty) query.metadata.pkey else query.sort.map(f => s"${safeIdentifier(colName(f.fld))} ${f.direction}") mkString ","
+        if (query.sort.isEmpty) safeIdentifier(query.metadata.pkey) else query.sort.map(f => s"${safeIdentifier(colName(f.fld))} ${f.direction}") mkString ","
     }
 
     def wktGeometry(query: SpatialQuery): Option[String] = {
@@ -574,7 +589,7 @@ class PostgresqlRepository @Inject() (
     }
 
     def windowFilterExpr(query: SpatialQuery): Option[String] = {
-      val geomCol = if (query.metadata.jsonTable) "geometry" else query.metadata.geometryColumn
+      val geomCol = geometryColumnOf(query.metadata)
 
       def bboxIntersectionRenderer(wkt: String) = s"$geomCol && ${safeLiteralString(wkt)}::geometry"
 
@@ -583,7 +598,7 @@ class PostgresqlRepository @Inject() (
     }
 
     def renderContextFromSpatialQuery(query: SpatialQuery): RenderContext = {
-      val geomCol = if (query.metadata.jsonTable) "geometry" else query.metadata.geometryColumn
+      val geomCol = geometryColumnOf(query.metadata)
       val bboxGeom = wktGeometry(query)
 
       RenderContext(geomCol, bboxGeom)
@@ -598,7 +613,7 @@ class PostgresqlRepository @Inject() (
           PGJsonQueryRenderer
         }
       } else PGRegularQueryRenderer
-      val geomCol = if (query.metadata.jsonTable) "geometry" else query.metadata.geometryColumn
+      val geomCol = geometryColumnOf(query.metadata)
 
       def geomIntersectionRenderer(wkt: String) = s"ST_Intersects($geomCol, ${safeWkt(wkt)}::geometry)"
 
@@ -639,7 +654,7 @@ class PostgresqlRepository @Inject() (
 
       val projection =
         if (query.metadata.jsonTable) "ID, ST_AsEWKT( geometry) as geom , json"
-        else s" ${query.metadata.pkey}, ST_AsEWKT( ${query.metadata.geometryColumn}) as $geoJsonCol, * "
+        else s" ${safeIdentifier(query.metadata.pkey)}, ST_AsEWKT( ${geometryColumnOf(query.metadata)}) as $geoJsonCol, * "
 
       sql"""
          SELECT #$projection
@@ -770,13 +785,17 @@ class PostgresqlRepository @Inject() (
         WHERE #$where
      """
 
-    def LIST_TABLE_NAMES(dbname: String) = {
-      sqlu""" select table_name from information_schema.tables
+    // Both comparisons are against catalogue *values*, so they are bind
+    // parameters. Quoting them first — as `'x'` or `"x"` — made PostgreSQL
+    // compare against a string that carries the quote characters, matching
+    // nothing.
+    def LIST_TABLE_NAMES(dbname: String): DBIO[Seq[String]] = {
+      sql""" select table_name from information_schema.tables
               where
-              table_schema = ${single_quote(dbname)}
+              table_schema = $dbname
               and table_type = 'BASE TABLE'
-              and table_name != ${safeIdentifier(MetadataCollection)}
-       """
+              and table_name != $MetadataCollection
+       """.as[String]
     }
 
     def INSERT_METADATA_JSON_COLLECTION(dbname: String, tableName: String, md: Metadata) =

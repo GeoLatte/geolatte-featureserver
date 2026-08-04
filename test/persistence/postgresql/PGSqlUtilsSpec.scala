@@ -42,4 +42,21 @@ class PGSqlUtilsSpec extends Specification {
         .reduce(_ and _)
     }
   }
+
+  "PGSqlUtils.safeJsonpathString" should {
+    "escape JSON string delimiters, backslashes and control characters" in {
+      PGSqlUtils.safeJsonpathString("a\"b\\c\n") === "\"a\\\"b\\\\c\\n\""
+    }
+
+    // U+0001 built from its code point: the character is invisible in an
+    // editor, and a source-level \u escape is resolved by the Scala lexer
+    // before the string ever exists.
+    "escape a control character that has no named JSON escape" in {
+      PGSqlUtils.safeJsonpathString("a" + 1.toChar + "b") === "\"a\\u0001b\""
+    }
+
+    "leave characters JSON does not require escaping untouched" in {
+      PGSqlUtils.safeJsonpathString("categorieën a/b") === "\"categorieën a/b\""
+    }
+  }
 }
