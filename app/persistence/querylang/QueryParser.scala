@@ -115,12 +115,18 @@ class QueryParser(val input: ParserInput) extends Parser
 
   val printableChar = (CharPredicate.All -- "'")
 
-  //a Literal String is quoted using single quotes. To use singe quotes in the string, simply repeat the quote twice (with no whitespace).
-  def LiteralStr = rule { '\'' ~ clearSB() ~ zeroOrMore((printableChar | "''") ~ appendSB()) ~ '\'' ~ push(LiteralString(sb.toString)) }
+  // String literals are single-quoted. Represent an apostrophe by doubling it.
+  def LiteralStr = rule { '\'' ~ clearSB() ~ zeroOrMore(QuotedStringChar) ~ '\'' ~ push(LiteralString(sb.toString)) }
 
   def Regex = rule { '/' ~ clearSB() ~ zeroOrMore((noneOf("/") ~ appendSB())) ~ '/' ~ push(RegexExpr(sb.toString)) }
 
-  def Like = rule { '\'' ~ clearSB() ~ zeroOrMore((printableChar | "\'\'") ~ appendSB()) ~ '\'' ~ push(LikeExpr(sb.toString)) }
+  def Like = rule { '\'' ~ clearSB() ~ zeroOrMore(QuotedStringChar) ~ '\'' ~ push(LikeExpr(sb.toString)) }
+
+  // Match doubled quotes explicitly instead of using the implicit `wspStr`
+  // conversion. `wspStr` also consumes trailing spaces, causing no-arg
+  // `appendSB()` to append the final space instead of the escaped apostrophe.
+  // Appending '\'' explicitly preserves both the quote and following whitespace.
+  def QuotedStringChar = rule { (str("''") ~ appendSB('\'')) | (printableChar ~ appendSB()) }
 
   def Property = rule { capture(NameString) ~> PropertyExpr ~ WS }
 

@@ -1,15 +1,19 @@
 package persistence.postgresql
 
 import persistence.querylang._
+import PGSqlUtils.{ safeJsonpathString, safeLiteralString }
 
 object PGJsonpathQueryRenderer extends BaseQueryRenderer {
+
+  private def renderJsonpathPredicate(expression: String): String =
+    s" json @?? ${safeLiteralString(expression)}"
 
   override def renderComparisonPredicate(
                                           lhs: AtomicExpr,
                                           op: ComparisonOperator,
                                           rhs: AtomicExpr
                                         )(implicit ctxt: RenderContext): String = {
-    s" json @?? '${jsonpathExpr(lhs, op, rhs)}'"
+    renderJsonpathPredicate(jsonpathExpr(lhs, op, rhs))
   }
 
   def jsonpathExpr(
@@ -24,7 +28,7 @@ object PGJsonpathQueryRenderer extends BaseQueryRenderer {
     case ToDate(date, fmt) => renderToDate(date, fmt)
     case LiteralBoolean(b) => if (b) " true " else " false "
     case LiteralNumber(n) => s" ${n.toString} "
-    case LiteralString(s) => s" \"$s\" "
+    case LiteralString(s) => s" ${safeJsonpathString(s)} "
     case p@PropertyExpr(_) => renderPropertyExpr(p)
   }
 
@@ -37,9 +41,9 @@ object PGJsonpathQueryRenderer extends BaseQueryRenderer {
                                         is:  Boolean
                                       )(implicit ctxt: RenderContext): String =
     if (is) {
-      s" json @?? '${renderAtomic(lhs)} ? (@ ${sym(EQ)} null)'"
+      renderJsonpathPredicate(s"${renderAtomic(lhs)} ? (@ ${sym(EQ)} null)")
     } else {
-      s" json @?? '${renderAtomic(lhs)} ? (@ ${sym(NEQ)} null)'"
+      renderJsonpathPredicate(s"${renderAtomic(lhs)} ? (@ ${sym(NEQ)} null)")
     }
 
   override def renderToDate(
@@ -61,7 +65,7 @@ object PGJsonpathQueryRenderer extends BaseQueryRenderer {
                                      lhs: AtomicExpr,
                                      rhs: RegexExpr
                                    )(implicit ctxt: RenderContext): String =
-    s" json @?? '${renderAtomic(lhs)} ? (@ like_regex \"${rhs.pattern}\")'"
+    renderJsonpathPredicate(s"${renderAtomic(lhs)} ? (@ like_regex ${safeJsonpathString(rhs.pattern)})")
 
   override def renderLikePredicate(
                                     lhs: AtomicExpr,
@@ -80,7 +84,7 @@ object PGJsonpathQueryRenderer extends BaseQueryRenderer {
                                     lhs: PropertyExpr,
                                     rhs: LiteralString
                                   )(implicit ctxt: RenderContext): String =
-    s"${PGJsonbFallbackQueryRenderer.renderPropertyExpr(lhs)} @> '${rhs.value}'::jsonb "
+    s"${PGJsonbFallbackQueryRenderer.renderPropertyExpr(lhs)} @> ${safeLiteralString(rhs.value)}::jsonb "
 
   override def renderBetween(
                               lhs: AtomicExpr,
@@ -137,4 +141,3 @@ object PGJsonbFallbackQueryRenderer extends BaseQueryRenderer with PGExpression 
                            ): String = s" to_date(${renderAtomicPropsAsText(date)}, ${renderAtomicPropsAsText(fmt)}) "
 
 }
-

@@ -1,7 +1,7 @@
 package persistence.postgresql
 
 import org.specs2.mutable.Specification
-import persistence.querylang.{ QueryParser, BooleanExpr }
+import persistence.querylang._
 
 /**
  * Created by Karel Maesen, Geovise BVBA on 23/01/15.
@@ -142,6 +142,12 @@ class PGQueryRenderSpec extends Specification {
       compressWS(renderer.render(expr)) === "json @?? '$.properties.foo ? ( @ == \"bar1\" )'"
     }
 
+    "safely render apostrophes and JSONPath delimiters in equality expressions" in {
+      val expr = ComparisonPredicate(PropertyExpr("properties.foo"), EQ, LiteralString("O'Brien \"quoted\""))
+      compressWS(renderer.render(expr)) ===
+        """json @?? '$.properties.foo ? ( @ == "O''Brien \"quoted\"" )'"""
+    }
+
     "properly render boolean expressions containing comparison expresssions other than equality " in {
 
       val expr1 = QueryParser.parse("ab.cd > 12").get
@@ -190,6 +196,22 @@ class PGQueryRenderSpec extends Specification {
       compressWS(renderer.render(expr)) === "json @?? '$.properties.foo ? (@ like_regex \"bar1.*\")'"
     }
 
+    "safely render apostrophes and JSONPath delimiters in regex expressions" in {
+      val expr = RegexPredicate(PropertyExpr("properties.foo"), RegexExpr("O'Brien \"quoted\""))
+      compressWS(renderer.render(expr)) ===
+        """json @?? '$.properties.foo ? (@ like_regex "O''Brien \"quoted\"")'"""
+    }
+
+    // A backslash has to survive the jsonpath string layer doubled, or the
+    // regex engine never sees it: PostgreSQL accepts an unknown jsonpath escape
+    // and silently drops the backslash, so an unescaped `\d` would arrive as a
+    // literal `d` and the pattern would quietly match the wrong rows.
+    "double backslashes in a regex so the escape reaches the regex engine" in {
+      val expr = RegexPredicate(PropertyExpr("properties.code"), RegexExpr("""a\d+b"""))
+      compressWS(renderer.render(expr)) ===
+        """json @?? '$.properties.code ? (@ like_regex "a\\d+b")'"""
+    }
+
     "properly render simple like expression " in {
       val expr = QueryParser.parse("properties.foo like 'a%bcd'").get
       compressWS(renderer.render(expr)) === "( json->'properties'->>'foo' )::text like 'a%bcd'"
@@ -225,6 +247,12 @@ class PGQueryRenderSpec extends Specification {
       compressWS(renderer.render(expr)) === """( json->'properties'->'test' ) @> '["a", 2]'::jsonb"""
     }
 
+    "safely render apostrophes in JsonContains expressions" in {
+      val expr = JsonContainsPredicate(PropertyExpr("properties.test"), LiteralString("""{"name":"O'Brien"}"""))
+      compressWS(renderer.render(expr)) ===
+        """( json->'properties'->'test' ) @> '{"name":"O''Brien"}'::jsonb"""
+    }
+
     "properly render to_date functions in expression" in {
       val expr = QueryParser.parse(" to_date(properties.foo, 'YYYY-MM-DD') = to_date('2019-04-30', 'YYYY-MM-DD') ").get
       compressWS(renderer.render(expr)) === """json @?? '$.properties.foo.datetime( "YYYY-MM-DD" ) ? ( @ == "2019-04-30" .datetime( "YYYY-MM-DD" ))'"""
@@ -253,6 +281,14 @@ class PGQueryRenderSpec extends Specification {
     "properly render simple equality expression " in {
       val expr = QueryParser.parse("properties.foo = 'bar1'").get
       compressWS(renderer.render(expr)) === """"foo" = ( 'bar1' )"""
+    }
+
+    // No parser produces a property name holding a double quote, so this
+    // expression is built by hand: the point is that the renderer closes the
+    // identifier itself rather than leaning on the grammar to do it.
+    "escape a double quote in a property name rather than close the identifier" in {
+      val expr = ComparisonPredicate(PropertyExpr("""foo" , (select 1) as "x"""), EQ, LiteralString("bar"))
+      compressWS(renderer.render(expr)) === """"foo"" , (select 1) as ""x" = ( 'bar' )"""
     }
 
     "properly render boolean expressions containing comparison expresssions other than equality " in {

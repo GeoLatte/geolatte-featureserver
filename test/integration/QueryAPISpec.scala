@@ -6,6 +6,7 @@ import play.api.libs.json._
 import org.geolatte.geom.Envelope
 import java.net.URLEncoder._
 import scala.collection.Seq
+import scala.util.Try
 
 /**
  * @author Karel Maesen, Geovise BVBA
@@ -52,6 +53,19 @@ class QueryAPISpec extends InCollectionSpecification {
      Projection may specify fields not in inputJson (works only on postgresql)
         with Json output, fields are set to JsNull                                  $e16
         with CSV output, fields are empty strings                                   $e17
+
+     The QUERY parameter on a JSONB collection should:
+        support the IS NULL predicate                                                $e18
+        support the IS NOT NULL predicate                                            $e19
+        support the regex predicate, honouring backslash escapes                     $e20
+        support the JSON-contains predicate                                          $e21
+        support to_date comparisons                                                  $e22
+
+     Query values are data, never SQL — a JSONB collection should:
+        match a value containing a single quote                                      $e23
+        match a value containing a double quote and a backslash                      $e24
+        not let a quoted payload in an equality break out of the query               $e25
+        not let a quoted payload in a JSON-contains break out of the query           $e26
 
   """
 
@@ -280,6 +294,113 @@ class QueryAPISpec extends InCollectionSpecification {
         }
       }
   }
+
+  // The test collection is JSONB-encoded (the create-collection default), so
+  // these run through PGJsonpathQueryRenderer. That renderer builds a jsonpath
+  // expression which the repository splices into the SQL text as a string
+  // literal, so a value crosses two quoting layers on its way to the database.
+  // Asserting on the rendered string alone (PGQueryRenderSpec) cannot show that
+  // PostgreSQL accepts the result, which is what these exercise.
+
+  def e18 = withFeaturesHavingProperties(Json.obj("code" -> JsNull), Json.obj("code" -> "bla")) {
+    features =>
+      queryFeatures("properties.code is null") applyMatcher {
+        res => res.responseBody must beSomeFeatures(JsArray(Seq(features.value.head)))
+      }
+  }
+
+  def e19 = withFeaturesHavingProperties(Json.obj("code" -> JsNull), Json.obj("code" -> "bla")) {
+    features =>
+      queryFeatures("properties.code is not null") applyMatcher {
+        res => res.responseBody must beSomeFeatures(JsArray(Seq(features.value(1))))
+      }
+  }
+
+  // `\d` has to reach the regex engine as a digit class. Before the values in a
+  // jsonpath were escaped, PostgreSQL swallowed the backslash and matched a
+  // literal `d` instead — silently, without an error.
+  def e20 = withFeaturesHavingProperties(Json.obj("code" -> "bla5bla"), Json.obj("code" -> "blaXbla")) {
+    features =>
+      queryFeatures("""properties.code ~ /bla\d+bla/""") applyMatcher {
+        res => res.responseBody must beSomeFeatures(JsArray(Seq(features.value.head)))
+      }
+  }
+
+  def e21 = withFeaturesHavingProperties(
+    Json.obj("tags" -> Json.arr("bla", 2)),
+    Json.obj("tags" -> Json.arr("blabla"))) {
+      features =>
+        queryFeatures("""properties.tags @> '["bla"]'""") applyMatcher {
+          res => res.responseBody must beSomeFeatures(JsArray(Seq(features.value.head)))
+        }
+    }
+
+  def e22 = withFeaturesHavingProperties(
+    Json.obj("datum" -> "2019-04-30"),
+    Json.obj("datum" -> "2020-01-01")) {
+      features =>
+        queryFeatures("to_date(properties.datum, 'YYYY-MM-DD') = to_date('2019-04-30', 'YYYY-MM-DD')") applyMatcher {
+          res => res.responseBody must beSomeFeatures(JsArray(Seq(features.value.head)))
+        }
+    }
+
+  def e23 = withFeaturesHavingProperties(Json.obj("foo" -> "bla'bla"), Json.obj("foo" -> "blabla")) {
+    features =>
+      queryFeatures("properties.foo = 'bla''bla'") applyMatcher {
+        res => res.responseBody must beSomeFeatures(JsArray(Seq(features.value.head)))
+      }
+  }
+
+  def e24 = withFeaturesHavingProperties(Json.obj("foo" -> """bla "bla" C:\bla"""), Json.obj("foo" -> "blabla")) {
+    features =>
+      queryFeatures("""properties.foo = 'bla "bla" C:\bla'""") applyMatcher {
+        res => res.responseBody must beSomeFeatures(JsArray(Seq(features.value.head)))
+      }
+  }
+
+  // The payload from the reported SQL injection. It has to come back as an
+  // ordinary string comparison that matches the feature literally holding it —
+  // proof the value never reached SQL statement context.
+  def e25 = {
+    val payload = """bla'::jsonb OR '1'='1"""
+    withFeaturesHavingProperties(Json.obj("foo" -> payload), Json.obj("foo" -> "bla")) {
+      features =>
+        queryFeatures(s"properties.foo = '${payload.replace("'", "''")}'") applyMatcher {
+          res => res.responseBody must beSomeFeatures(JsArray(Seq(features.value.head)))
+        }
+    }
+  }
+
+  // Same payload against `@>`, the operator the report weaponised. Escaped, it
+  // is no longer valid JSON, so PostgreSQL rejects the statement and the
+  // streaming response fails; unescaped, it made the WHERE clause
+  // unconditionally true and streamed back the whole collection. Only that last
+  // outcome is a leak, so the assertion is on it rather than on any particular
+  // error handling: the request must not succeed with every feature.
+  def e26 = withFeaturesHavingProperties(
+    Json.obj("tags" -> Json.arr("bla")),
+    Json.obj("tags" -> Json.arr("blabla"))) {
+      features =>
+        val attempt = Try(queryFeatures("""properties.tags @> '1''::jsonb OR ''1''=''1'""").responseBody)
+        attempt.toOption.flatten must not(beSomeFeatures(features))
+    }
+
+  /**
+   * Load features whose properties are exactly the given objects, all inside
+   * the same bbox, and hand the loaded array to the block in that order.
+   */
+  def withFeaturesHavingProperties[T](props: JsObject*)(block: JsArray => T): T = {
+    val generated = gjFeatureArrayGenerator("01", props.size).sample.get
+    val features = JsArray(generated.value.zip(props).map {
+      case (feature, properties) => feature.as[JsObject] ++ Json.obj("properties" -> properties)
+    })
+    withFeatures(testDbName, testColName, features) {
+      block(features)
+    }
+  }
+
+  def queryFeatures(query: String) =
+    getQuery(testDbName, testColName, Map("query" -> encode(query, "UTF-8")))(contentAsJsonStream)
 
   def withTestFeatures[T](sizeInsideBbox: Int, sizeOutsideBbox: Int)(block: (String, JsArray) => T) = {
     val (featuresIn01, allFeatures) = gjFeatureArrayGenerator("01", sizeInsideBbox)
