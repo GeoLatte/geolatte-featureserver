@@ -25,10 +25,12 @@ class TransactionAPISpec extends InCollectionSpecification {
        insert value idem-potently when object does not exist                      $e3
        update value idem-potently when object does already exist                  $e4
        update value idem-potently when object does already exist and id is text   $e42
+       update value when only the geometry changes                                $e43
 
      The transaction /insert should:
         return OK when the collection exists, and data is valid                   $e5
         metadata query returns the inserted number of objects                     $e6
+        write nothing from a batch when one of its features fails                 $e64
 
      The transaction /upsert should:
         return OK when the collection exists, and data is valid                   $e5u
@@ -126,6 +128,17 @@ class TransactionAPISpec extends InCollectionSpecification {
     result
   }
 
+  def e43 = {
+    val f = feature().sample.get
+    removeData(testDbName, testColName)
+    postUpsert(testDbName, testColName, f)
+    val modifiedFeature = f + ("geometry" -> (feature().sample.get \ "geometry").get)
+    postUpsert(testDbName, testColName, modifiedFeature)
+    getList(testDbName, testColName, "") applyMatcher { res =>
+      res.responseBody must beSome(matchFeaturesInJson(Json.arr(modifiedFeature)))
+    }
+  }
+
   def e5 = {
     val fs = featureArray(size = 100).sample.get
     removeData(testDbName, testColName)
@@ -164,6 +177,17 @@ class TransactionAPISpec extends InCollectionSpecification {
     val res = postInsert(testDbName, newColName, f).status must equalTo(OK)
     deleteCollection(testDbName, newColName)
     res
+  }
+
+  def e64 = {
+    val f = feature().sample.get
+    removeData(testDbName, testColName)
+    // the second feature repeats the id of the first, so its insert fails
+    val data = Seq(f, f) map (j => Json.stringify(j)) mkString Constants.chunkSeparator getBytes "UTF-8"
+    loadData(testDbName, testColName, ByteString(data))
+    getList(testDbName, testColName, "") applyMatcher { res =>
+      res.responseBody must beSome(matchFeaturesInJson(Json.arr()))
+    }
   }
 
   def e63 = {

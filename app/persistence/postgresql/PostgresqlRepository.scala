@@ -338,7 +338,7 @@ class PostgresqlRepository @Inject() (
   def batchInsert(db: String, collection: String, jsons: Seq[(JsObject, Geometry[_])]): Future[Int] = {
     val paramValues = buildUpdateParameters(jsons)
     val dbio = DBIO.sequence(paramValues.map { case (id, json, geom) => Sql.INSERT_DATA(db, collection, id, json, geom) }).map(_.sum)
-    runOnDb("batch-insert")(dbio)
+    runOnDb("batch-insert")(dbio.transactionally)
   }
 
   private def buildUpdateParameters(jsons: Seq[(JsObject, Geometry[_])]) =
@@ -369,7 +369,7 @@ class PostgresqlRepository @Inject() (
   def upsert(db: String, collection: String, jsons: Seq[(JsObject, Geometry[_])]): Future[Int] = {
     val paramValues = buildUpdateParameters(jsons)
     val dbio = DBIO.sequence(paramValues.map { case (id, json, geom) => Sql.UPSERT_DATA(db, collection, id, json, geom) }).map(_.sum)
-    runOnDb("batch-upsert")(dbio)
+    runOnDb("batch-upsert")(dbio.transactionally)
   }
 
   /**
@@ -486,7 +486,7 @@ class PostgresqlRepository @Inject() (
         case _ =>
           metrics.prometheusMetrics.dbio
             .labels(label)
-            .observe((System.nanoTime - startTimeNano) / 10E6)
+            .observe((System.nanoTime - startTimeNano) / 1e6)
       }
       .recover {
         case MappableException(dbe) => throw dbe
@@ -775,9 +775,11 @@ class PostgresqlRepository @Inject() (
        """
 
     def UPSERT_DATA(dbname: String, tableName: String, id: String, json: String, geometry: String) =
-      sqlu"""INSERT INTO #${safeIdentifier(dbname)}.#${safeIdentifier(tableName)}  (id, json, geometry)
+      sqlu"""INSERT INTO #${safeIdentifier(dbname)}.#${safeIdentifier(tableName)} AS t (id, json, geometry)
              VALUES ($id, $json::json, $geometry::geometry)
-             ON CONFLICT (id) DO UPDATE SET json = EXCLUDED.json, geometry = EXCLUDED.geometry;
+             ON CONFLICT (id) DO UPDATE SET json = EXCLUDED.json, geometry = EXCLUDED.geometry
+             WHERE t.json::jsonb IS DISTINCT FROM EXCLUDED.json::jsonb
+                OR t.geometry IS DISTINCT FROM EXCLUDED.geometry;
        """
 
     def DELETE_DATA(dbname: String, tableName: String, where: String) =
