@@ -47,6 +47,9 @@ class PostgresqlRepository @Inject() (
 
   private val excludedSchemas: Option[Seq[String]] = configuration.get[Option[Seq[String]]]("fs.exclude")
 
+  private val fetchTargetBytes: Long =
+    configuration.getOptional[Long]("fs.fetch_target_bytes").getOrElse(FetchSizeRegulator.DefaultTargetBytes)
+
   private def mkDatabaseWithMetrics(db: Database): Database =
     db.source match {
       case source: HikariCPJdbcDataSource =>
@@ -70,22 +73,35 @@ class PostgresqlRepository @Inject() (
 
   def getRowResultFromTable(md: Metadata) = GetResult(tableRecordToRow(md))
 
-  def tableRecordToRow(meta: Metadata) = (pr: PositionedResult) =>
-    if (meta.jsonTable) Row(pr.nextString(), pr.nextString(), Json.parse(pr.nextString()).as[JsObject])
-    else {
-      val rs = pr.rs
-      val md = rs.getMetaData
-      val id = rs.getString(meta.pkey)
-      val geom = rs.getString(geoJsonCol)
-      val props: Seq[(String, JsValue)] = for {
-        idx <- 1 to pr.numColumns
-        key = md.getColumnName(idx) if key != meta.geometryColumn && key != geoJsonCol && key != meta.pkey
-        value = rs.getObject(idx)
-      } yield (key, JsonUtils.toJsValue(value))
-      val parsedGeom: Geometry[_] = Wkt.fromWkt(geom)
-      val jsObj = Json.obj("id" -> id, "type" -> "Feature", "geometry" -> geometryWrites.writes(parsedGeom), "properties" -> JsObject(props))
-      Row(id, geom, jsObj)
-    }
+  private def sizeOf(s: String): Long = if (s == null) 0L else s.length.toLong
+
+  // One call per query: the returned reader carries the fetch-size state of that query's result set.
+  def tableRecordToRow(meta: Metadata) = {
+    val fetchSize = new FetchSizeRegulator(fetchTargetBytes)
+    (pr: PositionedResult) =>
+      if (meta.jsonTable) {
+        val id = pr.nextString()
+        val geom = pr.nextString()
+        val json = pr.nextString()
+        fetchSize.observe(pr.rs, sizeOf(geom) + sizeOf(json))
+        Row(id, geom, Json.parse(json).as[JsObject])
+      } else {
+        val rs = pr.rs
+        val md = rs.getMetaData
+        val id = rs.getString(meta.pkey)
+        val geom = rs.getString(geoJsonCol)
+        // the geometry is what makes rows of a registered table heavy; the other columns are not measured
+        fetchSize.observe(rs, sizeOf(geom))
+        val props: Seq[(String, JsValue)] = for {
+          idx <- 1 to pr.numColumns
+          key = md.getColumnName(idx) if key != meta.geometryColumn && key != geoJsonCol && key != meta.pkey
+          value = rs.getObject(idx)
+        } yield (key, JsonUtils.toJsValue(value))
+        val parsedGeom: Geometry[_] = Wkt.fromWkt(geom)
+        val jsObj = Json.obj("id" -> id, "type" -> "Feature", "geometry" -> geometryWrites.writes(parsedGeom), "properties" -> JsObject(props))
+        Row(id, geom, jsObj)
+      }
+  }
 
   implicit val getMetadataResult: GetResult[Metadata] = GetResult(r => {
     val jsEnv = json(r.nextString())
@@ -283,7 +299,7 @@ class PostgresqlRepository @Inject() (
         .stream(
           disableAutocommit
             andThen dataStmt.withStatementParameters(
-              fetchSize = 256,
+              fetchSize = FetchSizeRegulator.InitialFetchSize,
               statementInit = withQueryTimeout(queryTimeout)
             )
         )
