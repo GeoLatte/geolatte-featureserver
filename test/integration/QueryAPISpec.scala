@@ -23,6 +23,7 @@ class QueryAPISpec extends InCollectionSpecification {
       The FeatureCollection /list should:
         return the objects contained within the specified bbox as json object      $e3
         reject sql injection in geometry body parameter                            $e3b
+        not return objects whose envelope overlaps the bbox but whose geometry doesn't $e3c
         respond to the START query-param                                           $e4
         respond to the LIMIT query-param                                           $e5
         support the SORT parameter                                                 $e5b
@@ -104,6 +105,23 @@ class QueryAPISpec extends InCollectionSpecification {
     (bbox: String, featuresIn01: JsArray) =>
       getListBody(testDbName, testColName, "", s"SRID=4326;POINT(10 10)') OR TRUE --").applyMatcher(
         res => res.status must equalTo(BAD_REQUEST))
+  }
+
+  def e3c = {
+    def feature(id: Int, coordinates: JsArray) = Json.obj(
+      "type" -> "Feature",
+      "id" -> id,
+      "geometry" -> Json.obj("type" -> "LineString", "coordinates" -> coordinates),
+      "properties" -> Json.obj("foo" -> "bar1"))
+
+    // L-shaped: its envelope (1000,1000)-(9000,9000) covers the bbox, the line itself stays clear of it
+    val aroundBbox = feature(1, Json.arr(Json.arr(1000, 1000), Json.arr(9000, 1000), Json.arr(9000, 9000)))
+    val throughBbox = feature(2, Json.arr(Json.arr(1000, 9000), Json.arr(9000, 1000)))
+
+    withFeatures(testDbName, testColName, Json.arr(aroundBbox, throughBbox)) {
+      getList(testDbName, testColName, Map("bbox" -> "4000,4000,6000,6000")).applyMatcher(
+        res => (res.status must equalTo(OK)) and (res.responseBody must beSome(matchFeaturesInJson(Json.arr(throughBbox)))))
+    }
   }
 
   def e4 = withTestFeatures(100, 10) {
