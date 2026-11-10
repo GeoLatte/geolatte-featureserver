@@ -590,11 +590,14 @@ class PostgresqlRepository @Inject() (
 
     def windowFilterExpr(query: SpatialQuery): Option[String] = {
       val geomCol = geometryColumnOf(query.metadata)
-
-      def bboxIntersectionRenderer(wkt: String) = s"$geomCol && ${safeLiteralString(wkt)}::geometry"
+      
+      def windowIntersectionRenderer(wkt: String) = {
+        val window = s"${safeLiteralString(wkt)}::geometry"
+        s"$geomCol && $window AND ST_Intersects($geomCol, ST_SetSRID($window, ST_SRID($geomCol)))"
+      }
 
       val bboxGeom = wktGeometry(query)
-      bboxGeom.map(bboxIntersectionRenderer)
+      bboxGeom.map(windowIntersectionRenderer)
     }
 
     def renderContextFromSpatialQuery(query: SpatialQuery): RenderContext = {
